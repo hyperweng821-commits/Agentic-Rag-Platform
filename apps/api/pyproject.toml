@@ -1,0 +1,74 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agentic-rag-api"
+version = "0.1.0"
+description = "FastAPI backend foundation for Agentic RAG Platform."
+requires-python = ">=3.12,<3.14"
+dependencies = [
+  "alembic>=1.18,<2",
+  "asyncpg>=0.31,<1",
+  "fastapi>=0.139,<1",
+  "pydantic>=2.13,<3",
+  "pydantic-settings>=2.14,<3",
+  "sqlalchemy[asyncio]>=2.0,<3",
+  "structlog>=25,<26",
+  "uvicorn[standard]>=0.41,<1"
+]
+
+[project.optional-dependencies]
+dev = [
+  "httpx>=0.28,<1",
+  "mypy>=1.20,<2",
+  "pip-audit>=2.9,<3",
+  "pytest>=9.1,<10",
+  "pytest-asyncio>=1.3,<2",
+  "pytest-cov>=7,<8",
+  "ruff>=0.15,<1"
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.uv]
+required-version = ">=0.9,<1"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["app", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "ASYNC", "S", "SIM", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-config --strict-markers --cov=app --cov-report=term-missing --cov-report=xml"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+markers = [
+  "integration: requires containerized infrastructure",
+  "contract: validates public API contracts"
+]
+
+[tool.coverage.run]
+branch = true
+source = ["app"]
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true

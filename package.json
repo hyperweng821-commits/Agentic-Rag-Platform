@@ -1,0 +1,26 @@
+{
+  "name": "agentic-rag-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Observable, evaluable and locally deployable Agentic RAG platform.",
+  "workspaces": [
+    "apps/web",
+    "packages/api-client"
+  ],
+  "engines": {
+    "node": ">=24.0.0 <25",
+    "npm": ">=11.0.0"
+  },
+  "scripts": {
+    "dev": "npm run dev --workspace @agentic-rag/web",
+    "build": "npm run build --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "format": "npm run format --workspaces --if-present",
+    "format:check": "npm run format:check --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "test:e2e": "npm run test:e2e --workspace @agentic-rag/web",
+    "generate:api": "npm run generate --workspace @agentic-rag/api-client"
+  }
+}
+

@@ -1,0 +1,28 @@
+name: agentic-rag-platform-test
+
+services:
+  postgres:
+    image: postgres:18.4-alpine
+    environment:
+      POSTGRES_DB: agentic_rag_test
+      POSTGRES_USER: agentic_rag_test
+      POSTGRES_PASSWORD: test_only
+    ports:
+      - "55432:5432"
+    volumes:
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    tmpfs:
+      - /var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentic_rag_test -d agentic_rag_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  chroma:
+    image: chromadb/chroma:1.5.9
+    profiles: ["rag"]
+    ports:
+      - "58001:8000"
+    tmpfs:
+      - /data
