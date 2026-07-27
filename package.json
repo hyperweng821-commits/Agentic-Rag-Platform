@@ -19,7 +19,6 @@
     "format:check": "npm run format:check --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
-    "test:e2e": "npm run test:e2e --workspace @agentic-rag/web",
-    "generate:api": "npm run generate --workspace @agentic-rag/api-client"
+    "test:e2e": "npm run test:e2e --workspace @agentic-rag/web"
   }
 }
