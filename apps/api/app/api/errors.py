@@ -58,6 +58,29 @@ class ConflictError(AppException):
     status_code = status.HTTP_409_CONFLICT
 
 
+class InvalidUploadError(BadRequestError):
+    """The uploaded file failed AF-1 filename or content validation."""
+
+    code = "INVALID_UPLOAD"
+    message = "The uploaded file is invalid."
+
+
+class UnsupportedMediaTypeError(AppException):
+    """The uploaded filename and declared media type are not supported."""
+
+    code = "UNSUPPORTED_MEDIA_TYPE"
+    message = "The uploaded file type is not supported."
+    status_code = status.HTTP_415_UNSUPPORTED_MEDIA_TYPE
+
+
+class UploadTooLargeError(AppException):
+    """The upload exceeded the configured streaming size limit."""
+
+    code = "UPLOAD_TOO_LARGE"
+    message = "The uploaded file exceeds the maximum allowed size."
+    status_code = status.HTTP_413_CONTENT_TOO_LARGE
+
+
 class ServiceUnavailableError(AppException):
     """A required infrastructure dependency is temporarily unavailable."""
 

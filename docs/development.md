@@ -1,10 +1,13 @@
 # Development Guide
 
-## Phase 3 scope
+## Current scope
 
-The executable backend currently contains configuration, logging, async PostgreSQL infrastructure, versioned FastAPI routing, global errors, CORS, lifespan management and the readiness endpoint.
+The executable backend contains the Phase 3 foundation plus AF-1 knowledge
+bases, secure local document intake, durable document/job records,
+deduplication, and retry transitions.
 
-Authentication, documents, ingestion, retrieval, RAG, Agent, evaluation and workers are not implemented.
+Authentication, parsing, chunks, embeddings, indexing, retrieval, RAG, Agent,
+evaluation and workers are not implemented.
 
 ## Required tools
 
@@ -82,7 +85,8 @@ docker compose --profile frontend up --build
 
 These commands only expose future infrastructure. They do not indicate that the corresponding business functionality exists in Phase 3.
 
-There is no worker service or worker Python entry point in the current phase.
+There is no worker service or worker Python entry point in AF-1. Durable
+ingestion jobs remain pending until AF-2 implements execution.
 Neither `make up` nor `scripts/bootstrap.sh` pulls Ollama models.
 
 The optional ChromaDB service in `compose.test.yaml` is also isolated behind the `rag` profile. The Phase 3 pytest suite does not use Compose.

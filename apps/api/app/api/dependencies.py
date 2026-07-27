@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.db.session import async_session_maker
+from app.ingestion.storage import LocalFileStorage
+from app.services.knowledge_intake import KnowledgeIntakeService
 
 
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
@@ -27,3 +29,18 @@ def get_app_settings() -> Settings:
 
 DatabaseSession = Annotated[AsyncSession, Depends(get_db_session)]
 AppSettings = Annotated[Settings, Depends(get_app_settings)]
+
+
+def get_knowledge_intake_service(
+    session: DatabaseSession,
+    settings: AppSettings,
+) -> KnowledgeIntakeService:
+    """Build the request-scoped AF-1 service with its consumed local adapter."""
+    return KnowledgeIntakeService(
+        session,
+        LocalFileStorage(settings.upload_root),
+        max_upload_size_bytes=settings.max_upload_size_bytes,
+    )
+
+
+KnowledgeService = Annotated[KnowledgeIntakeService, Depends(get_knowledge_intake_service)]

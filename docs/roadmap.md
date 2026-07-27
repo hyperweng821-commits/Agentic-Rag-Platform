@@ -1,9 +1,9 @@
 # AgentForge roadmap
 
-All phases after AF-0 are planned and unimplemented. Interfaces are introduced
-only with their first consuming feature. No phase begins before the previous
-phase meets its acceptance criteria. P1 work cannot block the P0 recruiting
-demo.
+AF-0 and AF-1 are implemented. Later phases remain planned and unimplemented.
+Interfaces are introduced only with their first consuming feature. No phase
+begins before the previous phase meets its acceptance criteria. P1 work cannot
+block the P0 recruiting demo.
 
 ## AF-0 — Product boundary and safe branding
 
@@ -25,6 +25,8 @@ compatibility identifiers remain unchanged.
 
 ## AF-1 — Knowledge intake and durable jobs
 
+**Status:** Implemented.
+
 **Objective:** Add planned private document intake with durable job records.
 
 **Included scope:** `KnowledgeBase`, `Document`, `IngestionJob`, SQLAlchemy
@@ -33,8 +35,10 @@ API, SHA-256 deduplication, idempotency, the first Alembic migration, and tests.
 
 **Explicit exclusions:** Chunks, embeddings, Chroma, Agent Runtime, and tools.
 
-**Acceptance criteria:** Upload validation, durable records, deduplication,
-idempotent retries, reversible migration, and deterministic tests pass.
+**Implemented result:** Upload validation, durable records, SHA-256
+deduplication, idempotent retry transitions, local storage, a reversible
+migration, and deterministic tests. Jobs are created but not executed; parsing
+and later ingestion work begin in AF-2.
 
 **Proposed commit message:** `feat(knowledge): add private document intake and durable jobs`
 

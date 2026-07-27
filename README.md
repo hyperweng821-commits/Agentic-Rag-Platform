@@ -5,9 +5,10 @@ for private engineering workflows.
 
 ## Project status
 
-AgentForge currently preserves the completed Phase 3 application foundation.
-It is not production-ready, and the agent runtime and RAG capabilities described
-in the roadmap are plans rather than implemented features.
+AgentForge currently includes the completed Phase 3 application foundation,
+AF-0 product boundary, and AF-1 private document intake with durable PostgreSQL
+jobs. It is not production-ready, and later ingestion, retrieval, agent, and
+RAG capabilities described in the roadmap remain plans.
 
 ### Implemented now
 
@@ -19,10 +20,14 @@ in the roadmap are plans rather than implemented features.
 - unified error handling
 - React and Vite foundation
 - Docker and CI foundations
+- knowledge-base records and metadata APIs
+- secure local PDF, Markdown and text upload
+- streamed SHA-256 deduplication within a knowledge base
+- durable pending ingestion-job records and idempotent failed-job retry
 
 ### Planned only
 
-- document ingestion
+- document parsing and ingestion execution
 - chunks
 - embeddings
 - Chroma indexing
@@ -38,6 +43,10 @@ in the roadmap are plans rather than implemented features.
 
 Directories retained with `.gitkeep` reserve possible future locations; they are
 not implementations.
+
+AF-1 accepts and stores source files and creates durable jobs, but no worker
+executes those jobs yet. Uploaded documents therefore remain pending until AF-2
+adds the explicitly deferred processing pipeline.
 
 ## Quick start with Docker
 
@@ -72,6 +81,9 @@ The compatibility response remains:
 ```
 
 API documentation is available at <http://localhost:8000/docs>.
+
+Uploaded files use the local `upload_data` volume. Configure
+`MAX_UPLOAD_SIZE_BYTES` to change the default 10 MiB per-file limit.
 
 ```bash
 docker compose down
@@ -127,7 +139,7 @@ Ordinary unit tests do not require Ollama, ChromaDB, MCP, or network access.
 
 | Path | Responsibility |
 | --- | --- |
-| `apps/api` | FastAPI foundation, Alembic environment, and backend tests |
+| `apps/api` | FastAPI foundation, AF-1 intake domain, migration, and backend tests |
 | `apps/web` | React application shell |
 | `packages/api-client` | TypeScript API-client package boundary |
 | `docs` | Product boundary, architecture, roadmap, and decisions |

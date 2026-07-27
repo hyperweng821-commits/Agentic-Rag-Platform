@@ -1,7 +1,10 @@
-# Agentic RAG Platform — Current Project Structure
+# AgentForge — Current Project Structure
 
-> Current implementation: Phase 3 Backend Foundation  
-> Domain status: authentication, documents, ingestion, retrieval, RAG, Agent, evaluation and workers are not implemented
+> Current implementation: Phase 3 foundation, AF-0 product boundary and AF-1 knowledge intake
+> Domain status: knowledge bases, secure source-file storage, document metadata
+> and durable ingestion jobs are implemented. Authentication, job execution,
+> parsing, chunks, embeddings, indexing, retrieval, RAG, Agent, evaluation and
+> workers are not implemented.
 
 ## 1. Structure policy
 
@@ -17,7 +20,12 @@ Current rules:
 6. ChromaDB and Ollama are reserved behind the `rag` profile.
 7. React is reserved behind the `frontend` profile.
 
-## 2. Complete Phase 3 backend tree
+## 2. Baseline tree and AF-1 additions
+
+The historical Phase 3 tree below remains useful as the pre-AF-1 baseline.
+AF-1 adds real model, repository, ingestion-storage, service, schema, endpoint,
+migration and test modules in the corresponding previously reserved
+directories. The live source tree is authoritative.
 
 ```text
 agentic-rag-platform/

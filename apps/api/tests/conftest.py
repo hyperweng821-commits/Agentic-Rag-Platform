@@ -2,6 +2,7 @@
 
 import os
 from collections.abc import AsyncIterator, Iterator
+from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
@@ -24,6 +25,8 @@ TEST_ENVIRONMENT = {
     "DATABASE_POOL_TIMEOUT_SECONDS": "30",
     "DATABASE_POOL_RECYCLE_SECONDS": "1800",
     "DATABASE_HEALTHCHECK_TIMEOUT_SECONDS": "2",
+    "UPLOAD_ROOT": str(Path.cwd().parent / "agentforge-test-uploads"),
+    "MAX_UPLOAD_SIZE_BYTES": "10485760",
     "CORS_ORIGINS": '["http://localhost:3000","http://localhost:5173"]',
 }
 _ENV_FILE_NOT_CAPTURED = object()
