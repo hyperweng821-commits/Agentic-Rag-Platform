@@ -7,7 +7,7 @@ describe("App", () => {
     render(<App />);
 
     expect(
-      screen.getByRole("heading", { name: "Agentic RAG Platform" }),
+      screen.getByRole("heading", { name: "AgentForge" }),
     ).toBeInTheDocument();
   });
 });

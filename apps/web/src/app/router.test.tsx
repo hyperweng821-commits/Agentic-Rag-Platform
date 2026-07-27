@@ -7,7 +7,7 @@ describe("AppRouter", () => {
     render(<AppRouter />);
 
     expect(
-      await screen.findByRole("heading", { name: "Agentic RAG Platform" }),
+      await screen.findByRole("heading", { name: "AgentForge" }),
     ).toBeVisible();
   });
 });

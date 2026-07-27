@@ -4,6 +4,6 @@ test("renders the project shell", async ({ page }) => {
   await page.goto("/");
 
   await expect(
-    page.getByRole("heading", { name: "Agentic RAG Platform" }),
+    page.getByRole("heading", { name: "AgentForge" }),
   ).toBeVisible();
 });

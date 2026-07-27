@@ -6,16 +6,16 @@ SHELL := /bin/bash
 help:
 	@awk 'BEGIN {FS = ":.*##"; printf "Usage: make <target>\n\n"} /^[a-zA-Z_-]+:.*?##/ {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-bootstrap: ## Create local environment file and start infrastructure
+bootstrap: ## Prepare and start the current AgentForge foundation
 	./scripts/bootstrap.sh
 
-up: ## Start the Phase 3 API and PostgreSQL
+up: ## Start the AgentForge API foundation and PostgreSQL
 	docker compose up --build -d postgres api
 
-up-rag: ## Start the backend plus future ChromaDB and Ollama infrastructure
+up-rag: ## Start the foundation plus optional future AI infrastructure
 	docker compose --profile rag up --build -d
 
-up-frontend: ## Start the backend plus the frontend infrastructure
+up-frontend: ## Start the foundation plus the AgentForge frontend
 	docker compose --profile frontend up --build -d
 
 down: ## Stop the development stack
@@ -27,7 +27,7 @@ logs: ## Follow service logs
 ps: ## Show container status
 	docker compose ps
 
-pull-models: ## Future phase: start Ollama and pull configured local models
+pull-models: ## Planned capability: start Ollama and pull local models
 	docker compose --profile rag up -d ollama
 	./scripts/pull_models.sh
 
@@ -47,7 +47,7 @@ test: ## Run backend and frontend unit tests
 	cd apps/api && uv run --extra dev pytest
 	npm run test
 
-build: ## Build the Phase 3 API image
+build: ## Build the AgentForge API foundation image
 	docker compose build api
 
 build-all: ## Build API and frontend images explicitly
