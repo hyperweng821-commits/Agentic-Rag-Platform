@@ -12,6 +12,7 @@ WORKDIR /app
 COPY --from=ghcr.io/astral-sh/uv:0.11.28 /uv /uvx /bin/
 
 RUN groupadd --system app && useradd --system --gid app --home-dir /app app
+RUN mkdir -p /app/data/uploads
 
 COPY apps/api/pyproject.toml ./pyproject.toml
 COPY apps/api/uv.lock ./uv.lock

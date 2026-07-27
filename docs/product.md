@@ -5,10 +5,12 @@
 AgentForge is a local-first, observable and policy-controlled AI agent runtime
 for private engineering workflows.
 
-Only the implemented Phase 3 application foundation currently exists. All P0
-runtime, ingestion, retrieval, tool, approval, trace, and evaluation
-capabilities below are planned and unimplemented. P1 enhancements are
-deferred. Excluded scope is listed explicitly.
+The Phase 3 application foundation, AF-0 product boundary, and AF-1 knowledge
+intake are implemented. AF-1 supports knowledge bases, safe PDF/Markdown/text
+storage, document metadata, deduplication, and durable ingestion jobs. It does
+not execute those jobs. Parsing, chunks, embeddings, indexing, retrieval,
+runtime, tool, approval, trace, and evaluation capabilities below remain
+planned. P1 enhancements are deferred.
 
 ## Primary user
 
@@ -28,10 +30,10 @@ This use case is planned and unimplemented.
 
 The complete workflow is planned and unimplemented:
 
-1. Create or select a knowledge base.
-2. Upload PDF, Markdown, TXT or failed-test material.
-3. Validate and store the source file.
-4. Create a durable ingestion job.
+1. Create or select a knowledge base. **Implemented in AF-1.**
+2. Upload PDF, Markdown or TXT material. **Implemented in AF-1.**
+3. Validate and store the source file. **Implemented in AF-1.**
+4. Create a durable ingestion job. **Implemented in AF-1; execution is deferred.**
 5. Parse, normalize and deterministically chunk the document.
 6. Store chunks in PostgreSQL.
 7. Build a rebuildable Chroma index.

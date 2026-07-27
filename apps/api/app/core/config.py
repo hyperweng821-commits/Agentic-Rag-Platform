@@ -57,6 +57,9 @@ class Settings(BaseSettings):
     database_pool_recycle_seconds: int = Field(default=1800, ge=60)
     database_healthcheck_timeout_seconds: float = Field(default=2.0, gt=0, le=30)
 
+    upload_root: Path = Path("data/uploads")
+    max_upload_size_bytes: int = Field(default=10 * 1024 * 1024, ge=1, le=1024 * 1024 * 1024)
+
     cors_origins: list[str] = Field(
         default_factory=lambda: ["http://localhost:3000", "http://localhost:5173"]
     )

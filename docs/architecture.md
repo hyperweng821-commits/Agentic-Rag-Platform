@@ -2,7 +2,7 @@
 
 ## Current implementation status
 
-Only the Phase 3 foundation is implemented:
+The Phase 3 foundation and AF-1 knowledge intake are implemented:
 
 - FastAPI application factory and lifecycle;
 - typed configuration;
@@ -11,10 +11,15 @@ Only the Phase 3 foundation is implemented:
 - structured logging and request correlation;
 - React/Vite application foundation;
 - Docker Compose and CI foundations.
+- durable `KnowledgeBase`, `Document`, and `IngestionJob` PostgreSQL records;
+- secure local PDF, Markdown and text intake with streamed hashing;
+- database-enforced per-knowledge-base deduplication;
+- idempotent retry transitions for failed ingestion jobs.
 
-The existing health endpoint is the only implemented public backend endpoint.
-P0 ingestion, retrieval, agent, tool, approval, trace, and evaluation
-capabilities are planned and unimplemented. P1 enhancements are deferred.
+The health and AF-1 metadata/upload/job endpoints are implemented. AF-1 does
+not execute jobs. Parsing, chunks, embeddings, Chroma indexing, retrieval,
+agent, tool, approval, trace, and evaluation capabilities are planned and
+unimplemented. P1 enhancements are deferred.
 
 ## Architectural principles
 
@@ -60,7 +65,7 @@ flowchart TD
     PG[(PostgreSQL infrastructure; business data planned)]
     Chroma[(ChromaDB rebuildable index; planned)]
     Ollama["Ollama provider (planned)"]
-    Files[(Local File Storage; planned)]
+    Files[(Local File Storage; AF-1)]
     LocalRepo[(Scoped Local Repository; planned)]
 
     UI --> HTTP
@@ -119,15 +124,16 @@ MCP remains outside P0. Future P1 MCP tools must enter through an MCP adapter
 behind the same internal Tool Registry and Tool Executor path; MCP cannot
 create a second execution or policy path.
 
-## Planned ingestion flow
+## Ingestion flow
 
-This flow is planned and unimplemented:
+AF-1 implements upload validation, local storage, and durable records. The
+remaining processing flow is planned for AF-2:
 
 ```mermaid
 flowchart LR
-    Upload["Upload (planned)"] --> Validate["Validate (planned)"]
-    Validate --> Storage["Local storage (planned)"]
-    Storage --> Records["PostgreSQL Document + IngestionJob (planned)"]
+    Upload["Upload (AF-1)"] --> Validate["Validate (AF-1)"]
+    Validate --> Storage["Local storage (AF-1)"]
+    Storage --> Records["PostgreSQL Document + IngestionJob (AF-1)"]
     Records --> Claim["Worker claim (planned)"]
     Claim --> Parse["Parse (planned)"]
     Parse --> Normalize["Normalize (planned)"]

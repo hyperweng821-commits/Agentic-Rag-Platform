@@ -66,12 +66,15 @@ services:
       DATABASE_POOL_TIMEOUT_SECONDS: ${DATABASE_POOL_TIMEOUT_SECONDS:-30}
       DATABASE_POOL_RECYCLE_SECONDS: ${DATABASE_POOL_RECYCLE_SECONDS:-1800}
       DATABASE_HEALTHCHECK_TIMEOUT_SECONDS: ${DATABASE_HEALTHCHECK_TIMEOUT_SECONDS:-2}
+      UPLOAD_ROOT: /app/data/uploads
+      MAX_UPLOAD_SIZE_BYTES: ${MAX_UPLOAD_SIZE_BYTES:-10485760}
       CORS_ORIGINS: '${CORS_ORIGINS:-["http://localhost:3000","http://localhost:5173"]}'
     ports:
       - "${API_PORT:-8000}:8000"
     volumes:
       - ./apps/api:/app
       - api_venv:/app/.venv
+      - upload_data:/app/data/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -115,4 +118,5 @@ volumes:
   chroma_data:
   ollama_data:
   api_venv:
+  upload_data:
   web_node_modules:
