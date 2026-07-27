@@ -143,18 +143,21 @@ class KnowledgeIntakeService:
         document_id = uuid4()
         storage_key = f"{knowledge_base_id}/{document_id}{extension}"
         stored = await self._store_upload(source, storage_key)
+        cleanup_owned = True
         try:
             self._validate_content(media_type, stored)
-            return await self._persist_upload(
+            result = await self._persist_upload(
                 knowledge_base_id,
                 document_id=document_id,
                 filename=filename,
                 media_type=media_type,
                 stored=stored,
             )
-        except Exception:
-            await self._storage.delete(storage_key)
-            raise
+            cleanup_owned = False
+            return result
+        finally:
+            if cleanup_owned:
+                await self._storage.delete(storage_key)
 
     async def retry_ingestion_job(self, job_id: UUID) -> IngestionJob:
         async with self._session.begin():

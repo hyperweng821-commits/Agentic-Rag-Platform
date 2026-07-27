@@ -1,5 +1,6 @@
 """AF-1 service behavior, deduplication, cleanup, and retry tests."""
 
+import asyncio
 from contextlib import AbstractAsyncContextManager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -228,6 +229,37 @@ async def test_database_failure_removes_stored_file_and_hides_internal_error(
     assert exc_info.value.public_message == "Database is temporarily unavailable."
     assert "/private/secret/path" not in exc_info.value.public_message
     assert not _matches(tmp_path, "*.txt")
+
+
+async def test_upload_cancellation_after_publish_removes_all_files(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    knowledge_base, _, _ = _timestamp_records()
+    service._knowledge_bases.get.return_value = knowledge_base  # type: ignore[attr-defined]
+    persistence_started = asyncio.Event()
+    allow_persistence = asyncio.Event()
+
+    async def block_persistence(*args: object, **kwargs: object) -> None:
+        persistence_started.set()
+        await allow_persistence.wait()
+
+    service._persist_upload = AsyncMock(side_effect=block_persistence)  # type: ignore[method-assign]
+    upload_task = asyncio.create_task(
+        service.upload_document(
+            knowledge_base.id,
+            filename="notes.txt",
+            media_type="text/plain",
+            source=MemoryStream(b"hello"),
+        )
+    )
+    await persistence_started.wait()
+
+    upload_task.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await upload_task
+
+    assert not _matches(tmp_path, "*.txt")
+    assert not _matches(tmp_path, "*.tmp")
 
 
 async def test_invalid_pdf_signature_cleans_stored_file(tmp_path: Path) -> None:
