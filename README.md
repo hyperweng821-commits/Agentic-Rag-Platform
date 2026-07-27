@@ -1,36 +1,43 @@
-# Agentic RAG Platform
+# AgentForge
 
-An observable and locally deployable Agentic RAG platform being built with React, FastAPI, PostgreSQL, ChromaDB, Docker and Ollama.
+AgentForge is a local-first, observable and policy-controlled AI agent runtime
+for private engineering workflows.
 
 ## Project status
 
-**Phase 3 — Backend Foundation**
+AgentForge currently preserves the completed Phase 3 application foundation.
+It is not production-ready, and the agent runtime and RAG capabilities described
+in the roadmap are plans rather than implemented features.
 
-Implemented and tested:
+### Implemented now
 
-- typed configuration with Pydantic Settings
-- FastAPI application factory and lifespan management
-- SQLAlchemy 2.0 asynchronous PostgreSQL engine and sessions
-- stable `/api/v1` versioning
-- PostgreSQL-backed readiness endpoint
+- FastAPI application foundation
+- typed configuration
+- async PostgreSQL infrastructure
+- health and readiness behavior
 - structured logging and request correlation
-- unified 404, validation, application and unknown-error responses
-- CORS configuration
-- asynchronous Alembic environment
-- isolated unit tests and 90% coverage gate
-- Docker and GitHub Actions foundations
+- unified error handling
+- React and Vite foundation
+- Docker and CI foundations
 
-Not implemented yet:
+### Planned only
 
-- users and authentication
-- document upload and ingestion
-- Embedding and ChromaDB access
-- Ollama integration
-- retrieval, RAG and Agent workflows
-- background workers
-- evaluation features
+- document ingestion
+- chunks
+- embeddings
+- Chroma indexing
+- hybrid retrieval
+- Agent Runtime
+- Tool Registry
+- tool policies
+- approval workflow
+- structured Agent Trace
+- evaluation
+- MCP
+- memory
 
-Future directories are retained with `.gitkeep` or documentation and contain no placeholder Python implementations.
+Directories retained with `.gitkeep` reserve possible future locations; they are
+not implementations.
 
 ## Quick start with Docker
 
@@ -39,29 +46,21 @@ Prerequisites:
 - Git
 - Docker Engine with Docker Compose v2
 
-After copying the repository HTTPS URL from GitHub:
-
 ```bash
-git clone <repository-url> agentic-rag-platform
-cd agentic-rag-platform
+git clone <repository-url> agentforge
+cd agentforge
 cp .env.example .env
 docker compose up --build
 ```
 
-No host Python, Node.js, PostgreSQL, Ollama or ChromaDB installation is required for the default Phase 3 startup.
-
-The default command starts exactly:
-
-- `postgres`
-- `api`
-
-When both containers are healthy, verify the backend:
+The default command starts only `postgres` and `api`. When both containers are
+healthy, verify the backend:
 
 ```bash
 curl http://localhost:8000/api/v1/health
 ```
 
-Expected response:
+The compatibility response remains:
 
 ```json
 {
@@ -74,42 +73,13 @@ Expected response:
 
 API documentation is available at <http://localhost:8000/docs>.
 
-Stop the stack with:
-
 ```bash
 docker compose down
 ```
 
-Equivalent helper commands are available:
-
-```bash
-make up
-make up-rag
-make up-frontend
-```
-
-`make up` and `scripts/bootstrap.sh` explicitly start only `postgres` and `api`.
-
-## Optional future infrastructure
-
-These profiles expose infrastructure only; they do not imply that future business behavior is implemented.
-
-Start ChromaDB and Ollama with the backend:
-
-```bash
-docker compose --profile rag up --build
-# or: make up-rag
-```
-
-Start the React shell with the backend:
-
-```bash
-docker compose --profile frontend up --build
-# or: make up-frontend
-```
-
-No worker service exists in Phase 3. It will be introduced only with a real ingestion workflow.
-Neither the default startup nor the bootstrap script downloads Ollama models.
+Equivalent helpers are `make up`, `make up-rag`, and `make up-frontend`.
+The latter two expose optional infrastructure or the frontend shell; they do
+not imply that planned product capabilities exist.
 
 ## Local backend development
 
@@ -127,37 +97,49 @@ uv sync --frozen --extra dev
 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-## Backend quality checks
+## Quality checks
 
-Run from `apps/api`:
+Run backend checks from `apps/api`:
 
 ```bash
-uv sync --frozen --extra dev
+uv lock --check
 uv run ruff check .
 uv run ruff format --check .
 uv run mypy app
 uv run pytest
-uv run pytest --cov=app
-python -m compileall app tests
+python -m compileall app
 ```
 
-The tests use dependency overrides and mocks. They do not require PostgreSQL, Docker, ChromaDB or Ollama.
+Run frontend checks from the repository root:
+
+```bash
+npm run lint
+npm run format:check
+npm run typecheck
+npm run test
+npm run build
+npm run test:e2e
+```
+
+Ordinary unit tests do not require Ollama, ChromaDB, MCP, or network access.
 
 ## Repository map
 
 | Path | Responsibility |
 | --- | --- |
-| `apps/api` | FastAPI backend foundation, Alembic and backend tests |
-| `apps/web` | React application shell, isolated behind the `frontend` profile |
+| `apps/api` | FastAPI foundation, Alembic environment, and backend tests |
+| `apps/web` | React application shell |
 | `packages/api-client` | TypeScript API-client package boundary |
-| `docs` | Architecture, ADRs, development and engineering reports |
-| `eval` | Future evaluation datasets and generated reports |
+| `docs` | Product boundary, architecture, roadmap, and decisions |
+| `eval` | Reserved future evaluation data and reports |
 | `infra` | Local infrastructure initialization assets |
 
 ## Documentation
 
+- [Approved baseline](docs/baseline.md)
+- [Product definition](docs/product.md)
+- [Roadmap](docs/roadmap.md)
 - [System architecture](docs/architecture.md)
-- [Current project structure](docs/project-structure.md)
 - [Backend foundation](docs/backend-foundation.md)
 - [Development guide](docs/development.md)
 - [Engineering review](docs/engineering-review.md)
@@ -166,9 +148,8 @@ The tests use dependency overrides and mocks. They do not require PostgreSQL, Do
 
 ## Configuration and secrets
 
-`.env.example` contains local development defaults only. Copy it to `.env`; never commit `.env`, credentials, private documents or production data.
-
-Production deployments must replace all development credentials through environment variables or a secret-management system.
+`.env.example` contains local development defaults only. Copy it to `.env`;
+never commit `.env`, credentials, private documents, or production data.
 
 ## License
 

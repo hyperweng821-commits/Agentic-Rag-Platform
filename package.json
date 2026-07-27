@@ -2,7 +2,7 @@
   "name": "agentic-rag-platform",
   "version": "0.1.0",
   "private": true,
-  "description": "Observable, evaluable and locally deployable Agentic RAG platform.",
+  "description": "Local-first, observable and policy-controlled AI agent runtime for private engineering workflows.",
   "workspaces": [
     "apps/web",
     "packages/api-client"
