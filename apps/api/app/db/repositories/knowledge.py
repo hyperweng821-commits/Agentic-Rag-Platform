@@ -1,12 +1,13 @@
-"""Explicit SQLAlchemy queries for AF-1 durable records."""
+"""Explicit SQLAlchemy queries for AF-1 and AF-2A durable records."""
 
+from collections.abc import Sequence
 from uuid import UUID
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.db.models import Document, IngestionJob, KnowledgeBase
+from app.db.models import Document, DocumentChunk, IngestionJob, KnowledgeBase
 
 
 class KnowledgeBaseRepository:
@@ -83,6 +84,35 @@ class DocumentRepository:
             .offset(offset)
         )
         return list((await self._session.scalars(statement)).all())
+
+
+class DocumentChunkRepository:
+    """Persistence operations for ordered, PostgreSQL-authoritative chunks."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def list_for_document(self, document_id: UUID) -> list[DocumentChunk]:
+        statement = (
+            select(DocumentChunk)
+            .where(DocumentChunk.document_id == document_id)
+            .order_by(DocumentChunk.chunk_index.asc())
+        )
+        return list((await self._session.scalars(statement)).all())
+
+    async def replace_for_document(
+        self,
+        document_id: UUID,
+        chunks: Sequence[DocumentChunk],
+    ) -> None:
+        if any(chunk.document_id != document_id for chunk in chunks):
+            raise ValueError("Every replacement chunk must match the target document_id.")
+
+        await self._session.execute(
+            delete(DocumentChunk).where(DocumentChunk.document_id == document_id)
+        )
+        self._session.add_all(list(chunks))
+        await self._session.flush()
 
 
 class IngestionJobRepository:

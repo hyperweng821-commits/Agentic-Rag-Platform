@@ -6,9 +6,10 @@ for private engineering workflows.
 ## Project status
 
 AgentForge currently includes the completed Phase 3 application foundation,
-AF-0 product boundary, and AF-1 private document intake with durable PostgreSQL
-jobs. It is not production-ready, and later ingestion, retrieval, agent, and
-RAG capabilities described in the roadmap remain plans.
+AF-0 product boundary, AF-1 private document intake, and the AF-2A persistence
+foundation for durable ingestion. It is not production-ready, and executable
+ingestion, retrieval, agent, and RAG capabilities described in the roadmap
+remain plans.
 
 ### Implemented now
 
@@ -24,11 +25,13 @@ RAG capabilities described in the roadmap remain plans.
 - secure local PDF, Markdown and text upload
 - streamed SHA-256 deduplication within a knowledge base
 - durable pending ingestion-job records and idempotent failed-job retry
+- bounded retry, progress, claim, lease, and retry-scheduling job metadata
+- PostgreSQL-authoritative ordered document-chunk persistence
 
 ### Planned only
 
-- document parsing and ingestion execution
-- chunks
+- document parsing, normalization, and deterministic chunk production
+- ingestion-job claiming and execution
 - embeddings
 - Chroma indexing
 - hybrid retrieval
@@ -44,9 +47,13 @@ RAG capabilities described in the roadmap remain plans.
 Directories retained with `.gitkeep` reserve possible future locations; they are
 not implementations.
 
-AF-1 accepts and stores source files and creates durable jobs, but no worker
-executes those jobs yet. Uploaded documents therefore remain pending until AF-2
-adds the explicitly deferred processing pipeline.
+AF-1 accepts and stores source files and creates durable jobs. AF-2A adds only
+the schema and repository foundation for later processing: it preserves the
+`pending`, `processing`, `completed`, and `failed` states, adds lease and retry
+metadata, and defines authoritative ordered chunk records. No worker executes
+jobs and no chunk content is produced yet. AF-2B will add parsing,
+normalization, and deterministic chunking; AF-2C will add job claiming,
+execution, retries, and lease recovery.
 
 ## Quick start with Docker
 
@@ -85,6 +92,14 @@ API documentation is available at <http://localhost:8000/docs>.
 Uploaded files use the local `upload_data` volume. Configure
 `MAX_UPLOAD_SIZE_BYTES` to change the default 10 MiB per-file limit.
 
+Apply database migrations from the repository root:
+
+```bash
+docker compose up -d
+docker compose exec api uv run alembic upgrade head
+docker compose exec api uv run alembic current
+```
+
 ```bash
 docker compose down
 ```
@@ -119,7 +134,7 @@ uv run ruff check .
 uv run ruff format --check .
 uv run mypy app
 uv run pytest
-python -m compileall app
+python -m compileall app tests
 ```
 
 Run frontend checks from the repository root:
@@ -139,7 +154,7 @@ Ordinary unit tests do not require Ollama, ChromaDB, MCP, or network access.
 
 | Path | Responsibility |
 | --- | --- |
-| `apps/api` | FastAPI foundation, AF-1 intake domain, migration, and backend tests |
+| `apps/api` | FastAPI, AF-1 intake, AF-2A persistence, migrations, and backend tests |
 | `apps/web` | React application shell |
 | `packages/api-client` | TypeScript API-client package boundary |
 | `docs` | Product boundary, architecture, roadmap, and decisions |

@@ -1,4 +1,4 @@
-"""Durable PostgreSQL records for AF-1 knowledge intake."""
+"""Durable PostgreSQL records for AF-1 intake and the AF-2A foundation."""
 
 from datetime import datetime
 from enum import StrEnum
@@ -32,7 +32,7 @@ class DocumentStatus(StrEnum):
 
 
 class IngestionJobStatus(StrEnum):
-    """Durable ingestion-job states; AF-1 creates but does not execute jobs."""
+    """Durable ingestion-job states shared by AF-1 and the AF-2 foundation."""
 
     PENDING = "pending"
     PROCESSING = "processing"
@@ -41,7 +41,7 @@ class IngestionJobStatus(StrEnum):
 
 
 class TimestampMixin:
-    """Server-timestamped fields shared by AF-1 records."""
+    """Server-timestamped fields shared by durable knowledge records."""
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -142,6 +142,12 @@ class Document(TimestampMixin, Base):
         passive_deletes=True,
         uselist=False,
     )
+    chunks: Mapped[list["DocumentChunk"]] = relationship(
+        back_populates="document",
+        cascade="all, delete-orphan",
+        order_by="DocumentChunk.chunk_index",
+        passive_deletes=True,
+    )
 
 
 class IngestionJob(TimestampMixin, Base):
@@ -151,15 +157,47 @@ class IngestionJob(TimestampMixin, Base):
     __table_args__ = (
         UniqueConstraint("document_id", name="uq_ingestion_jobs_document_id"),
         CheckConstraint("attempt_count >= 0", name="nonnegative_attempt_count"),
+        CheckConstraint("max_attempts > 0", name="positive_max_attempts"),
+        CheckConstraint(
+            "attempt_count <= max_attempts",
+            name="attempt_count_within_max_attempts",
+        ),
+        CheckConstraint(
+            "progress_percent BETWEEN 0 AND 100",
+            name="progress_percent_range",
+        ),
         CheckConstraint(
             "status IN ('pending', 'processing', 'completed', 'failed')",
             name="valid_status",
+        ),
+        CheckConstraint(
+            "claimed_by IS NULL OR char_length(btrim(claimed_by)) BETWEEN 1 AND 255",
+            name="claimed_by_nonblank",
+        ),
+        CheckConstraint(
+            "("
+            "claimed_by IS NULL AND claimed_at IS NULL AND lease_expires_at IS NULL"
+            ") OR ("
+            "claimed_by IS NOT NULL AND claimed_at IS NOT NULL "
+            "AND lease_expires_at IS NOT NULL"
+            ")",
+            name="lease_fields_consistent",
+        ),
+        CheckConstraint(
+            "lease_expires_at IS NULL OR lease_expires_at > claimed_at",
+            name="lease_window",
         ),
         CheckConstraint(
             "safe_error_message IS NULL OR char_length(safe_error_message) <= 1000",
             name="safe_error_message_length",
         ),
         Index("ix_ingestion_jobs_status_created_at", "status", "created_at"),
+        Index("ix_ingestion_jobs_status_next_retry_at", "status", "next_retry_at"),
+        Index(
+            "ix_ingestion_jobs_status_lease_expires_at",
+            "status",
+            "lease_expires_at",
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(
@@ -184,9 +222,63 @@ class IngestionJob(TimestampMixin, Base):
         default=0,
         server_default="0",
     )
+    max_attempts: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=3,
+        server_default="3",
+    )
+    progress_percent: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+    claimed_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    next_retry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     error_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
     safe_error_message: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     document: Mapped[Document] = relationship(back_populates="ingestion_job")
+
+
+class DocumentChunk(TimestampMixin, Base):
+    """PostgreSQL-authoritative normalized text for one ordered document chunk."""
+
+    __tablename__ = "document_chunks"
+    __table_args__ = (
+        UniqueConstraint(
+            "document_id",
+            "chunk_index",
+            name="uq_document_chunks_document_id_chunk_index",
+        ),
+        CheckConstraint("chunk_index >= 0", name="nonnegative_chunk_index"),
+        CheckConstraint("token_count >= 0", name="nonnegative_token_count"),
+        CheckConstraint(
+            "char_length(btrim(normalized_text)) > 0",
+            name="nonempty_normalized_text",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+    )
+    document_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    normalized_text: Mapped[str] = mapped_column(Text, nullable=False)
+    token_count: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    document: Mapped[Document] = relationship(back_populates="chunks")

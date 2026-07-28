@@ -2,7 +2,8 @@
 
 ## Current implementation status
 
-The Phase 3 foundation and AF-1 knowledge intake are implemented:
+The Phase 3 foundation, AF-1 knowledge intake, and AF-2A ingestion persistence
+foundation are implemented:
 
 - FastAPI application factory and lifecycle;
 - typed configuration;
@@ -14,12 +15,15 @@ The Phase 3 foundation and AF-1 knowledge intake are implemented:
 - durable `KnowledgeBase`, `Document`, and `IngestionJob` PostgreSQL records;
 - secure local PDF, Markdown and text intake with streamed hashing;
 - database-enforced per-knowledge-base deduplication;
-- idempotent retry transitions for failed ingestion jobs.
+- idempotent retry transitions for failed ingestion jobs;
+- bounded attempt, progress, claim, lease, and retry-scheduling job metadata;
+- PostgreSQL-authoritative `DocumentChunk` records with deterministic ordering.
 
-The health and AF-1 metadata/upload/job endpoints are implemented. AF-1 does
-not execute jobs. Parsing, chunks, embeddings, Chroma indexing, retrieval,
-agent, tool, approval, trace, and evaluation capabilities are planned and
-unimplemented. P1 enhancements are deferred.
+The health and AF-1 metadata/upload/job endpoints are implemented. AF-2A does
+not change those contracts and does not execute jobs or produce chunks.
+Parsing, normalization, chunk creation, worker execution, embeddings, Chroma
+indexing, retrieval, agent, tool, approval, trace, and evaluation capabilities
+are planned and unimplemented. P1 enhancements are deferred.
 
 ## Architectural principles
 
@@ -62,7 +66,7 @@ flowchart TD
     ChatAdapter["ChatModel Adapter (planned)"]
     EmbeddingAdapter["EmbeddingModel Adapter (planned)"]
     VectorAdapter["VectorStore Adapter (planned)"]
-    PG[(PostgreSQL infrastructure; business data planned)]
+    PG[(PostgreSQL; AF-1 and AF-2A business source of truth)]
     Chroma[(ChromaDB rebuildable index; planned)]
     Ollama["Ollama provider (planned)"]
     Files[(Local File Storage; AF-1)]
@@ -126,27 +130,58 @@ create a second execution or policy path.
 
 ## Ingestion flow
 
-AF-1 implements upload validation, local storage, and durable records. The
-remaining processing flow is planned for AF-2:
+AF-1 implements upload validation, local storage, and durable document/job
+records. AF-2A adds the lease/retry fields and authoritative chunk table needed
+by later stages; it does not move jobs through this flow:
 
 ```mermaid
 flowchart LR
     Upload["Upload (AF-1)"] --> Validate["Validate (AF-1)"]
     Validate --> Storage["Local storage (AF-1)"]
     Storage --> Records["PostgreSQL Document + IngestionJob (AF-1)"]
-    Records --> Claim["Worker claim (planned)"]
-    Claim --> Parse["Parse (planned)"]
-    Parse --> Normalize["Normalize (planned)"]
-    Normalize --> Chunk["Chunk (planned)"]
-    Chunk --> PGChunks["PostgreSQL chunks (planned)"]
-    PGChunks --> Embed["Embed (planned)"]
-    Embed --> Upsert["Chroma upsert (planned)"]
-    Upsert --> Ready["Ready (planned)"]
+    Records --> Claim["Claim with lease (AF-2C planned)"]
+    Claim --> Parse["Parse (AF-2B planned)"]
+    Parse --> Normalize["Normalize (AF-2B planned)"]
+    Normalize --> Chunk["Deterministic chunking (AF-2B planned)"]
+    Chunk --> PGChunks["DocumentChunk writes (AF-2C planned; schema AF-2A)"]
+    PGChunks --> Embed["Embed (AF-2D planned)"]
+    Embed --> Upsert["Chroma upsert (AF-2E planned)"]
+    Upsert --> Ready["Ready (AF-2E planned)"]
 ```
 
 PostgreSQL is authoritative. Chroma can be rebuilt from PostgreSQL-authoritative
 records. A document is not searchable until all required persistence and index
 states are complete.
+
+### AF-2A persistence model
+
+The four AF-1 lifecycle values remain unchanged: `pending`, `processing`,
+`completed`, and `failed`. `IngestionJob` reuses its existing attempt, failure,
+start, and finish fields and adds:
+
+- `max_attempts` and `progress_percent`;
+- `claimed_by`, `claimed_at`, and `lease_expires_at`;
+- `next_retry_at`.
+
+Database checks keep attempts non-negative and within a positive maximum,
+progress between 0 and 100, and claimant identifiers nonblank when present.
+Claim identity and timestamps must be either all absent or all present, and a
+lease must expire after it is claimed. The existing status/creation index
+continues to provide queue ordering; status/retry and status/lease indexes
+support future scheduled-retry and expired-lease queries.
+
+`DocumentChunk` has a stable UUID, a cascading document association, a
+zero-based `chunk_index`, normalized text, a non-negative token count, and the
+shared timestamps. Database constraints require non-negative ordering,
+nonempty text, and uniqueness of `(document_id, chunk_index)`. That unique key
+also provides document-ordered lookup without a redundant document-only index.
+Embeddings and vector-store identifiers are deliberately absent.
+
+AF-2B will consume the model boundary by adding parsers, normalization, and a
+deterministic chunker. AF-2C will own worker execution, claiming, lease
+renewal/recovery, retry scheduling, lifecycle transitions, and transactional
+chunk replacement. AF-2D and AF-2E remain responsible for model/vector adapter
+boundaries and Chroma integration respectively.
 
 ## Planned hybrid retrieval flow
 

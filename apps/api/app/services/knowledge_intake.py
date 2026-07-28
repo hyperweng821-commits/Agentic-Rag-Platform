@@ -170,6 +170,11 @@ class KnowledgeIntakeService:
                 raise ConflictError("Only failed ingestion jobs can be retried.")
 
             job.status = IngestionJobStatus.PENDING.value
+            job.progress_percent = 0
+            job.claimed_by = None
+            job.claimed_at = None
+            job.lease_expires_at = None
+            job.next_retry_at = None
             job.error_code = None
             job.safe_error_message = None
             job.started_at = None

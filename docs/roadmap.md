@@ -1,9 +1,9 @@
 # AgentForge roadmap
 
-AF-0 and AF-1 are implemented. Later phases remain planned and unimplemented.
-Interfaces are introduced only with their first consuming feature. No phase
-begins before the previous phase meets its acceptance criteria. P1 work cannot
-block the P0 recruiting demo.
+AF-0, AF-1, and AF-2A are implemented. AF-2B onward remain planned and
+unimplemented. Interfaces are introduced only with their first consuming
+feature. No phase begins before the previous phase meets its acceptance
+criteria. P1 work cannot block the P0 recruiting demo.
 
 ## AF-0 — Product boundary and safe branding
 
@@ -42,22 +42,68 @@ and later ingestion work begin in AF-2.
 
 **Proposed commit message:** `feat(knowledge): add private document intake and durable jobs`
 
-## AF-2 — Parsing, chunking, embeddings and vector indexing
+## AF-2 — Durable ingestion and vector indexing
 
-**Objective:** Add the planned durable ingestion and rebuildable vector-index
+AF-2 is delivered in bounded stages so its persistence, deterministic
+transformation, execution, adapter, and integration concerns remain separate.
+
+### AF-2A — Schema and persistence foundation
+
+**Status:** Implemented.
+
+**Objective:** Prepare PostgreSQL for durable ingestion without executing the
 pipeline.
 
-**Included scope:** PDF, Markdown and TXT parsers, deterministic chunking,
-`Chunk` persistence, fake and Ollama `EmbeddingModel` adapters, fake and Chroma
-`VectorStore` adapters, ingestion worker, leases, retries, and Chroma rebuild.
+**Included scope:** Preserve the AF-1 `pending`, `processing`, `completed`, and
+`failed` states; add maximum-attempt, progress, claim, lease, and retry
+scheduling metadata; add the PostgreSQL-authoritative `DocumentChunk` model;
+add constraints, indexes, a reversible migration, repository primitives, and
+focused tests.
 
-**Explicit exclusions:** Retrieval APIs, Agent Runtime, tools, and reranking.
+**Explicit exclusions:** Parsing, text normalization, chunking algorithms,
+workers, polling, job claiming, embeddings, Chroma writes, retrieval, and API
+changes.
 
-**Acceptance criteria:** Supported files produce deterministic authoritative
-chunks; jobs recover from leases and retries; the Chroma index rebuilds from
-PostgreSQL; fake-adapter tests pass.
+**Implemented result:** Existing AF-1 records remain compatible. Future work
+can locate queued/retryable jobs and expired leases efficiently, while ordered
+normalized chunks have stable UUIDs and a unique document/index identity.
 
-**Proposed commit message:** `feat(ingestion): add durable parsing and vector indexing`
+**Proposed commit message:** `feat(ingestion): add AF-2A persistence foundation`
+
+### AF-2B — Parsing, normalization, and deterministic chunking
+
+**Objective:** Add isolated PDF, Markdown, and text parsers, canonical text
+normalization, and deterministic chunk production.
+
+**Explicit exclusions:** Worker execution, job claiming, embeddings, and
+vector-store writes.
+
+### AF-2C — Worker execution, leases, retries, and recovery
+
+**Objective:** Claim eligible PostgreSQL jobs, enforce attempt and lease
+bounds, recover expired work, persist chunks transactionally, and record safe
+outcomes.
+
+**Explicit exclusions:** Embedding generation and Chroma writes.
+
+### AF-2D — Embedding and vector-store boundaries
+
+**Objective:** Introduce `EmbeddingModel` and `VectorStore` boundaries with
+deterministic fakes and their first consumers.
+
+**Explicit exclusions:** End-to-end Chroma indexing and rebuild behavior.
+
+### AF-2E — Chroma indexing and rebuild
+
+**Objective:** Add idempotent Chroma indexing, PostgreSQL-authoritative index
+rebuild, and end-to-end ingestion integration.
+
+**AF-2 acceptance criteria:** Supported files produce deterministic
+authoritative chunks; jobs recover through bounded leases and retries; Chroma
+rebuilds from PostgreSQL; fake-adapter and end-to-end tests pass.
+
+**AF-2 explicit exclusions:** Retrieval APIs, Agent Runtime, tools, and
+reranking.
 
 ## AF-3 — Hybrid retrieval and citations
 
