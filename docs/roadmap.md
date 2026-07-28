@@ -1,9 +1,10 @@
 # AgentForge roadmap
 
-AF-0, AF-1, and AF-2A are implemented. AF-2B onward remain planned and
-unimplemented. Interfaces are introduced only with their first consuming
-feature. No phase begins before the previous phase meets its acceptance
-criteria. P1 work cannot block the P0 recruiting demo.
+AF-0, AF-1, AF-2A, and the explicitly approved end-to-end AF-2B scope are
+implemented. AF-3 onward remain planned and unimplemented. Interfaces are
+introduced only with their first consuming feature. No phase begins before the
+previous phase meets its acceptance criteria. P1 work cannot block the P0
+recruiting demo.
 
 ## AF-0 — Product boundary and safe branding
 
@@ -70,40 +71,38 @@ normalized chunks have stable UUIDs and a unique document/index identity.
 
 **Proposed commit message:** `feat(ingestion): add AF-2A persistence foundation`
 
-### AF-2B — Parsing, normalization, and deterministic chunking
+### AF-2B — Deterministic processing and rebuildable vector indexing
 
-**Objective:** Add isolated PDF, Markdown, and text parsers, canonical text
-normalization, and deterministic chunk production.
+**Status:** Implemented.
 
-**Explicit exclusions:** Worker execution, job claiming, embeddings, and
-vector-store writes.
+**Objective:** Turn the AF-2A durable foundation into an executable,
+deterministic, and rebuildable ingestion pipeline.
 
-### AF-2C — Worker execution, leases, retries, and recovery
+**Included scope:** Isolated text, Markdown, and extractable-text PDF parsers;
+canonical normalization; deterministic overlapping chunks with hashes and
+source provenance; transactional chunk replacement; PostgreSQL-safe claiming,
+leases, bounded retries, cancellation, and expired-work recovery; explicit
+`EmbeddingModel` and `VectorStore` boundaries with deterministic fakes; Ollama
+embeddings; idempotent Chroma indexing; and document/knowledge-base rebuild
+commands.
 
-**Objective:** Claim eligible PostgreSQL jobs, enforce attempt and lease
-bounds, recover expired work, persist chunks transactionally, and record safe
-outcomes.
+**Implemented result:** Supported managed files produce deterministic
+PostgreSQL-authoritative chunks. The worker uses short transactions for claims
+and lifecycle transitions, never spans slow parser/provider work with an open
+transaction, and does not mark completion before vector indexing succeeds.
+Chroma vector IDs derive from durable chunks and the index can be regenerated
+without treating Chroma as authoritative.
 
-**Explicit exclusions:** Embedding generation and Chroma writes.
+**Explicit exclusions:** Retrieval APIs, semantic or hybrid search, RAG,
+reranking, Agent Runtime, tools, OCR, arbitrary URL ingestion, and
+client-provided filesystem paths.
 
-### AF-2D — Embedding and vector-store boundaries
+**Acceptance criteria:** Supported files produce deterministic authoritative
+chunks; jobs recover through bounded leases and retries; Chroma rebuilds from
+PostgreSQL; deterministic fake-adapter, lifecycle, concurrency, and
+cancellation tests pass.
 
-**Objective:** Introduce `EmbeddingModel` and `VectorStore` boundaries with
-deterministic fakes and their first consumers.
-
-**Explicit exclusions:** End-to-end Chroma indexing and rebuild behavior.
-
-### AF-2E — Chroma indexing and rebuild
-
-**Objective:** Add idempotent Chroma indexing, PostgreSQL-authoritative index
-rebuild, and end-to-end ingestion integration.
-
-**AF-2 acceptance criteria:** Supported files produce deterministic
-authoritative chunks; jobs recover through bounded leases and retries; Chroma
-rebuilds from PostgreSQL; fake-adapter and end-to-end tests pass.
-
-**AF-2 explicit exclusions:** Retrieval APIs, Agent Runtime, tools, and
-reranking.
+**Proposed commit message:** `feat(ingestion): add deterministic processing and rebuildable indexing`
 
 ## AF-3 — Hybrid retrieval and citations
 

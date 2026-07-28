@@ -112,6 +112,28 @@ def test_document_chunk_has_deterministic_ordering_and_content_constraints() -> 
     assert DocumentChunk.__table__.c.token_count.nullable is False
 
 
+def test_document_chunk_has_nullable_validated_provenance_metadata() -> None:
+    columns = DocumentChunk.__table__.c
+    names = _constraint_names(DocumentChunk.__table__)
+    check_sql = _check_sql(DocumentChunk.__table__)
+
+    assert {
+        "ck_document_chunks_valid_content_sha256",
+        "ck_document_chunks_valid_source_offsets",
+        "ck_document_chunks_valid_page_range",
+    } <= names
+    assert columns.content_sha256.nullable
+    assert columns.start_offset.nullable
+    assert columns.end_offset.nullable
+    assert columns.page_start.nullable
+    assert columns.page_end.nullable
+    assert "^[0-9a-f]{64}$" in check_sql
+    assert "start_offset >= 0" in check_sql
+    assert "end_offset > start_offset" in check_sql
+    assert "page_start > 0" in check_sql
+    assert "page_end >= page_start" in check_sql
+
+
 def test_document_to_chunk_relationship_uses_database_cascade() -> None:
     relationship = Document.chunks.property
     foreign_key = next(iter(DocumentChunk.__table__.c.document_id.foreign_keys))

@@ -1,4 +1,4 @@
-"""Offline upgrade/downgrade tests for the AF-1 and AF-2A migrations."""
+"""Offline upgrade/downgrade tests for the AF-1 through AF-2B migrations."""
 
 from io import StringIO
 
@@ -39,17 +39,18 @@ def test_migration_downgrade_removes_all_af1_tables_in_reverse_order() -> None:
     assert sql.index("DROP TABLE documents") < sql.index("DROP TABLE knowledge_bases")
 
 
-def test_af2a_migration_is_the_single_current_head() -> None:
+def test_af2b_migration_is_the_single_current_head() -> None:
     scripts = ScriptDirectory.from_config(_config(StringIO()))
 
-    assert scripts.get_current_head() == "20260728_0002"
+    assert scripts.get_current_head() == "20260728_0003"
+    assert scripts.get_revision("20260728_0003").down_revision == "20260728_0002"
     assert scripts.get_revision("20260728_0002").down_revision == "20260727_0001"
 
 
 def test_af2a_upgrade_adds_job_leases_and_document_chunks() -> None:
     output = StringIO()
 
-    command.upgrade(_config(output), "20260727_0001:head", sql=True)
+    command.upgrade(_config(output), "20260727_0001:20260728_0002", sql=True)
 
     sql = output.getvalue()
     assert "ALTER TABLE ingestion_jobs ADD COLUMN max_attempts" in sql
@@ -77,7 +78,7 @@ def test_af2a_upgrade_adds_job_leases_and_document_chunks() -> None:
 def test_af2a_downgrade_removes_only_af2a_schema() -> None:
     output = StringIO()
 
-    command.downgrade(_config(output), "head:20260727_0001", sql=True)
+    command.downgrade(_config(output), "20260728_0002:20260727_0001", sql=True)
 
     sql = output.getvalue()
     assert "DROP TABLE document_chunks" in sql
@@ -92,3 +93,36 @@ def test_af2a_downgrade_removes_only_af2a_schema() -> None:
     assert "DROP TABLE ingestion_jobs" not in sql
     assert "DROP TABLE documents" not in sql
     assert "DROP TABLE knowledge_bases" not in sql
+
+
+def test_af2b_upgrade_adds_nullable_chunk_provenance() -> None:
+    output = StringIO()
+
+    command.upgrade(_config(output), "20260728_0002:20260728_0003", sql=True)
+
+    sql = output.getvalue()
+    assert "ALTER TABLE document_chunks ADD COLUMN content_sha256 VARCHAR(64)" in sql
+    assert "ALTER TABLE document_chunks ADD COLUMN start_offset INTEGER" in sql
+    assert "ALTER TABLE document_chunks ADD COLUMN end_offset INTEGER" in sql
+    assert "ALTER TABLE document_chunks ADD COLUMN page_start INTEGER" in sql
+    assert "ALTER TABLE document_chunks ADD COLUMN page_end INTEGER" in sql
+    assert "ck_document_chunks_valid_content_sha256" in sql
+    assert "ck_document_chunks_valid_source_offsets" in sql
+    assert "ck_document_chunks_valid_page_range" in sql
+
+
+def test_af2b_downgrade_removes_only_chunk_provenance() -> None:
+    output = StringIO()
+
+    command.downgrade(_config(output), "20260728_0003:20260728_0002", sql=True)
+
+    sql = output.getvalue()
+    assert "DROP CONSTRAINT ck_document_chunks_valid_page_range" in sql
+    assert "DROP CONSTRAINT ck_document_chunks_valid_source_offsets" in sql
+    assert "DROP CONSTRAINT ck_document_chunks_valid_content_sha256" in sql
+    assert "ALTER TABLE document_chunks DROP COLUMN page_end" in sql
+    assert "ALTER TABLE document_chunks DROP COLUMN page_start" in sql
+    assert "ALTER TABLE document_chunks DROP COLUMN end_offset" in sql
+    assert "ALTER TABLE document_chunks DROP COLUMN start_offset" in sql
+    assert "ALTER TABLE document_chunks DROP COLUMN content_sha256" in sql
+    assert "DROP TABLE document_chunks" not in sql

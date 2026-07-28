@@ -12,7 +12,7 @@ bootstrap: ## Prepare and start the current AgentForge foundation
 up: ## Start the AgentForge API foundation and PostgreSQL
 	docker compose up --build -d postgres api
 
-up-rag: ## Start the foundation plus optional future AI infrastructure
+up-rag: ## Start the API plus AF-2B Ollama and Chroma infrastructure
 	docker compose --profile rag up --build -d
 
 up-frontend: ## Start the foundation plus the AgentForge frontend
@@ -27,7 +27,7 @@ logs: ## Follow service logs
 ps: ## Show container status
 	docker compose ps
 
-pull-models: ## Planned capability: start Ollama and pull local models
+pull-models: ## Start Ollama and pull the configured local models
 	docker compose --profile rag up -d ollama
 	./scripts/pull_models.sh
 

@@ -1,4 +1,4 @@
-"""AF-1 and AF-2A SQLAlchemy repositories."""
+"""AF-1 and AF-2 SQLAlchemy repositories."""
 
 from app.db.repositories.knowledge import (
     DocumentChunkRepository,

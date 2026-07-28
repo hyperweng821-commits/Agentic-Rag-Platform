@@ -6,10 +6,10 @@ for private engineering workflows.
 ## Project status
 
 AgentForge currently includes the completed Phase 3 application foundation,
-AF-0 product boundary, AF-1 private document intake, and the AF-2A persistence
-foundation for durable ingestion. It is not production-ready, and executable
-ingestion, retrieval, agent, and RAG capabilities described in the roadmap
-remain plans.
+AF-0 product boundary, AF-1 private document intake, the AF-2A persistence
+foundation, and AF-2B durable document processing with rebuildable vector
+indexing. It is not production-ready. Retrieval, agent, and RAG capabilities
+described in the roadmap remain plans.
 
 ### Implemented now
 
@@ -26,14 +26,15 @@ remain plans.
 - streamed SHA-256 deduplication within a knowledge base
 - durable pending ingestion-job records and idempotent failed-job retry
 - bounded retry, progress, claim, lease, and retry-scheduling job metadata
-- PostgreSQL-authoritative ordered document-chunk persistence
+- text, Markdown, and extractable-text PDF parsing
+- deterministic normalization and overlapping chunk production
+- PostgreSQL-authoritative ordered chunks with hashes and source provenance
+- PostgreSQL-safe worker claiming, bounded retries, and expired-lease recovery
+- Ollama embedding and Chroma vector-store adapters behind explicit boundaries
+- idempotent document and knowledge-base vector-index rebuilds
 
 ### Planned only
 
-- document parsing, normalization, and deterministic chunk production
-- ingestion-job claiming and execution
-- embeddings
-- Chroma indexing
 - hybrid retrieval
 - Agent Runtime
 - Tool Registry
@@ -47,13 +48,13 @@ remain plans.
 Directories retained with `.gitkeep` reserve possible future locations; they are
 not implementations.
 
-AF-1 accepts and stores source files and creates durable jobs. AF-2A adds only
-the schema and repository foundation for later processing: it preserves the
-`pending`, `processing`, `completed`, and `failed` states, adds lease and retry
-metadata, and defines authoritative ordered chunk records. No worker executes
-jobs and no chunk content is produced yet. AF-2B will add parsing,
-normalization, and deterministic chunking; AF-2C will add job claiming,
-execution, retries, and lease recovery.
+AF-1 accepts and stores source files and creates durable jobs. AF-2A added the
+schema and repository foundation while preserving the `pending`, `processing`,
+`completed`, and `failed` states. AF-2B now claims those jobs, parses only
+server-managed artifacts, writes deterministic chunks to PostgreSQL, generates
+embeddings through Ollama, and maintains Chroma as a derived index. PostgreSQL
+remains authoritative, so the vector index can be rebuilt for one document or
+one knowledge base without an HTTP retrieval API.
 
 ## Quick start with Docker
 
@@ -105,8 +106,10 @@ docker compose down
 ```
 
 Equivalent helpers are `make up`, `make up-rag`, and `make up-frontend`.
-The latter two expose optional infrastructure or the frontend shell; they do
-not imply that planned product capabilities exist.
+`make up-rag` starts the Ollama and Chroma infrastructure consumed by AF-2B;
+it does not pull the configured embedding model automatically. The frontend
+profile remains an application shell and does not imply that planned retrieval
+or agent capabilities exist.
 
 ## Local backend development
 
@@ -154,7 +157,7 @@ Ordinary unit tests do not require Ollama, ChromaDB, MCP, or network access.
 
 | Path | Responsibility |
 | --- | --- |
-| `apps/api` | FastAPI, AF-1 intake, AF-2A persistence, migrations, and backend tests |
+| `apps/api` | FastAPI, AF-1 intake, AF-2 ingestion/indexing, migrations, workers, and backend tests |
 | `apps/web` | React application shell |
 | `packages/api-client` | TypeScript API-client package boundary |
 | `docs` | Product boundary, architecture, roadmap, and decisions |
