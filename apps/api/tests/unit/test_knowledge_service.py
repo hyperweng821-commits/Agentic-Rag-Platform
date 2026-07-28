@@ -2,7 +2,7 @@
 
 import asyncio
 from contextlib import AbstractAsyncContextManager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import TracebackType
 from unittest.mock import AsyncMock
@@ -84,6 +84,12 @@ def _timestamp_records() -> tuple[KnowledgeBase, Document, IngestionJob]:
         document_id=document.id,
         status="failed",
         attempt_count=1,
+        max_attempts=3,
+        progress_percent=75,
+        claimed_by="worker-1",
+        claimed_at=now,
+        lease_expires_at=now + timedelta(minutes=5),
+        next_retry_at=now + timedelta(minutes=10),
         error_code="PARSER_FAILED",
         safe_error_message="The document could not be processed.",
         started_at=now,
@@ -384,6 +390,11 @@ async def test_failed_job_retry_reuses_row_and_resets_document() -> None:
     assert job.attempt_count == 1
     assert job.error_code is None
     assert job.safe_error_message is None
+    assert job.progress_percent == 0
+    assert job.claimed_by is None
+    assert job.claimed_at is None
+    assert job.lease_expires_at is None
+    assert job.next_retry_at is None
     assert job.started_at is None
     assert job.finished_at is None
 

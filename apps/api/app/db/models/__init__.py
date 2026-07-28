@@ -1,7 +1,8 @@
-"""AF-1 durable knowledge-intake models."""
+"""Durable AF-1 and AF-2A knowledge models."""
 
 from app.db.models.knowledge import (
     Document,
+    DocumentChunk,
     DocumentStatus,
     IngestionJob,
     IngestionJobStatus,
@@ -10,6 +11,7 @@ from app.db.models.knowledge import (
 
 __all__ = [
     "Document",
+    "DocumentChunk",
     "DocumentStatus",
     "IngestionJob",
     "IngestionJobStatus",

@@ -1,12 +1,18 @@
-"""Focused tests for AF-1 repository query and flush behavior."""
+"""Focused tests for AF-1 and AF-2A repository query and flush behavior."""
 
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Document, IngestionJob, KnowledgeBase
-from app.db.repositories import DocumentRepository, IngestionJobRepository, KnowledgeBaseRepository
+from app.db.models import Document, DocumentChunk, IngestionJob, KnowledgeBase
+from app.db.repositories import (
+    DocumentChunkRepository,
+    DocumentRepository,
+    IngestionJobRepository,
+    KnowledgeBaseRepository,
+)
 
 
 async def test_repository_adds_flush_without_committing() -> None:
@@ -81,4 +87,72 @@ async def test_document_and_job_add_flush_without_commit() -> None:
 
     assert session.add.call_count == 2
     assert session.flush.await_count == 2
+    session.commit.assert_not_awaited()
+
+
+async def test_document_chunk_list_uses_deterministic_chunk_order() -> None:
+    session = AsyncMock(spec=AsyncSession)
+    scalar_result = MagicMock()
+    scalar_result.all.return_value = []
+    session.scalars.return_value = scalar_result
+    document_id = uuid4()
+
+    result = await DocumentChunkRepository(session).list_for_document(document_id)
+
+    assert result == []
+    statement = session.scalars.await_args.args[0]
+    rendered = str(statement)
+    assert "document_chunks.document_id" in rendered
+    assert "ORDER BY document_chunks.chunk_index ASC" in rendered
+
+
+async def test_document_chunk_replace_deletes_and_flushes_without_committing() -> None:
+    session = AsyncMock(spec=AsyncSession)
+    session.add_all = MagicMock()
+    document_id = uuid4()
+    chunks = [
+        DocumentChunk(
+            document_id=document_id,
+            chunk_index=0,
+            normalized_text="First chunk",
+            token_count=2,
+        ),
+        DocumentChunk(
+            document_id=document_id,
+            chunk_index=1,
+            normalized_text="Second chunk",
+            token_count=2,
+        ),
+    ]
+
+    await DocumentChunkRepository(session).replace_for_document(document_id, chunks)
+
+    delete_statement = session.execute.await_args.args[0]
+    assert "DELETE FROM document_chunks" in str(delete_statement)
+    assert "document_chunks.document_id" in str(delete_statement)
+    session.add_all.assert_called_once_with(chunks)
+    session.flush.assert_awaited_once_with()
+    session.commit.assert_not_awaited()
+
+
+async def test_document_chunk_replace_rejects_mismatched_document_ids() -> None:
+    session = AsyncMock(spec=AsyncSession)
+    session.add_all = MagicMock()
+    document_id = uuid4()
+    mismatched_chunk = DocumentChunk(
+        document_id=uuid4(),
+        chunk_index=0,
+        normalized_text="Wrong document",
+        token_count=2,
+    )
+
+    with pytest.raises(ValueError, match="document_id"):
+        await DocumentChunkRepository(session).replace_for_document(
+            document_id,
+            [mismatched_chunk],
+        )
+
+    session.execute.assert_not_awaited()
+    session.add_all.assert_not_called()
+    session.flush.assert_not_awaited()
     session.commit.assert_not_awaited()
