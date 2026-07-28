@@ -1,4 +1,4 @@
-"""Durable PostgreSQL records for AF-1 intake and the AF-2A foundation."""
+"""Durable PostgreSQL records for AF-1 intake and AF-2 ingestion."""
 
 from datetime import datetime
 from enum import StrEnum
@@ -265,6 +265,28 @@ class DocumentChunk(TimestampMixin, Base):
             "char_length(btrim(normalized_text)) > 0",
             name="nonempty_normalized_text",
         ),
+        CheckConstraint(
+            "content_sha256 IS NULL OR content_sha256 ~ '^[0-9a-f]{64}$'",
+            name="valid_content_sha256",
+        ),
+        CheckConstraint(
+            "("
+            "start_offset IS NULL AND end_offset IS NULL"
+            ") OR ("
+            "start_offset IS NOT NULL AND end_offset IS NOT NULL "
+            "AND start_offset >= 0 AND end_offset > start_offset"
+            ")",
+            name="valid_source_offsets",
+        ),
+        CheckConstraint(
+            "("
+            "page_start IS NULL AND page_end IS NULL"
+            ") OR ("
+            "page_start IS NOT NULL AND page_end IS NOT NULL "
+            "AND page_start > 0 AND page_end >= page_start"
+            ")",
+            name="valid_page_range",
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(
@@ -280,5 +302,10 @@ class DocumentChunk(TimestampMixin, Base):
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     normalized_text: Mapped[str] = mapped_column(Text, nullable=False)
     token_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    content_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    start_offset: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    end_offset: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    page_start: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    page_end: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     document: Mapped[Document] = relationship(back_populates="chunks")

@@ -4,8 +4,9 @@ from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlsplit
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -60,6 +61,30 @@ class Settings(BaseSettings):
     upload_root: Path = Path("data/uploads")
     max_upload_size_bytes: int = Field(default=10 * 1024 * 1024, ge=1, le=1024 * 1024 * 1024)
 
+    chunk_size_chars: int = Field(default=1200, ge=100, le=100_000)
+    chunk_overlap_chars: int = Field(default=200, ge=0, le=99_999)
+
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_embed_model: str = Field(default="qwen3-embedding:0.6b", min_length=1, max_length=255)
+    embedding_dimension: int = Field(default=1024, ge=1, le=65_536)
+    embedding_batch_size: int = Field(default=32, ge=1, le=1024)
+    embedding_request_timeout_seconds: float = Field(default=30.0, gt=0, le=600)
+
+    chroma_host: str = Field(default="localhost", min_length=1, max_length=253)
+    chroma_http_port: int = Field(default=8000, ge=1, le=65_535)
+    chroma_ssl: bool = False
+    chroma_collection_name: str = Field(
+        default="agentforge_document_chunks",
+        min_length=3,
+        max_length=512,
+        pattern=r"^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$",
+    )
+
+    ingestion_lease_seconds: int = Field(default=300, ge=30, le=86_400)
+    ingestion_retry_delay_seconds: int = Field(default=30, ge=1, le=86_400)
+    ingestion_worker_poll_interval_seconds: float = Field(default=2.0, gt=0, le=300)
+    ingestion_rebuild_batch_size: int = Field(default=32, ge=1, le=1024)
+
     cors_origins: list[str] = Field(
         default_factory=lambda: ["http://localhost:3000", "http://localhost:5173"]
     )
@@ -72,6 +97,36 @@ class Settings(BaseSettings):
             msg = "DATABASE_URL must use the postgresql+asyncpg:// scheme"
             raise ValueError(msg)
         return value
+
+    @field_validator("ollama_base_url")
+    @classmethod
+    def validate_ollama_base_url(cls, value: str) -> str:
+        """Require a bounded HTTP endpoint rather than an arbitrary URL scheme."""
+        parsed = urlsplit(value)
+        if parsed.scheme not in {"http", "https"} or parsed.hostname is None:
+            msg = "OLLAMA_BASE_URL must be an http:// or https:// URL"
+            raise ValueError(msg)
+        if parsed.query or parsed.fragment or parsed.username or parsed.password:
+            msg = "OLLAMA_BASE_URL must not contain credentials, a query, or a fragment"
+            raise ValueError(msg)
+        return value.rstrip("/")
+
+    @field_validator("chroma_host")
+    @classmethod
+    def validate_chroma_host(cls, value: str) -> str:
+        """Accept a host only; scheme and port are configured separately."""
+        if "://" in value or "/" in value or any(character.isspace() for character in value):
+            msg = "CHROMA_HOST must be a hostname without a scheme, path, or whitespace"
+            raise ValueError(msg)
+        return value
+
+    @model_validator(mode="after")
+    def validate_chunking_window(self) -> "Settings":
+        """Guarantee that deterministic chunking always advances."""
+        if self.chunk_overlap_chars >= self.chunk_size_chars:
+            msg = "CHUNK_OVERLAP_CHARS must be smaller than CHUNK_SIZE_CHARS"
+            raise ValueError(msg)
+        return self
 
     @field_validator("cors_origins")
     @classmethod

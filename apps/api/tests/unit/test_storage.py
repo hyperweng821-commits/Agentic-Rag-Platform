@@ -8,6 +8,7 @@ from app.ingestion.storage import (
     EmptyFileError,
     FileTooLargeError,
     LocalFileStorage,
+    StorageError,
     UnsafeStorageKeyError,
 )
 
@@ -110,3 +111,75 @@ async def test_source_failure_removes_partial_file(tmp_path: Path) -> None:
 
     assert not (tmp_path / "kb/file.txt").exists()
     assert not _matches(tmp_path, "*.tmp")
+
+
+async def test_storage_reads_a_bounded_managed_artifact(tmp_path: Path) -> None:
+    storage = LocalFileStorage(tmp_path)
+    await storage.store(
+        MemoryStream(b"private text"),
+        storage_key="kb/document.txt",
+        max_bytes=100,
+    )
+
+    content = await storage.read("kb/document.txt", max_bytes=12)
+
+    assert content == b"private text"
+
+
+async def test_storage_read_rejects_an_oversized_artifact(tmp_path: Path) -> None:
+    storage = LocalFileStorage(tmp_path)
+    await storage.store(
+        MemoryStream(b"private text"),
+        storage_key="kb/document.txt",
+        max_bytes=100,
+    )
+
+    with pytest.raises(FileTooLargeError):
+        await storage.read("kb/document.txt", max_bytes=11)
+
+
+@pytest.mark.parametrize(
+    "storage_key",
+    ["../outside.txt", "/absolute.txt", "kb/../../outside.txt", "."],
+)
+async def test_storage_read_rejects_path_traversal(
+    tmp_path: Path,
+    storage_key: str,
+) -> None:
+    storage = LocalFileStorage(tmp_path)
+
+    with pytest.raises(UnsafeStorageKeyError):
+        await storage.read(storage_key, max_bytes=100)
+
+
+async def test_storage_read_rejects_a_symlink_leaf(tmp_path: Path) -> None:
+    storage_root = tmp_path / "uploads"
+    outside = tmp_path / "outside.txt"
+    outside.write_bytes(b"must not be exposed")
+    target = storage_root / "kb" / "document.txt"
+    target.parent.mkdir(parents=True)
+    target.symlink_to(outside)
+    storage = LocalFileStorage(storage_root)
+
+    with pytest.raises(StorageError):
+        await storage.read("kb/document.txt", max_bytes=100)
+
+
+async def test_storage_read_rejects_a_symlinked_parent_outside_root(tmp_path: Path) -> None:
+    storage_root = tmp_path / "uploads"
+    outside = tmp_path / "outside"
+    storage_root.mkdir()
+    outside.mkdir()
+    (outside / "document.txt").write_bytes(b"must not be exposed")
+    (storage_root / "kb").symlink_to(outside, target_is_directory=True)
+    storage = LocalFileStorage(storage_root)
+
+    with pytest.raises(UnsafeStorageKeyError):
+        await storage.read("kb/document.txt", max_bytes=100)
+
+
+async def test_storage_read_requires_a_positive_bound(tmp_path: Path) -> None:
+    storage = LocalFileStorage(tmp_path)
+
+    with pytest.raises(ValueError, match="positive"):
+        await storage.read("kb/document.txt", max_bytes=0)

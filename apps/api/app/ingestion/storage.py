@@ -3,6 +3,7 @@
 import asyncio
 import hashlib
 import os
+import stat
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Protocol
@@ -42,6 +43,10 @@ class FileStorage(Protocol):
 
     async def delete(self, storage_key: str) -> None:
         """Idempotently remove a server-controlled key."""
+        ...
+
+    async def read(self, storage_key: str, *, max_bytes: int) -> bytes:
+        """Read one server-controlled key without exceeding ``max_bytes``."""
         ...
 
 
@@ -136,3 +141,37 @@ class LocalFileStorage:
         """Idempotently remove a stored file without exposing its host path."""
         target = self._resolve_key(storage_key)
         await asyncio.to_thread(target.unlink, missing_ok=True)
+
+    async def read(self, storage_key: str, *, max_bytes: int) -> bytes:
+        """Read a bounded regular file without following a replaced symlink."""
+        if max_bytes < 1:
+            raise ValueError("max_bytes must be positive")
+        target = self._resolve_key(storage_key)
+        try:
+            resolved_parent = await asyncio.to_thread(target.parent.resolve, strict=True)
+            resolved_parent.relative_to(self._root)
+            return await asyncio.to_thread(self._read_bounded, target, max_bytes)
+        except FileTooLargeError:
+            raise
+        except ValueError as exc:
+            raise UnsafeStorageKeyError from exc
+        except OSError as exc:
+            raise StorageError("The stored file could not be read.") from exc
+
+    @staticmethod
+    def _read_bounded(target: Path, max_bytes: int) -> bytes:
+        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(target, flags)
+        try:
+            metadata = os.fstat(descriptor)
+            if not stat.S_ISREG(metadata.st_mode):
+                raise StorageError("The storage key does not identify a regular file.")
+            if metadata.st_size > max_bytes:
+                raise FileTooLargeError
+            with os.fdopen(descriptor, "rb", closefd=False) as handle:
+                content = handle.read(max_bytes + 1)
+        finally:
+            os.close(descriptor)
+        if len(content) > max_bytes:
+            raise FileTooLargeError
+        return content

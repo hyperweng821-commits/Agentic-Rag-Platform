@@ -1,14 +1,23 @@
-"""Opt-in PostgreSQL tests for AF-2A constraints and transaction behavior."""
+"""Opt-in PostgreSQL tests for AF-2 durable schema and claim behavior."""
 
+import asyncio
 import os
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime, timedelta
-from uuid import uuid4
+from pathlib import Path
+from typing import Literal, cast
+from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import func, select
+from alembic.config import Config
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
+from alembic.script import ScriptDirectory
+from sqlalchemy import func, inspect, select
+from sqlalchemy.engine import Connection
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
@@ -18,20 +27,24 @@ from sqlalchemy.schema import CreateSchema, DropSchema
 
 from app.db.base import Base
 from app.db.models import Document, DocumentChunk, IngestionJob, KnowledgeBase
-from app.db.repositories import DocumentChunkRepository
+from app.db.repositories import DocumentChunkRepository, IngestionJobRepository
 
 pytestmark = pytest.mark.integration
 
 
-@pytest.fixture
-async def postgres_sessions() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
-    """Create an isolated schema only when an explicit test database is provided."""
+def _test_database_url() -> str:
     database_url = os.getenv("AF2A_TEST_DATABASE_URL")
     if database_url is None:
         pytest.skip("AF2A_TEST_DATABASE_URL is not configured")
     if not database_url.startswith("postgresql+asyncpg://"):
         pytest.fail("AF2A_TEST_DATABASE_URL must use postgresql+asyncpg://")
+    return database_url
 
+
+@pytest.fixture
+async def postgres_sessions() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
+    """Create an isolated schema only when an explicit test database is provided."""
+    database_url = _test_database_url()
     schema_name = f"af2a_test_{uuid4().hex}"
     admin_engine = create_async_engine(database_url, poolclass=NullPool)
     test_engine = create_async_engine(
@@ -58,6 +71,61 @@ async def postgres_sessions() -> AsyncIterator[async_sessionmaker[AsyncSession]]
             async with admin_engine.begin() as connection:
                 await connection.execute(DropSchema(schema_name, cascade=True, if_exists=True))
         await admin_engine.dispose()
+
+
+@pytest.fixture
+async def postgres_migration_engine() -> AsyncIterator[AsyncEngine]:
+    """Create an empty isolated schema for exercising real Alembic operations."""
+    database_url = _test_database_url()
+    schema_name = f"af2b_migration_{uuid4().hex}"
+    admin_engine = create_async_engine(database_url, poolclass=NullPool)
+    test_engine = create_async_engine(
+        database_url,
+        connect_args={"server_settings": {"search_path": schema_name}},
+        poolclass=NullPool,
+    )
+    schema_created = False
+    try:
+        async with admin_engine.begin() as connection:
+            await connection.execute(CreateSchema(schema_name))
+        schema_created = True
+        yield test_engine
+    finally:
+        await test_engine.dispose()
+        if schema_created:
+            async with admin_engine.begin() as connection:
+                await connection.execute(DropSchema(schema_name, cascade=True, if_exists=True))
+        await admin_engine.dispose()
+
+
+def _run_revision(
+    connection: Connection,
+    revision: str,
+    direction: Literal["upgrade", "downgrade"],
+) -> None:
+    config = Config(str(Path(__file__).resolve().parents[2] / "alembic.ini"))
+    scripts = ScriptDirectory.from_config(config)
+    revision_script = scripts.get_revision(revision)
+    migration = cast(Callable[[], None], getattr(revision_script.module, direction))
+    context = MigrationContext.configure(connection)
+    with Operations.context(context):
+        migration()
+
+
+def _upgrade_through_af2b(connection: Connection) -> None:
+    for revision in ("20260727_0001", "20260728_0002", "20260728_0003"):
+        _run_revision(connection, revision, "upgrade")
+
+
+def _chunk_schema(connection: Connection) -> tuple[set[str], set[str]]:
+    inspector = inspect(connection)
+    columns = {column["name"] for column in inspector.get_columns("document_chunks")}
+    constraints = {
+        constraint["name"]
+        for constraint in inspector.get_check_constraints("document_chunks")
+        if constraint["name"] is not None
+    }
+    return columns, constraints
 
 
 async def _add_document(
@@ -199,6 +267,36 @@ async def test_chunk_checks_and_document_order_uniqueness_are_enforced(
             normalized_text="Text",
             token_count=-1,
         ),
+        DocumentChunk(
+            document_id=document_id,
+            chunk_index=0,
+            normalized_text="Text",
+            token_count=1,
+            content_sha256="A" * 64,
+        ),
+        DocumentChunk(
+            document_id=document_id,
+            chunk_index=0,
+            normalized_text="Text",
+            token_count=1,
+            start_offset=0,
+        ),
+        DocumentChunk(
+            document_id=document_id,
+            chunk_index=0,
+            normalized_text="Text",
+            token_count=1,
+            start_offset=1,
+            end_offset=1,
+        ),
+        DocumentChunk(
+            document_id=document_id,
+            chunk_index=0,
+            normalized_text="Text",
+            token_count=1,
+            page_start=0,
+            page_end=1,
+        ),
     ]
     for invalid_chunk in invalid_chunks:
         async with postgres_sessions() as session:
@@ -310,3 +408,231 @@ async def test_chunk_replacement_rolls_back_atomically(
         chunks = await DocumentChunkRepository(session).list_for_document(document_id)
 
         assert [(chunk.chunk_index, chunk.normalized_text) for chunk in chunks] == [(0, "Original")]
+
+
+async def test_second_worker_skips_the_only_locked_job(
+    postgres_sessions: async_sessionmaker[AsyncSession],
+) -> None:
+    now = datetime.now(UTC)
+    async with postgres_sessions() as session, session.begin():
+        _, job = await _add_document(session)
+        job_id = job.id
+
+    release_claim = asyncio.Event()
+    first_claimed = asyncio.Event()
+
+    async def claim_and_hold() -> UUID:
+        async with postgres_sessions() as session, session.begin():
+            claimed = await IngestionJobRepository(session).claim_next(
+                worker_id="worker-1",
+                claimed_at=now,
+                lease_expires_at=now + timedelta(minutes=5),
+            )
+            assert claimed is not None
+            first_claimed.set()
+            await release_claim.wait()
+            return claimed.id
+
+    first_task = asyncio.create_task(claim_and_hold())
+    try:
+        await asyncio.wait_for(first_claimed.wait(), timeout=5)
+        async with postgres_sessions() as session, session.begin():
+            second_claim = await IngestionJobRepository(session).claim_next(
+                worker_id="worker-2",
+                claimed_at=now,
+                lease_expires_at=now + timedelta(minutes=5),
+            )
+        assert second_claim is None
+    finally:
+        release_claim.set()
+        first_job_id = await first_task
+
+    assert first_job_id == job_id
+
+
+async def test_concurrent_workers_skip_a_locked_claim_without_sleeping(
+    postgres_sessions: async_sessionmaker[AsyncSession],
+) -> None:
+    now = datetime.now(UTC)
+    async with postgres_sessions() as session, session.begin():
+        _, first_job = await _add_document(
+            session,
+            job_values={"created_at": now - timedelta(seconds=2)},
+        )
+        _, second_job = await _add_document(
+            session,
+            job_values={"created_at": now - timedelta(seconds=1)},
+        )
+        expected_job_ids = {first_job.id, second_job.id}
+
+    release_claims = asyncio.Event()
+    first_claimed = asyncio.Event()
+    second_claimed = asyncio.Event()
+
+    async def claim_and_hold(worker_id: str, claimed: asyncio.Event) -> UUID:
+        async with postgres_sessions() as session, session.begin():
+            job = await IngestionJobRepository(session).claim_next(
+                worker_id=worker_id,
+                claimed_at=now,
+                lease_expires_at=now + timedelta(minutes=5),
+            )
+            assert job is not None
+            job_id = job.id
+            claimed.set()
+            await release_claims.wait()
+            return job_id
+
+    first_task = asyncio.create_task(claim_and_hold("worker-1", first_claimed))
+    second_task: asyncio.Task[UUID] | None = None
+    try:
+        await asyncio.wait_for(first_claimed.wait(), timeout=5)
+        second_task = asyncio.create_task(claim_and_hold("worker-2", second_claimed))
+        await asyncio.wait_for(second_claimed.wait(), timeout=5)
+    finally:
+        release_claims.set()
+
+    assert second_task is not None
+    claimed_job_ids = set(await asyncio.gather(first_task, second_task))
+
+    assert claimed_job_ids == expected_job_ids
+    async with postgres_sessions() as session:
+        jobs = [await session.get(IngestionJob, job_id) for job_id in claimed_job_ids]
+
+    assert {job.claimed_by for job in jobs if job is not None} == {"worker-1", "worker-2"}
+    assert {job.status for job in jobs if job is not None} == {"processing"}
+
+
+async def test_claim_next_selects_a_due_retry_and_leaves_a_future_retry_pending(
+    postgres_sessions: async_sessionmaker[AsyncSession],
+) -> None:
+    now = datetime.now(UTC)
+    async with postgres_sessions() as session, session.begin():
+        _, due_job = await _add_document(
+            session,
+            job_values={"next_retry_at": now - timedelta(seconds=1)},
+        )
+        _, future_job = await _add_document(
+            session,
+            job_values={"next_retry_at": now + timedelta(minutes=5)},
+        )
+        due_job_id = due_job.id
+        future_job_id = future_job.id
+
+    async with postgres_sessions() as session, session.begin():
+        claimed = await IngestionJobRepository(session).claim_next(
+            worker_id="worker-1",
+            claimed_at=now,
+            lease_expires_at=now + timedelta(minutes=5),
+        )
+
+        assert claimed is not None
+        assert claimed.id == due_job_id
+
+    async with postgres_sessions() as session:
+        future = await session.get(IngestionJob, future_job_id)
+
+    assert future is not None
+    assert future.status == "pending"
+    assert future.next_retry_at == now + timedelta(minutes=5)
+
+
+async def test_owned_processing_lookup_fences_worker_expiry_and_status(
+    postgres_sessions: async_sessionmaker[AsyncSession],
+) -> None:
+    now = datetime.now(UTC)
+    lease_expires_at = now + timedelta(minutes=5)
+    async with postgres_sessions() as session, session.begin():
+        _, job = await _add_document(session)
+        job_id = job.id
+
+    async with postgres_sessions() as session, session.begin():
+        claimed = await IngestionJobRepository(session).claim_next(
+            worker_id="worker-1",
+            claimed_at=now,
+            lease_expires_at=lease_expires_at,
+        )
+        assert claimed is not None
+        assert claimed.id == job_id
+
+    async with postgres_sessions() as session, session.begin():
+        repository = IngestionJobRepository(session)
+
+        owned = await repository.get_owned_processing(
+            job_id,
+            worker_id="worker-1",
+            now=now,
+            for_update=True,
+        )
+        wrong_worker = await repository.get_owned_processing(
+            job_id,
+            worker_id="worker-2",
+            now=now,
+        )
+        expired = await repository.get_owned_processing(
+            job_id,
+            worker_id="worker-1",
+            now=lease_expires_at,
+        )
+
+        assert owned is not None
+        assert wrong_worker is None
+        assert expired is None
+
+        owned.status = "pending"
+        await session.flush()
+        wrong_status = await repository.get_owned_processing(
+            job_id,
+            worker_id="worker-1",
+            now=now,
+        )
+
+        assert wrong_status is None
+
+
+async def test_af2b_migration_round_trips_in_isolated_postgresql_schema(
+    postgres_migration_engine: AsyncEngine,
+) -> None:
+    provenance_columns = {
+        "content_sha256",
+        "start_offset",
+        "end_offset",
+        "page_start",
+        "page_end",
+    }
+    provenance_constraints = {
+        "ck_document_chunks_valid_content_sha256",
+        "ck_document_chunks_valid_source_offsets",
+        "ck_document_chunks_valid_page_range",
+    }
+
+    async with postgres_migration_engine.begin() as connection:
+        await connection.run_sync(_upgrade_through_af2b)
+        columns, constraints = await connection.run_sync(_chunk_schema)
+
+        assert provenance_columns <= columns
+        assert provenance_constraints <= constraints
+
+        await connection.run_sync(
+            lambda sync_connection: _run_revision(
+                sync_connection,
+                "20260728_0003",
+                "downgrade",
+            )
+        )
+        columns, constraints = await connection.run_sync(_chunk_schema)
+
+        assert provenance_columns.isdisjoint(columns)
+        assert provenance_constraints.isdisjoint(constraints)
+        assert {"id", "document_id", "chunk_index", "normalized_text", "token_count"} <= columns
+
+        await connection.run_sync(
+            lambda sync_connection: _run_revision(
+                sync_connection,
+                "20260728_0003",
+                "upgrade",
+            )
+        )
+        columns, constraints = await connection.run_sync(_chunk_schema)
+
+        assert provenance_columns <= columns
+        assert provenance_constraints <= constraints

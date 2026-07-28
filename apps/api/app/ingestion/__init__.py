@@ -1,4 +1,4 @@
-"""AF-1 file-intake infrastructure."""
+"""Public exports for the shared managed-file storage boundary."""
 
 from app.ingestion.storage import AsyncReadable, FileStorage, LocalFileStorage, StoredFile
 

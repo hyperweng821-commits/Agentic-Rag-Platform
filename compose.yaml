@@ -45,7 +45,7 @@ services:
       retries: 10
       start_period: 30s
     restart: unless-stopped
-    networks: [backend]
+    networks: [backend, model_egress]
 
   api:
     build:
@@ -68,6 +68,21 @@ services:
       DATABASE_HEALTHCHECK_TIMEOUT_SECONDS: ${DATABASE_HEALTHCHECK_TIMEOUT_SECONDS:-2}
       UPLOAD_ROOT: /app/data/uploads
       MAX_UPLOAD_SIZE_BYTES: ${MAX_UPLOAD_SIZE_BYTES:-10485760}
+      CHUNK_SIZE_CHARS: ${CHUNK_SIZE_CHARS:-1200}
+      CHUNK_OVERLAP_CHARS: ${CHUNK_OVERLAP_CHARS:-200}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL:-qwen3-embedding:0.6b}
+      EMBEDDING_DIMENSION: ${EMBEDDING_DIMENSION:-1024}
+      EMBEDDING_BATCH_SIZE: ${EMBEDDING_BATCH_SIZE:-32}
+      EMBEDDING_REQUEST_TIMEOUT_SECONDS: ${EMBEDDING_REQUEST_TIMEOUT_SECONDS:-30}
+      CHROMA_HOST: ${CHROMA_HOST:-chroma}
+      CHROMA_HTTP_PORT: ${CHROMA_HTTP_PORT:-8000}
+      CHROMA_SSL: ${CHROMA_SSL:-false}
+      CHROMA_COLLECTION_NAME: ${CHROMA_COLLECTION_NAME:-agentforge_document_chunks}
+      INGESTION_LEASE_SECONDS: ${INGESTION_LEASE_SECONDS:-300}
+      INGESTION_RETRY_DELAY_SECONDS: ${INGESTION_RETRY_DELAY_SECONDS:-30}
+      INGESTION_WORKER_POLL_INTERVAL_SECONDS: ${INGESTION_WORKER_POLL_INTERVAL_SECONDS:-2}
+      INGESTION_REBUILD_BATCH_SIZE: ${INGESTION_REBUILD_BATCH_SIZE:-32}
       CORS_ORIGINS: '${CORS_ORIGINS:-["http://localhost:3000","http://localhost:5173"]}'
     ports:
       - "${API_PORT:-8000}:8000"
@@ -111,6 +126,7 @@ services:
 networks:
   backend:
     internal: true
+  model_egress:
   frontend:
 
 volumes:

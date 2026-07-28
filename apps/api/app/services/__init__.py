@@ -1,4 +1,4 @@
-"""AF-1 application services."""
+"""Application-service package for knowledge intake and ingestion."""
 
 from app.services.knowledge_intake import KnowledgeIntakeService
 
