@@ -1,4 +1,4 @@
-"""Offline upgrade/downgrade tests for the AF-1 through AF-2B migrations."""
+"""Offline upgrade/downgrade tests for the AF-1 through AF-2S migrations."""
 
 from io import StringIO
 
@@ -39,10 +39,11 @@ def test_migration_downgrade_removes_all_af1_tables_in_reverse_order() -> None:
     assert sql.index("DROP TABLE documents") < sql.index("DROP TABLE knowledge_bases")
 
 
-def test_af2b_migration_is_the_single_current_head() -> None:
+def test_af2s_migration_is_the_single_current_head() -> None:
     scripts = ScriptDirectory.from_config(_config(StringIO()))
 
-    assert scripts.get_current_head() == "20260728_0003"
+    assert scripts.get_current_head() == "20260729_0004"
+    assert scripts.get_revision("20260729_0004").down_revision == "20260728_0003"
     assert scripts.get_revision("20260728_0003").down_revision == "20260728_0002"
     assert scripts.get_revision("20260728_0002").down_revision == "20260727_0001"
 
@@ -125,4 +126,41 @@ def test_af2b_downgrade_removes_only_chunk_provenance() -> None:
     assert "ALTER TABLE document_chunks DROP COLUMN end_offset" in sql
     assert "ALTER TABLE document_chunks DROP COLUMN start_offset" in sql
     assert "ALTER TABLE document_chunks DROP COLUMN content_sha256" in sql
+    assert "DROP TABLE document_chunks" not in sql
+
+
+def test_af2s_upgrade_adds_users_sessions_and_memberships_without_claiming_legacy_data() -> None:
+    output = StringIO()
+
+    command.upgrade(_config(output), "20260728_0003:20260729_0004", sql=True)
+
+    sql = output.getvalue()
+    assert "CREATE TABLE users" in sql
+    assert "CREATE TABLE user_sessions" in sql
+    assert "CREATE TABLE knowledge_base_memberships" in sql
+    assert "ck_users_normalized_email" in sql
+    assert "ck_users_valid_password_hash" in sql
+    assert "ck_user_sessions_valid_token_sha256" in sql
+    assert "ck_user_sessions_valid_csrf_token_sha256" in sql
+    assert "uq_user_sessions_token_sha256" in sql
+    assert "uq_knowledge_base_memberships_knowledge_base_id_user_id" in sql
+    assert "ix_user_sessions_active_user_expires_at" in sql
+    assert "ix_knowledge_base_memberships_user_id_knowledge_base_id" in sql
+    assert "INSERT INTO knowledge_base_memberships" not in sql
+    assert "UPDATE knowledge_bases" not in sql
+
+
+def test_af2s_downgrade_removes_only_access_boundary_tables() -> None:
+    output = StringIO()
+
+    command.downgrade(_config(output), "20260729_0004:20260728_0003", sql=True)
+
+    sql = output.getvalue()
+    assert sql.index("DROP TABLE knowledge_base_memberships") < sql.index(
+        "DROP TABLE user_sessions"
+    )
+    assert sql.index("DROP TABLE user_sessions") < sql.index("DROP TABLE users")
+    assert "DROP TABLE knowledge_bases" not in sql
+    assert "DROP TABLE documents" not in sql
+    assert "DROP TABLE ingestion_jobs" not in sql
     assert "DROP TABLE document_chunks" not in sql

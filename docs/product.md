@@ -5,12 +5,15 @@
 AgentForge is a local-first, observable and policy-controlled AI agent runtime
 for private engineering workflows.
 
-The Phase 3 application foundation, AF-0 product boundary, and AF-1 knowledge
-intake are implemented. AF-1 supports knowledge bases, safe PDF/Markdown/text
-storage, document metadata, deduplication, and durable ingestion jobs. It does
-not execute those jobs. Parsing, chunks, embeddings, indexing, retrieval,
-runtime, tool, approval, trace, and evaluation capabilities below remain
-planned. P1 enhancements are deferred.
+The Phase 3 application foundation, AF-0 product boundary, AF-1 knowledge
+intake, AF-2 durable processing/indexing, and the minimal AF-2S1
+knowledge-access boundary are implemented. Local users authenticate through
+opaque server-side sessions, and knowledge bases, documents, and ingestion
+jobs are scoped through owner/editor/viewer memberships. AF-2 executes durable
+jobs and maintains PostgreSQL-authoritative chunks plus a rebuildable Chroma
+index. Retrieval, runtime, tool, approval, trace, and evaluation capabilities
+below remain planned. The product is not production-ready, and broader AF-2S2
+identity and operational hardening is deferred to P1.
 
 ## Primary user
 
@@ -28,30 +31,34 @@ This use case is planned and unimplemented.
 
 ## Target workflow
 
-The complete workflow is planned and unimplemented:
+The complete workflow is not yet implemented:
 
-1. Create or select a knowledge base. **Implemented in AF-1.**
-2. Upload PDF, Markdown or TXT material. **Implemented in AF-1.**
-3. Validate and store the source file. **Implemented in AF-1.**
-4. Create a durable ingestion job. **Implemented in AF-1; execution is deferred.**
-5. Parse, normalize and deterministically chunk the document.
-6. Store chunks in PostgreSQL.
-7. Build a rebuildable Chroma index.
-8. Submit a failed-test analysis task.
-9. Create a bounded Agent Run.
-10. Search knowledge and allowed repository files.
-11. Verify claims against citations.
-12. Produce a repair recommendation.
-13. Prepare an issue draft.
-14. Pause for exact-action approval.
-15. Approve or reject.
-16. Display the final result and structured trace.
+1. Authenticate a locally provisioned user. **Implemented in AF-2S1.**
+2. Create or select an authorized knowledge base. **Implemented in AF-1 and scoped in AF-2S1.**
+3. Upload PDF, Markdown or TXT material. **Implemented in AF-1 and scoped in AF-2S1.**
+4. Validate and store the source file. **Implemented in AF-1.**
+5. Create a durable ingestion job. **Implemented in AF-1.**
+6. Parse, normalize and deterministically chunk the document. **Implemented in AF-2B.**
+7. Store authoritative chunks in PostgreSQL. **Implemented in AF-2B.**
+8. Build a rebuildable Chroma index. **Implemented in AF-2B.**
+9. Submit a failed-test analysis task.
+10. Create a bounded Agent Run.
+11. Search knowledge and allowed repository files.
+12. Verify claims against citations.
+13. Produce a repair recommendation.
+14. Prepare an issue draft.
+15. Pause for exact-action approval.
+16. Approve or reject.
+17. Display the final result and structured trace.
 
 ## P0 recruiting MVP
 
-The planned, unimplemented P0 scope is:
+The P0 scope combines the implemented foundation described above with the
+planned retrieval, runtime, tool, approval, UI, and evaluation work:
 
 - knowledge-base creation;
+- local operator-provisioned users and opaque session authentication;
+- owner/editor/viewer knowledge-base authorization;
 - safe PDF, Markdown and TXT intake;
 - durable ingestion jobs;
 - deterministic chunking;
@@ -84,7 +91,11 @@ The following work is deferred until after P0:
 - prompt-injection guard;
 - OpenTelemetry;
 - real GitHub issue creation;
-- authentication and RBAC;
+- SSO and external identity providers;
+- MFA, password reset, and email verification;
+- organization and advanced membership administration;
+- enterprise audit retention;
+- separate worker/database roles and hostile-document resource containment;
 - multiple LLM providers.
 
 ## Non-goals before the recruiting demo

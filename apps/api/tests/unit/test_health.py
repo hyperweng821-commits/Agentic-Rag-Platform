@@ -13,9 +13,12 @@ from app.main import create_app
 def test_application_can_be_created() -> None:
     application = create_app()
 
-    assert isinstance(application, FastAPI)
-    assert application.title == "agentic-rag-backend"
-    assert "/api/v1/health" in application.openapi()["paths"]
+    try:
+        assert isinstance(application, FastAPI)
+        assert application.title == "agentic-rag-backend"
+        assert "/api/v1/health" in application.openapi()["paths"]
+    finally:
+        application.state.password_work_limiter.shutdown()
 
 
 async def test_health_check_returns_healthy(
@@ -31,6 +34,7 @@ async def test_health_check_returns_healthy(
         "version": "0.1.0",
         "database": "healthy",
     }
+    assert "cache-control" not in response.headers
     database_session.execute.assert_awaited_once()
 
 
@@ -68,6 +72,7 @@ async def test_health_check_operational_error_returns_503(
         "request_id": response.headers["X-Request-ID"],
     }
     assert "connection refused" not in response.text
+    assert "cache-control" not in response.headers
 
 
 async def test_health_check_returns_503_after_database_timeout(
@@ -112,9 +117,12 @@ async def test_cors_preflight_allows_configured_frontend(client: AsyncClient) ->
         "/api/v1/health",
         headers={
             "Origin": "http://localhost:3000",
-            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "X-CSRF-Token",
         },
     )
 
     assert response.status_code == 200
     assert response.headers["Access-Control-Allow-Origin"] == "http://localhost:3000"
+    assert response.headers["Access-Control-Allow-Credentials"] == "true"
+    assert "X-CSRF-Token" in response.headers["Access-Control-Allow-Headers"]

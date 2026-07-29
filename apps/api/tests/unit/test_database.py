@@ -36,6 +36,11 @@ def test_declarative_base_uses_stable_naming_convention() -> None:
     assert Base.metadata.naming_convention == NAMING_CONVENTION
 
 
+def test_database_engine_always_hides_bound_parameters() -> None:
+    """SQL echo must never reveal password hashes or authentication digests."""
+    assert session_module.engine.sync_engine.hide_parameters is True
+
+
 async def test_database_dependency_closes_session(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

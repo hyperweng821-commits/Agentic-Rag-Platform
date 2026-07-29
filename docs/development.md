@@ -3,12 +3,14 @@
 ## Current scope
 
 The executable backend contains the Phase 3 foundation, AF-1 knowledge intake,
-and durable ingestion/indexing through AF-2B. PostgreSQL stores authoritative
-job state and ordered normalized chunks. The AF-2B worker parses managed source
-artifacts, replaces chunks transactionally, generates Ollama embeddings, and
-updates a rebuildable Chroma index.
+durable ingestion/indexing through AF-2B, and the minimal AF-2S1
+knowledge-access boundary. PostgreSQL stores authoritative users, sessions,
+memberships, job state, and ordered normalized chunks. The AF-2B worker parses
+managed source artifacts, replaces chunks transactionally, generates Ollama
+embeddings, and updates a rebuildable Chroma index.
 
-Retrieval, RAG, Agent, evaluation, and authentication are not implemented.
+Retrieval, RAG, Agent, and evaluation are not implemented. AF-2S2 identity and
+operational hardening remains P1.
 
 ## Required tools
 
@@ -34,16 +36,19 @@ uv python install 3.12
 uv sync --frozen --extra dev
 ```
 
-Start PostgreSQL from the repository root:
+The default Compose PostgreSQL service is intentionally not published to the
+host. For the normal local workflow, run the API inside Compose:
 
 ```bash
-docker compose up -d postgres
+docker compose up --build
 ```
 
-Start FastAPI from `apps/api`:
+To run FastAPI directly from `apps/api`, provide a separately managed
+PostgreSQL endpoint in `DATABASE_URL`; starting the default Compose `postgres`
+service does not expose port 5432 to a host process:
 
 ```bash
-uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 ## Current Compose startup
@@ -58,6 +63,10 @@ The default services are:
 
 - `postgres`
 - `api`
+
+PostgreSQL is reachable by containers at `postgres:5432` but has no host port.
+The API is the only default host-facing service and binds to
+`127.0.0.1:${API_PORT:-8000}`.
 
 Equivalent Make target:
 
@@ -93,10 +102,77 @@ does not add retrieval or RAG APIs, and neither `make up-rag` nor
 is an explicit CLI process rather than an always-running Compose service.
 Only Ollama joins the dedicated `model_egress` network needed for explicit
 model pulls; PostgreSQL and Chroma remain confined to the internal backend
-network.
+network. PostgreSQL, Chroma, and Ollama have no host-published ports in the
+default project; the API and optional Web service bind only to `127.0.0.1`.
 
 The optional ChromaDB service in `compose.test.yaml` is also isolated behind
-the `rag` profile. Ordinary backend tests do not require Compose.
+the `rag` profile. Test PostgreSQL and Chroma ports bind only to `127.0.0.1`.
+Ordinary backend tests do not require Compose.
+
+## Database access
+
+Use Compose execution rather than publishing PostgreSQL to the host:
+
+```bash
+docker compose exec postgres sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+```
+
+Application and migration commands use the internal `postgres:5432` service
+address:
+
+```bash
+docker compose exec api uv run alembic current
+docker compose exec api uv run alembic upgrade head
+```
+
+Do not add an unauthenticated Chroma debug port to the default workflow.
+
+## AF-2S1 local access setup
+
+AF-2S1 has no public registration or frontend login screen. Bootstrap an active
+local user with the operator CLI; the command prompts for the password without
+echoing it:
+
+```bash
+docker compose exec api uv run python -m app.cli.security \
+  bootstrap-user --email owner@example.com
+```
+
+The email is normalized, duplicates are rejected, and neither the password nor
+its Argon2id hash is printed.
+
+The AF-2S1 migration deliberately leaves existing knowledge bases unowned and
+therefore hidden from all user-facing requests. Preview and then explicitly
+claim only still-unowned knowledge bases for an existing user:
+
+```bash
+docker compose exec api uv run python -m app.cli.security \
+  claim-legacy-knowledge-bases --owner-email owner@example.com --dry-run
+
+docker compose exec api uv run python -m app.cli.security \
+  claim-legacy-knowledge-bases --owner-email owner@example.com
+```
+
+The claim is transactional and idempotent and reports counts only. It never
+creates or guesses a user.
+
+Login sets an `HttpOnly` `agentforge_session` cookie and a readable
+`agentforge_csrf` cookie by default. For authenticated writes, clients must
+copy the CSRF cookie value into `X-CSRF-Token`. Cookie names, bounded session
+TTL, `Secure`, and `SameSite` behavior are configured with
+`SESSION_COOKIE_NAME`, `CSRF_COOKIE_NAME`, `SESSION_TTL_SECONDS`,
+`SESSION_COOKIE_SECURE`, and `SESSION_COOKIE_SAMESITE`. Do not add an
+authentication-disabled development mode.
+
+`ARGON2_MAX_CONCURRENCY` bounds memory-intensive password verification and
+rehashing to two concurrent jobs per API process by default and accepts values
+from 1 through 8. Login reads a primitive user snapshot in a short transaction,
+releases the database connection before bounded Argon2 work, then locks and
+rechecks the user in a short write transaction before creating the session.
+
+Credentialed browser clients must originate from an explicit
+`CORS_ORIGINS` entry. Wildcard CORS is rejected; adding an origin does not
+replace session, CSRF, or membership checks.
 
 ## Ingestion worker and index rebuild
 
@@ -154,7 +230,21 @@ uv run pytest
 python -m compileall app tests
 ```
 
-The pytest environment pins every Settings field used by the foundation, disables dotenv loading before collection and clears the Settings cache before and after every test. Health tests replace the database dependency with an AsyncMock, so they never connect to a developer PostgreSQL instance.
+The pytest environment pins every Settings field used by the foundation,
+disables dotenv loading before collection, and clears the Settings cache
+before and after every test. Health tests replace the database dependency with
+an AsyncMock, so they never connect to a developer PostgreSQL instance.
+
+Live AF-2A and AF-2S tests use only the explicit
+`AF2A_TEST_DATABASE_URL`. Locally, those tests skip when the variable is
+intentionally absent. Under `CI=true`, absence is a test failure so
+infrastructure coverage cannot skip behind a green backend job. With the
+isolated test Compose PostgreSQL running, execute the complete suite with:
+
+```bash
+AF2A_TEST_DATABASE_URL=postgresql+asyncpg://agentic_rag_test:test_only@127.0.0.1:55432/agentic_rag_test \
+  uv run pytest
+```
 
 ## Alembic
 
@@ -180,6 +270,13 @@ AF-2A adds the reversible `20260728_0002` revision after
 `20260728_0003` chunk-provenance revision without editing either merged
 revision. Its new hash, offset, and page-range columns remain nullable so
 existing authoritative chunks are not assigned fabricated provenance.
+AF-2S1 adds `20260729_0004` local-user, opaque-session, and
+knowledge-base-membership tables without rewriting existing knowledge data.
+Downgrading it to `20260728_0003` preserves pre-AF-2S knowledge bases,
+documents, ingestion jobs, and chunks, but destructively removes AF-2S users,
+sessions, and memberships. Re-upgrading recreates empty access-boundary tables;
+it does not fabricate or restore the deleted AF-2S rows. Legacy knowledge
+bases remain unowned and fail closed until the operator claim command is run.
 
 ## AF-2 ingestion contract
 
@@ -205,12 +302,18 @@ existing authoritative chunks are not assigned fabricated provenance.
 
 ## Current layering rule
 
-- `app/api` owns the unchanged HTTP routing, dependencies and error mapping.
+- `app/api` owns HTTP routing, authenticated principal dependencies, and error
+  mapping; endpoints contain no SQL or role-name checks.
 - `app/core` owns configuration and logging.
-- `app/db` owns the declarative base, engine, sessions, business models, and
-  persistence queries.
+- `app/security` owns Argon2id password handling, opaque-session
+  authentication, CSRF validation, principal construction, and capability
+  policy.
+- `app/db` owns the declarative base, engine, database sessions, business
+  models, user-scoped persistence queries, and explicitly separate
+  worker/internal persistence queries.
 - `app/services` owns AF-1 intake plus AF-2B processing/rebuild sequencing and
-  transaction boundaries.
+  AF-2S1 access-boundary transaction sequencing.
+- `app/cli` owns operator-only user bootstrap and legacy-data claim commands.
 - `app/ingestion` owns managed storage, parsing, deterministic transformation,
   embedding, and vector-store boundaries and adapters.
 - `app/workers` owns polling, signal handling, and CLI composition; it does not

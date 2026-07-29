@@ -1,4 +1,4 @@
-"""AF-1 and AF-2A model metadata and database-constraint tests."""
+"""Knowledge, ingestion, and access model metadata tests."""
 
 from sqlalchemy import CheckConstraint
 
@@ -9,6 +9,10 @@ from app.db.models import (
     IngestionJob,
     IngestionJobStatus,
     KnowledgeBase,
+    KnowledgeBaseMembership,
+    KnowledgeBaseRole,
+    User,
+    UserSession,
 )
 
 
@@ -142,3 +146,93 @@ def test_document_to_chunk_relationship_uses_database_cascade() -> None:
     assert relationship.passive_deletes is True
     assert relationship.cascade.delete_orphan
     assert foreign_key.ondelete == "CASCADE"
+
+
+def test_user_requires_normalized_email_and_argon2id_hash() -> None:
+    columns = User.__table__.c
+    names = _constraint_names(User.__table__)
+    check_sql = _check_sql(User.__table__)
+
+    assert columns.email.type.length == 320
+    assert columns.email.nullable is False
+    assert columns.password_hash.nullable is False
+    assert columns.is_active.default.arg is True
+    assert str(columns.is_active.server_default.arg) == "true"
+    assert "uq_users_email" in names
+    assert "ck_users_normalized_email" in names
+    assert "ck_users_valid_password_hash" in names
+    assert "email = lower(email)" in check_sql
+    assert "email = btrim(email)" in check_sql
+    assert "$argon2id$" in check_sql
+
+
+def test_user_session_persists_only_valid_token_digests_and_lifecycle_times() -> None:
+    columns = UserSession.__table__.c
+    names = _constraint_names(UserSession.__table__)
+    check_sql = _check_sql(UserSession.__table__)
+    index_columns = {
+        index.name: tuple(column.name for column in index.columns)
+        for index in UserSession.__table__.indexes
+    }
+
+    assert columns.token_sha256.type.length == 64
+    assert columns.csrf_token_sha256.type.length == 64
+    assert columns.expires_at.type.timezone is True
+    assert columns.revoked_at.type.timezone is True
+    assert columns.last_seen_at.type.timezone is True
+    assert "token" not in columns
+    assert "csrf_token" not in columns
+    assert "uq_user_sessions_token_sha256" in names
+    assert "ck_user_sessions_valid_token_sha256" in names
+    assert "ck_user_sessions_valid_csrf_token_sha256" in names
+    assert check_sql.count("^[0-9a-f]{64}$") == 2
+    assert index_columns["ix_user_sessions_user_id"] == ("user_id",)
+    assert index_columns["ix_user_sessions_expires_at"] == ("expires_at",)
+    assert index_columns["ix_user_sessions_active_user_expires_at"] == (
+        "user_id",
+        "revoked_at",
+        "expires_at",
+    )
+
+
+def test_session_and_membership_foreign_keys_cascade() -> None:
+    session_user_fk = next(iter(UserSession.__table__.c.user_id.foreign_keys))
+    membership_kb_fk = next(
+        iter(KnowledgeBaseMembership.__table__.c.knowledge_base_id.foreign_keys)
+    )
+    membership_user_fk = next(iter(KnowledgeBaseMembership.__table__.c.user_id.foreign_keys))
+
+    assert session_user_fk.ondelete == "CASCADE"
+    assert membership_kb_fk.ondelete == "CASCADE"
+    assert membership_user_fk.ondelete == "CASCADE"
+    assert User.sessions.property.passive_deletes is True
+    assert User.knowledge_base_memberships.property.passive_deletes is True
+    assert KnowledgeBase.memberships.property.passive_deletes is True
+
+
+def test_membership_has_bounded_roles_and_bidirectional_lookup_indexes() -> None:
+    names = _constraint_names(KnowledgeBaseMembership.__table__)
+    check_sql = _check_sql(KnowledgeBaseMembership.__table__)
+    index_columns = {
+        index.name: tuple(column.name for column in index.columns)
+        for index in KnowledgeBaseMembership.__table__.indexes
+    }
+
+    assert set(KnowledgeBaseRole) == {
+        KnowledgeBaseRole.OWNER,
+        KnowledgeBaseRole.EDITOR,
+        KnowledgeBaseRole.VIEWER,
+    }
+    assert {
+        "knowledge_base_id",
+        "user_id",
+    } == {column.name for column in KnowledgeBaseMembership.__table__.primary_key.columns}
+    assert "uq_knowledge_base_memberships_knowledge_base_id_user_id" in names
+    assert "ck_knowledge_base_memberships_valid_role" in names
+    assert "owner" in check_sql
+    assert "editor" in check_sql
+    assert "viewer" in check_sql
+    assert index_columns["ix_knowledge_base_memberships_user_id_knowledge_base_id"] == (
+        "user_id",
+        "knowledge_base_id",
+    )

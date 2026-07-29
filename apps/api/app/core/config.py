@@ -36,6 +36,7 @@ class Settings(BaseSettings):
         extra="ignore",
         env_ignore_empty=True,
         frozen=True,
+        hide_input_in_errors=True,
         str_strip_whitespace=True,
     )
 
@@ -57,6 +58,23 @@ class Settings(BaseSettings):
     database_pool_timeout_seconds: float = Field(default=30.0, gt=0, le=300)
     database_pool_recycle_seconds: int = Field(default=1800, ge=60)
     database_healthcheck_timeout_seconds: float = Field(default=2.0, gt=0, le=30)
+
+    session_ttl_seconds: int = Field(default=8 * 60 * 60, ge=300, le=30 * 24 * 60 * 60)
+    session_cookie_name: str = Field(
+        default="agentforge_session",
+        min_length=1,
+        max_length=64,
+        pattern=r"^[A-Za-z0-9_-]+$",
+    )
+    csrf_cookie_name: str = Field(
+        default="agentforge_csrf",
+        min_length=1,
+        max_length=64,
+        pattern=r"^[A-Za-z0-9_-]+$",
+    )
+    session_cookie_secure: bool = False
+    session_cookie_samesite: Literal["strict", "lax"] = "strict"
+    argon2_max_concurrency: int = Field(default=2, ge=1, le=8)
 
     upload_root: Path = Path("data/uploads")
     max_upload_size_bytes: int = Field(default=10 * 1024 * 1024, ge=1, le=1024 * 1024 * 1024)
@@ -121,10 +139,19 @@ class Settings(BaseSettings):
         return value
 
     @model_validator(mode="after")
-    def validate_chunking_window(self) -> "Settings":
-        """Guarantee that deterministic chunking always advances."""
+    def validate_cross_field_settings(self) -> "Settings":
+        """Validate settings whose safety depends on another configured field."""
         if self.chunk_overlap_chars >= self.chunk_size_chars:
             msg = "CHUNK_OVERLAP_CHARS must be smaller than CHUNK_SIZE_CHARS"
+            raise ValueError(msg)
+        if self.session_cookie_name == self.csrf_cookie_name:
+            msg = "SESSION_COOKIE_NAME and CSRF_COOKIE_NAME must be different"
+            raise ValueError(msg)
+        if self.app_env is Environment.PRODUCTION and self.app_debug:
+            msg = "APP_DEBUG must be disabled in production"
+            raise ValueError(msg)
+        if self.app_env is Environment.PRODUCTION and not self.session_cookie_secure:
+            msg = "SESSION_COOKIE_SECURE must be enabled in production"
             raise ValueError(msg)
         return self
 

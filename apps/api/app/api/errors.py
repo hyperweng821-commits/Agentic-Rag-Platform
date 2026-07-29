@@ -10,6 +10,7 @@ from starlette import status
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import ExceptionHandler
 
+from app.api.cache_control import private_cache_headers
 from app.core.logging import API_VERSION, API_VERSION_HEADER, REQUEST_ID_HEADER, get_request_id
 from app.schemas.common import ErrorInfo, ErrorResponse, ValidationIssue
 
@@ -116,13 +117,15 @@ def _error_response(
             request_id=request_id,
         )
     )
+    headers = {
+        REQUEST_ID_HEADER: request_id,
+        API_VERSION_HEADER: API_VERSION,
+    }
+    headers.update(private_cache_headers(request.url.path))
     return JSONResponse(
         status_code=status_code,
         content=payload.model_dump(mode="json"),
-        headers={
-            REQUEST_ID_HEADER: request_id,
-            API_VERSION_HEADER: API_VERSION,
-        },
+        headers=headers,
     )
 
 

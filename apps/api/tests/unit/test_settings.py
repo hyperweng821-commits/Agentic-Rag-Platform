@@ -63,6 +63,7 @@ def test_production_defaults_to_json_logs() -> None:
         _env_file=None,
         app_env=Environment.PRODUCTION,
         log_json=None,
+        session_cookie_secure=True,
     )
 
     assert settings.use_json_logs is True
@@ -73,6 +74,83 @@ def test_explicit_log_format_overrides_environment() -> None:
         _env_file=None,
         app_env=Environment.PRODUCTION,
         log_json=False,
+        session_cookie_secure=True,
     )
 
     assert settings.use_json_logs is False
+
+
+def test_authentication_settings_have_bounded_secure_defaults() -> None:
+    settings = Settings(_env_file=None)
+
+    assert settings.session_ttl_seconds == 28_800
+    assert settings.session_cookie_name == "agentforge_session"
+    assert settings.csrf_cookie_name == "agentforge_csrf"
+    assert settings.session_cookie_samesite == "strict"
+
+
+def test_settings_reject_identical_session_and_csrf_cookie_names() -> None:
+    with pytest.raises(ValidationError, match="must be different"):
+        Settings(
+            _env_file=None,
+            session_cookie_name="same_cookie",
+            csrf_cookie_name="same_cookie",
+        )
+
+
+def test_production_requires_secure_session_cookies() -> None:
+    with pytest.raises(ValidationError, match="SESSION_COOKIE_SECURE"):
+        Settings(
+            _env_file=None,
+            app_env=Environment.PRODUCTION,
+            session_cookie_secure=False,
+        )
+
+
+def test_production_rejects_debug_before_application_startup() -> None:
+    with pytest.raises(ValidationError, match="APP_DEBUG"):
+        Settings(
+            _env_file=None,
+            app_env=Environment.PRODUCTION,
+            app_debug=True,
+            session_cookie_secure=True,
+        )
+
+
+@pytest.mark.parametrize("environment", [Environment.DEVELOPMENT, Environment.TEST])
+def test_non_production_environments_allow_explicit_debug(environment: Environment) -> None:
+    settings = Settings(_env_file=None, app_env=environment, app_debug=True)
+
+    assert settings.app_debug is True
+
+
+def test_sensitive_settings_inputs_are_hidden_from_validation_errors() -> None:
+    sentinel = "".join(("settings-", "credential-sentinel"))
+    invalid_database_url = f"postgresql://user:{sentinel}@database.example/app"
+
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(_env_file=None, database_url=invalid_database_url)
+
+    rendered = str(exc_info.value)
+    assert "postgresql+asyncpg" in rendered
+    assert sentinel not in rendered
+    assert invalid_database_url not in rendered
+
+    invalid_provider_url = f"https://user:{sentinel}@provider.example"
+    with pytest.raises(ValidationError) as provider_exc_info:
+        Settings(_env_file=None, ollama_base_url=invalid_provider_url)
+
+    provider_rendered = str(provider_exc_info.value)
+    assert "credentials" in provider_rendered
+    assert sentinel not in provider_rendered
+    assert invalid_provider_url not in provider_rendered
+
+
+@pytest.mark.parametrize("max_concurrency", [0, 9])
+def test_argon2_concurrency_setting_is_bounded(max_concurrency: int) -> None:
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, argon2_max_concurrency=max_concurrency)
+
+
+def test_argon2_concurrency_has_safe_default() -> None:
+    assert Settings(_env_file=None).argon2_max_concurrency == 2

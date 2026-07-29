@@ -7,8 +7,6 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-agentic_rag}
       POSTGRES_USER: ${POSTGRES_USER:-agentic_rag}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agentic_rag_dev_only}
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql
       - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
@@ -24,8 +22,6 @@ services:
   chroma:
     image: chromadb/chroma:1.5.9
     profiles: ["rag"]
-    ports:
-      - "${CHROMA_EXPOSED_PORT:-8001}:8000"
     volumes:
       - chroma_data:/data
     restart: unless-stopped
@@ -34,8 +30,6 @@ services:
   ollama:
     image: ollama/ollama:0.31.1
     profiles: ["rag"]
-    ports:
-      - "${OLLAMA_PORT:-11434}:11434"
     volumes:
       - ollama_data:/root/.ollama
     healthcheck:
@@ -83,9 +77,15 @@ services:
       INGESTION_RETRY_DELAY_SECONDS: ${INGESTION_RETRY_DELAY_SECONDS:-30}
       INGESTION_WORKER_POLL_INTERVAL_SECONDS: ${INGESTION_WORKER_POLL_INTERVAL_SECONDS:-2}
       INGESTION_REBUILD_BATCH_SIZE: ${INGESTION_REBUILD_BATCH_SIZE:-32}
+      SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS:-28800}
+      SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-agentforge_session}
+      CSRF_COOKIE_NAME: ${CSRF_COOKIE_NAME:-agentforge_csrf}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+      SESSION_COOKIE_SAMESITE: ${SESSION_COOKIE_SAMESITE:-strict}
+      ARGON2_MAX_CONCURRENCY: ${ARGON2_MAX_CONCURRENCY:-2}
       CORS_ORIGINS: '${CORS_ORIGINS:-["http://localhost:3000","http://localhost:5173"]}'
     ports:
-      - "${API_PORT:-8000}:8000"
+      - "127.0.0.1:${API_PORT:-8000}:8000"
     volumes:
       - ./apps/api:/app
       - api_venv:/app/.venv
@@ -112,7 +112,7 @@ services:
       VITE_API_BASE_URL: /api/v1
       VITE_DEV_API_TARGET: http://api:8000
     ports:
-      - "${WEB_PORT:-3000}:5173"
+      - "127.0.0.1:${WEB_PORT:-3000}:5173"
     volumes:
       - ./apps/web:/workspace/apps/web
       - ./packages/api-client:/workspace/packages/api-client

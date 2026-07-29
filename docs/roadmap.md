@@ -1,10 +1,10 @@
 # AgentForge roadmap
 
-AF-0, AF-1, AF-2A, and the explicitly approved end-to-end AF-2B scope are
-implemented. AF-3 onward remain planned and unimplemented. Interfaces are
-introduced only with their first consuming feature. No phase begins before the
-previous phase meets its acceptance criteria. P1 work cannot block the P0
-recruiting demo.
+AF-0, AF-1, AF-2A, the explicitly approved end-to-end AF-2B scope, and the
+minimal AF-2S1 knowledge-access boundary are implemented. AF-3 onward remain
+planned and unimplemented. Interfaces are introduced only with their first
+consuming feature. No phase begins before the previous phase meets its
+acceptance criteria. P1 work cannot block the P0 recruiting demo.
 
 ## AF-0 — Product boundary and safe branding
 
@@ -104,7 +104,65 @@ cancellation tests pass.
 
 **Proposed commit message:** `feat(ingestion): add deterministic processing and rebuildable indexing`
 
+## AF-2S — Knowledge-access security boundary
+
+AF-2S separates the minimal P0 boundary required before private retrieval from
+broader P1 identity and deployment hardening.
+
+### AF-2S1 — Local authentication and object authorization
+
+**Status:** Implemented.
+
+**Objective:** Ensure every user-facing private knowledge operation has an
+authenticated principal and a PostgreSQL-authoritative object-access boundary
+before AF-3 retrieval begins.
+
+**Included scope:** Operator-provisioned local users; Argon2id password hashes;
+opaque, expiring, revocable server-side sessions whose raw tokens are not
+persisted; `HttpOnly` session cookies; session-bound CSRF protection;
+knowledge-base owner/editor/viewer memberships; capability-based policy;
+principal-scoped SQL queries for knowledge bases, documents, and ingestion
+jobs; atomic owner membership on knowledge-base creation; fail-closed legacy
+knowledge bases with an explicit operator claim command; and loopback/internal
+Compose exposure defaults.
+
+**Explicit exclusions:** Public registration, frontend authentication UI,
+password reset, email verification, MFA, OAuth, SSO, external identity
+providers, organization administration, membership-management endpoints,
+document deletion, retrieval, RAG, Agent Runtime, tools, and approvals.
+
+**Implemented result:** Health and readiness remain public. Authentication uses
+`login`, `logout`, and `me`; knowledge APIs require a live active-user session,
+and state-changing requests require valid CSRF proof. Non-member objects are
+indistinguishable from absent objects. Chroma remains a derived index and
+never authorizes access. Worker/internal persistence operations remain
+separate from user-scoped HTTP queries.
+
+**Acceptance criteria:** Authentication, expiry, revocation, CSRF, role
+capabilities, cross-user isolation, SQL-scoped access, legacy-data
+preservation, explicitly destructive AF-2S downgrade behavior, and rendered
+Compose exposure are covered without weakening existing AF-1 or AF-2 behavior.
+Downgrade preserves pre-AF-2S knowledge data while removing AF-2S users,
+sessions, and memberships.
+
+**Proposed commit message:** `feat(security): add authenticated knowledge access boundary`
+
+### AF-2S2 — Extended identity and operational hardening
+
+**Status:** P1; planned and unimplemented.
+
+**Included scope:** SSO and external identity providers, MFA, password reset,
+email verification, organization administration, advanced membership
+administration, enterprise audit retention, separate worker/database roles,
+hostile-document resource containment, production secret and TLS policy, and
+additional deployment hardening.
+
+AF-2S2 does not block the local recruiting demonstration and is not part of
+AF-2S1.
+
 ## AF-3 — Hybrid retrieval and citations
+
+**Status:** Planned and unimplemented.
 
 **Objective:** Add planned deterministic cited hybrid retrieval.
 

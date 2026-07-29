@@ -35,6 +35,7 @@ from app.ingestion.storage import (
     StorageError,
     StoredFile,
 )
+from app.security import Capability, Principal, require_capability
 
 _ALLOWED_UPLOADS: dict[str, tuple[str, ...]] = {
     "application/pdf": (".pdf",),
@@ -71,64 +72,111 @@ class KnowledgeIntakeService:
 
     async def create_knowledge_base(
         self,
+        principal: Principal,
         *,
         name: str,
         description: str | None,
     ) -> KnowledgeBase:
+        require_capability(None, Capability.KNOWLEDGE_BASE_CREATE)
         knowledge_base = KnowledgeBase(name=name, description=description)
         async with self._session.begin():
-            await self._knowledge_bases.add(knowledge_base)
+            await self._knowledge_bases.add_with_owner(
+                knowledge_base,
+                owner_user_id=principal.user_id,
+            )
         return knowledge_base
 
     async def list_knowledge_bases(
         self,
+        principal: Principal,
         *,
         limit: int,
         offset: int,
     ) -> list[KnowledgeBase]:
         async with self._session.begin():
-            return await self._knowledge_bases.list(limit=limit, offset=offset)
+            visible = await self._knowledge_bases.list_for_user(
+                user_id=principal.user_id,
+                limit=limit,
+                offset=offset,
+            )
+        for _, role in visible:
+            require_capability(role, Capability.KNOWLEDGE_BASE_READ)
+        return [knowledge_base for knowledge_base, _ in visible]
 
-    async def get_knowledge_base(self, knowledge_base_id: UUID) -> KnowledgeBase:
+    async def get_knowledge_base(
+        self,
+        principal: Principal,
+        knowledge_base_id: UUID,
+    ) -> KnowledgeBase:
         async with self._session.begin():
-            knowledge_base = await self._knowledge_bases.get(knowledge_base_id)
-        if knowledge_base is None:
+            visible = await self._knowledge_bases.get_for_user(
+                knowledge_base_id,
+                user_id=principal.user_id,
+            )
+        if visible is None:
             raise NotFoundError("Knowledge base was not found.")
+        knowledge_base, role = visible
+        require_capability(role, Capability.KNOWLEDGE_BASE_READ)
         return knowledge_base
 
     async def list_documents(
         self,
+        principal: Principal,
         knowledge_base_id: UUID,
         *,
         limit: int,
         offset: int,
     ) -> list[Document]:
         async with self._session.begin():
-            knowledge_base = await self._knowledge_bases.get(knowledge_base_id)
-            if knowledge_base is None:
-                raise NotFoundError("Knowledge base was not found.")
-            return await self._documents.list_for_knowledge_base(
+            visible_knowledge_base = await self._knowledge_bases.get_for_user(
                 knowledge_base_id,
+                user_id=principal.user_id,
+            )
+            if visible_knowledge_base is None:
+                raise NotFoundError("Knowledge base was not found.")
+            _, role = visible_knowledge_base
+            require_capability(role, Capability.DOCUMENT_READ)
+            visible_documents = await self._documents.list_for_knowledge_base_for_user(
+                knowledge_base_id,
+                user_id=principal.user_id,
                 limit=limit,
                 offset=offset,
             )
+        for _, document_role in visible_documents:
+            require_capability(document_role, Capability.DOCUMENT_READ)
+        return [document for document, _ in visible_documents]
 
-    async def get_document(self, document_id: UUID) -> Document:
+    async def get_document(self, principal: Principal, document_id: UUID) -> Document:
         async with self._session.begin():
-            document = await self._documents.get(document_id)
-        if document is None:
+            visible = await self._documents.get_for_user(
+                document_id,
+                user_id=principal.user_id,
+            )
+        if visible is None:
             raise NotFoundError("Document was not found.")
+        document, role = visible
+        require_capability(role, Capability.DOCUMENT_READ)
         return document
 
-    async def get_ingestion_job(self, job_id: UUID) -> IngestionJob:
+    async def get_ingestion_job(
+        self,
+        principal: Principal,
+        job_id: UUID,
+    ) -> IngestionJob:
         async with self._session.begin():
-            job = await self._jobs.get(job_id)
-        if job is None:
+            visible = await self._jobs.get_for_user(
+                job_id,
+                user_id=principal.user_id,
+            )
+        if visible is None:
             raise NotFoundError("Ingestion job was not found.")
+        job, role = visible
+        require_capability(role, Capability.INGESTION_JOB_READ)
         return job
 
     async def upload_document(
         self,
+        principal: Principal,
         knowledge_base_id: UUID,
         *,
         filename: str,
@@ -137,8 +185,14 @@ class KnowledgeIntakeService:
     ) -> UploadResult:
         extension = self._validate_upload_metadata(filename, media_type)
         async with self._session.begin():
-            if await self._knowledge_bases.get(knowledge_base_id) is None:
+            upload_target = await self._knowledge_bases.get_upload_target_for_user(
+                knowledge_base_id,
+                user_id=principal.user_id,
+            )
+            if upload_target is None:
                 raise NotFoundError("Knowledge base was not found.")
+            _, role = upload_target
+            require_capability(role, Capability.DOCUMENT_UPLOAD)
 
         document_id = uuid4()
         storage_key = f"{knowledge_base_id}/{document_id}{extension}"
@@ -147,6 +201,7 @@ class KnowledgeIntakeService:
         try:
             self._validate_content(media_type, stored)
             result = await self._persist_upload(
+                principal,
                 knowledge_base_id,
                 document_id=document_id,
                 filename=filename,
@@ -159,11 +214,21 @@ class KnowledgeIntakeService:
             if cleanup_owned:
                 await self._storage.delete(storage_key)
 
-    async def retry_ingestion_job(self, job_id: UUID) -> IngestionJob:
+    async def retry_ingestion_job(
+        self,
+        principal: Principal,
+        job_id: UUID,
+    ) -> IngestionJob:
         async with self._session.begin():
-            job = await self._jobs.get(job_id, for_update=True)
-            if job is None:
+            retry_target = await self._jobs.get_retry_target_for_user(
+                job_id,
+                user_id=principal.user_id,
+                for_update=True,
+            )
+            if retry_target is None:
                 raise NotFoundError("Ingestion job was not found.")
+            job, role = retry_target
+            require_capability(role, Capability.INGESTION_JOB_RETRY)
             if job.status == IngestionJobStatus.PENDING.value:
                 return job
             if job.status != IngestionJobStatus.FAILED.value:
@@ -181,6 +246,7 @@ class KnowledgeIntakeService:
             job.finished_at = None
             job.document.status = DocumentStatus.PENDING.value
             await self._session.flush()
+            await self._session.refresh(job)
             return job
 
     async def _store_upload(self, source: AsyncReadable, storage_key: str) -> StoredFile:
@@ -201,6 +267,7 @@ class KnowledgeIntakeService:
 
     async def _persist_upload(
         self,
+        principal: Principal,
         knowledge_base_id: UUID,
         *,
         document_id: UUID,
@@ -210,11 +277,23 @@ class KnowledgeIntakeService:
     ) -> UploadResult:
         try:
             async with self._session.begin():
-                existing = await self._documents.get_by_digest(
+                upload_target = await self._knowledge_bases.get_upload_target_for_user(
+                    knowledge_base_id,
+                    user_id=principal.user_id,
+                )
+                if upload_target is None:
+                    raise NotFoundError("Knowledge base was not found.")
+                _, role = upload_target
+                require_capability(role, Capability.DOCUMENT_UPLOAD)
+
+                duplicate = await self._documents.get_by_digest_for_user(
                     knowledge_base_id=knowledge_base_id,
                     sha256=stored.sha256,
+                    user_id=principal.user_id,
                 )
-                if existing is not None:
+                if duplicate is not None:
+                    existing, duplicate_role = duplicate
+                    require_capability(duplicate_role, Capability.DOCUMENT_UPLOAD)
                     if existing.ingestion_job is None:
                         raise ConflictError("Existing document has no ingestion job.")
                     await self._storage.delete(stored.storage_key)
@@ -235,12 +314,13 @@ class KnowledgeIntakeService:
                     status=IngestionJobStatus.PENDING.value,
                     attempt_count=0,
                 )
-                await self._documents.add(document)
-                await self._jobs.add(job)
+                await self._documents.add_authorized_upload(document)
+                await self._jobs.add_for_authorized_upload(job)
                 return UploadResult(document, job, duplicate=False)
         except IntegrityError:
             await self._storage.delete(stored.storage_key)
             return await self._resolve_concurrent_duplicate(
+                principal=principal,
                 knowledge_base_id=knowledge_base_id,
                 sha256=stored.sha256,
             )
@@ -250,14 +330,29 @@ class KnowledgeIntakeService:
     async def _resolve_concurrent_duplicate(
         self,
         *,
+        principal: Principal,
         knowledge_base_id: UUID,
         sha256: str,
     ) -> UploadResult:
         async with self._session.begin():
-            existing = await self._documents.get_by_digest(
+            upload_target = await self._knowledge_bases.get_upload_target_for_user(
+                knowledge_base_id,
+                user_id=principal.user_id,
+            )
+            if upload_target is None:
+                raise NotFoundError("Knowledge base was not found.")
+            _, role = upload_target
+            require_capability(role, Capability.DOCUMENT_UPLOAD)
+            duplicate = await self._documents.get_by_digest_for_user(
                 knowledge_base_id=knowledge_base_id,
                 sha256=sha256,
+                user_id=principal.user_id,
             )
+            if duplicate is None:
+                existing = None
+            else:
+                existing, duplicate_role = duplicate
+                require_capability(duplicate_role, Capability.DOCUMENT_UPLOAD)
         if existing is None or existing.ingestion_job is None:
             raise ConflictError("The document could not be stored due to a concurrent conflict.")
         return UploadResult(existing, existing.ingestion_job, duplicate=True)

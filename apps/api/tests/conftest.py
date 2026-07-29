@@ -25,6 +25,12 @@ TEST_ENVIRONMENT = {
     "DATABASE_POOL_TIMEOUT_SECONDS": "30",
     "DATABASE_POOL_RECYCLE_SECONDS": "1800",
     "DATABASE_HEALTHCHECK_TIMEOUT_SECONDS": "2",
+    "SESSION_TTL_SECONDS": "28800",
+    "SESSION_COOKIE_NAME": "agentforge_session",
+    "CSRF_COOKIE_NAME": "agentforge_csrf",
+    "SESSION_COOKIE_SECURE": "false",
+    "SESSION_COOKIE_SAMESITE": "strict",
+    "ARGON2_MAX_CONCURRENCY": "2",
     "UPLOAD_ROOT": str(Path.cwd().parent / "agentforge-test-uploads"),
     "MAX_UPLOAD_SIZE_BYTES": "10485760",
     "CHUNK_SIZE_CHARS": "1200",
@@ -90,8 +96,11 @@ def application() -> Iterator[FastAPI]:
     from app.main import create_app
 
     test_application = create_app()
-    yield test_application
-    test_application.dependency_overrides.clear()
+    try:
+        yield test_application
+    finally:
+        test_application.dependency_overrides.clear()
+        test_application.state.password_work_limiter.shutdown()
 
 
 @pytest.fixture

@@ -19,8 +19,9 @@ from app.api.errors import (
     UnsupportedMediaTypeError,
     UploadTooLargeError,
 )
-from app.db.models import Document, IngestionJob, KnowledgeBase
+from app.db.models import Document, IngestionJob, KnowledgeBase, KnowledgeBaseRole
 from app.ingestion.storage import LocalFileStorage
+from app.security import AuthorizationError, Principal
 from app.services.knowledge_intake import KnowledgeIntakeService
 
 
@@ -58,6 +59,7 @@ class TransactionContext(AbstractAsyncContextManager[None]):
 class FakeSession:
     def __init__(self) -> None:
         self.flush = AsyncMock()
+        self.refresh = AsyncMock()
 
     def begin(self) -> TransactionContext:
         return TransactionContext()
@@ -101,6 +103,14 @@ def _timestamp_records() -> tuple[KnowledgeBase, Document, IngestionJob]:
     return knowledge_base, document, job
 
 
+def _principal() -> Principal:
+    return Principal(
+        user_id=uuid4(),
+        email="owner@example.com",
+        session_id=uuid4(),
+    )
+
+
 def _service(tmp_path: Path) -> KnowledgeIntakeService:
     service = KnowledgeIntakeService(
         FakeSession(),  # type: ignore[arg-type]
@@ -116,10 +126,15 @@ def _service(tmp_path: Path) -> KnowledgeIntakeService:
 async def test_upload_creates_document_and_single_durable_job(tmp_path: Path) -> None:
     service = _service(tmp_path)
     knowledge_base, _, _ = _timestamp_records()
-    service._knowledge_bases.get.return_value = knowledge_base  # type: ignore[attr-defined]
-    service._documents.get_by_digest.return_value = None  # type: ignore[attr-defined]
+    principal = _principal()
+    service._knowledge_bases.get_upload_target_for_user.return_value = (  # type: ignore[attr-defined]
+        knowledge_base,
+        KnowledgeBaseRole.OWNER,
+    )
+    service._documents.get_by_digest_for_user.return_value = None  # type: ignore[attr-defined]
 
     result = await service.upload_document(
+        principal,
         knowledge_base.id,
         filename="notes.txt",
         media_type="text/plain",
@@ -133,8 +148,12 @@ async def test_upload_creates_document_and_single_durable_job(tmp_path: Path) ->
     assert result.document.status == "pending"
     assert result.job.status == "pending"
     assert result.job.attempt_count == 0
-    service._documents.add.assert_awaited_once_with(result.document)  # type: ignore[attr-defined]
-    service._jobs.add.assert_awaited_once_with(result.job)  # type: ignore[attr-defined]
+    service._documents.add_authorized_upload.assert_awaited_once_with(  # type: ignore[attr-defined]
+        result.document
+    )
+    service._jobs.add_for_authorized_upload.assert_awaited_once_with(  # type: ignore[attr-defined]
+        result.job
+    )
     assert (tmp_path / result.document.storage_key).read_bytes() == b"hello"
 
 
@@ -153,10 +172,15 @@ async def test_supported_pdf_and_markdown_reach_durable_pending_state(
 ) -> None:
     service = _service(tmp_path)
     knowledge_base, _, _ = _timestamp_records()
-    service._knowledge_bases.get.return_value = knowledge_base  # type: ignore[attr-defined]
-    service._documents.get_by_digest.return_value = None  # type: ignore[attr-defined]
+    principal = _principal()
+    service._knowledge_bases.get_upload_target_for_user.return_value = (  # type: ignore[attr-defined]
+        knowledge_base,
+        KnowledgeBaseRole.OWNER,
+    )
+    service._documents.get_by_digest_for_user.return_value = None  # type: ignore[attr-defined]
 
     result = await service.upload_document(
+        principal,
         knowledge_base.id,
         filename=filename,
         media_type=media_type,
@@ -174,10 +198,18 @@ async def test_duplicate_upload_returns_existing_resources_and_removes_new_file(
 ) -> None:
     service = _service(tmp_path)
     knowledge_base, document, job = _timestamp_records()
-    service._knowledge_bases.get.return_value = knowledge_base  # type: ignore[attr-defined]
-    service._documents.get_by_digest.return_value = document  # type: ignore[attr-defined]
+    principal = _principal()
+    service._knowledge_bases.get_upload_target_for_user.return_value = (  # type: ignore[attr-defined]
+        knowledge_base,
+        KnowledgeBaseRole.OWNER,
+    )
+    service._documents.get_by_digest_for_user.return_value = (  # type: ignore[attr-defined]
+        document,
+        KnowledgeBaseRole.OWNER,
+    )
 
     result = await service.upload_document(
+        principal,
         knowledge_base.id,
         filename="copy.txt",
         media_type="text/plain",
@@ -186,7 +218,7 @@ async def test_duplicate_upload_returns_existing_resources_and_removes_new_file(
 
     assert result == result.__class__(document, job, duplicate=True)
     assert not _matches(tmp_path, "*.txt")
-    service._documents.add.assert_not_awaited()  # type: ignore[attr-defined]
+    service._documents.add_authorized_upload.assert_not_awaited()  # type: ignore[attr-defined]
 
 
 async def test_simulated_concurrent_uniqueness_conflict_returns_existing(
@@ -194,11 +226,21 @@ async def test_simulated_concurrent_uniqueness_conflict_returns_existing(
 ) -> None:
     service = _service(tmp_path)
     knowledge_base, document, job = _timestamp_records()
-    service._knowledge_bases.get.return_value = knowledge_base  # type: ignore[attr-defined]
-    service._documents.get_by_digest.side_effect = [None, document]  # type: ignore[attr-defined]
-    service._documents.add.side_effect = IntegrityError("insert", {}, Exception())  # type: ignore[attr-defined]
+    principal = _principal()
+    service._knowledge_bases.get_upload_target_for_user.return_value = (  # type: ignore[attr-defined]
+        knowledge_base,
+        KnowledgeBaseRole.OWNER,
+    )
+    service._documents.get_by_digest_for_user.side_effect = [  # type: ignore[attr-defined]
+        None,
+        (document, KnowledgeBaseRole.OWNER),
+    ]
+    service._documents.add_authorized_upload.side_effect = IntegrityError(  # type: ignore[attr-defined]
+        "insert", {}, Exception()
+    )
 
     result = await service.upload_document(
+        principal,
         knowledge_base.id,
         filename="copy.txt",
         media_type="text/plain",
@@ -216,9 +258,13 @@ async def test_database_failure_removes_stored_file_and_hides_internal_error(
 ) -> None:
     service = _service(tmp_path)
     knowledge_base, _, _ = _timestamp_records()
-    service._knowledge_bases.get.return_value = knowledge_base  # type: ignore[attr-defined]
-    service._documents.get_by_digest.return_value = None  # type: ignore[attr-defined]
-    service._documents.add.side_effect = OperationalError(  # type: ignore[attr-defined]
+    principal = _principal()
+    service._knowledge_bases.get_upload_target_for_user.return_value = (  # type: ignore[attr-defined]
+        knowledge_base,
+        KnowledgeBaseRole.OWNER,
+    )
+    service._documents.get_by_digest_for_user.return_value = None  # type: ignore[attr-defined]
+    service._documents.add_authorized_upload.side_effect = OperationalError(  # type: ignore[attr-defined]
         "INSERT PRIVATE PATH",
         {},
         Exception("/private/secret/path"),
@@ -226,6 +272,7 @@ async def test_database_failure_removes_stored_file_and_hides_internal_error(
 
     with pytest.raises(ServiceUnavailableError) as exc_info:
         await service.upload_document(
+            principal,
             knowledge_base.id,
             filename="notes.txt",
             media_type="text/plain",
@@ -240,7 +287,11 @@ async def test_database_failure_removes_stored_file_and_hides_internal_error(
 async def test_upload_cancellation_after_publish_removes_all_files(tmp_path: Path) -> None:
     service = _service(tmp_path)
     knowledge_base, _, _ = _timestamp_records()
-    service._knowledge_bases.get.return_value = knowledge_base  # type: ignore[attr-defined]
+    principal = _principal()
+    service._knowledge_bases.get_upload_target_for_user.return_value = (  # type: ignore[attr-defined]
+        knowledge_base,
+        KnowledgeBaseRole.OWNER,
+    )
     persistence_started = asyncio.Event()
     allow_persistence = asyncio.Event()
 
@@ -251,6 +302,7 @@ async def test_upload_cancellation_after_publish_removes_all_files(tmp_path: Pat
     service._persist_upload = AsyncMock(side_effect=block_persistence)  # type: ignore[method-assign]
     upload_task = asyncio.create_task(
         service.upload_document(
+            principal,
             knowledge_base.id,
             filename="notes.txt",
             media_type="text/plain",
@@ -271,10 +323,15 @@ async def test_upload_cancellation_after_publish_removes_all_files(tmp_path: Pat
 async def test_invalid_pdf_signature_cleans_stored_file(tmp_path: Path) -> None:
     service = _service(tmp_path)
     knowledge_base, _, _ = _timestamp_records()
-    service._knowledge_bases.get.return_value = knowledge_base  # type: ignore[attr-defined]
+    principal = _principal()
+    service._knowledge_bases.get_upload_target_for_user.return_value = (  # type: ignore[attr-defined]
+        knowledge_base,
+        KnowledgeBaseRole.OWNER,
+    )
 
     with pytest.raises(InvalidUploadError, match="signature"):
         await service.upload_document(
+            principal,
             knowledge_base.id,
             filename="document.pdf",
             media_type="application/pdf",
@@ -286,10 +343,12 @@ async def test_invalid_pdf_signature_cleans_stored_file(tmp_path: Path) -> None:
 
 async def test_unknown_knowledge_base_writes_no_file(tmp_path: Path) -> None:
     service = _service(tmp_path)
-    service._knowledge_bases.get.return_value = None  # type: ignore[attr-defined]
+    principal = _principal()
+    service._knowledge_bases.get_upload_target_for_user.return_value = None  # type: ignore[attr-defined]
 
     with pytest.raises(NotFoundError):
         await service.upload_document(
+            principal,
             uuid4(),
             filename="notes.txt",
             media_type="text/plain",
@@ -302,18 +361,33 @@ async def test_unknown_knowledge_base_writes_no_file(tmp_path: Path) -> None:
 async def test_service_crud_queries_return_durable_records(tmp_path: Path) -> None:
     service = _service(tmp_path)
     knowledge_base, document, job = _timestamp_records()
-    service._knowledge_bases.get.return_value = knowledge_base  # type: ignore[attr-defined]
-    service._knowledge_bases.list.return_value = [knowledge_base]  # type: ignore[attr-defined]
-    service._documents.get.return_value = document  # type: ignore[attr-defined]
-    service._documents.list_for_knowledge_base.return_value = [document]  # type: ignore[attr-defined]
-    service._jobs.get.return_value = job  # type: ignore[attr-defined]
+    principal = _principal()
+    owner_access = (knowledge_base, KnowledgeBaseRole.OWNER)
+    service._knowledge_bases.get_for_user.return_value = owner_access  # type: ignore[attr-defined]
+    service._knowledge_bases.list_for_user.return_value = [owner_access]  # type: ignore[attr-defined]
+    service._documents.get_for_user.return_value = (  # type: ignore[attr-defined]
+        document,
+        KnowledgeBaseRole.OWNER,
+    )
+    service._documents.list_for_knowledge_base_for_user.return_value = [  # type: ignore[attr-defined]
+        (document, KnowledgeBaseRole.OWNER)
+    ]
+    service._jobs.get_for_user.return_value = (  # type: ignore[attr-defined]
+        job,
+        KnowledgeBaseRole.OWNER,
+    )
 
-    created = await service.create_knowledge_base(name="New", description=None)
-    listed = await service.list_knowledge_bases(limit=10, offset=0)
-    retrieved = await service.get_knowledge_base(knowledge_base.id)
-    documents = await service.list_documents(knowledge_base.id, limit=10, offset=0)
-    retrieved_document = await service.get_document(document.id)
-    retrieved_job = await service.get_ingestion_job(job.id)
+    created = await service.create_knowledge_base(principal, name="New", description=None)
+    listed = await service.list_knowledge_bases(principal, limit=10, offset=0)
+    retrieved = await service.get_knowledge_base(principal, knowledge_base.id)
+    documents = await service.list_documents(
+        principal,
+        knowledge_base.id,
+        limit=10,
+        offset=0,
+    )
+    retrieved_document = await service.get_document(principal, document.id)
+    retrieved_job = await service.get_ingestion_job(principal, job.id)
 
     assert created.name == "New"
     assert listed == [knowledge_base]
@@ -321,7 +395,10 @@ async def test_service_crud_queries_return_durable_records(tmp_path: Path) -> No
     assert documents == [document]
     assert retrieved_document is document
     assert retrieved_job is job
-    service._knowledge_bases.add.assert_awaited_once_with(created)  # type: ignore[attr-defined]
+    service._knowledge_bases.add_with_owner.assert_awaited_once_with(  # type: ignore[attr-defined]
+        created,
+        owner_user_id=principal.user_id,
+    )
 
 
 @pytest.mark.parametrize(
@@ -341,10 +418,15 @@ async def test_upload_metadata_validation_rejects_unsafe_or_unsupported_input(
 ) -> None:
     service = _service(tmp_path)
     knowledge_base, _, _ = _timestamp_records()
-    service._knowledge_bases.get.return_value = knowledge_base  # type: ignore[attr-defined]
+    principal = _principal()
+    service._knowledge_bases.get_upload_target_for_user.return_value = (  # type: ignore[attr-defined]
+        knowledge_base,
+        KnowledgeBaseRole.OWNER,
+    )
 
     with pytest.raises(expected_exception):
         await service.upload_document(
+            principal,
             knowledge_base.id,
             filename=filename,
             media_type=media_type,
@@ -357,10 +439,15 @@ async def test_upload_metadata_validation_rejects_unsafe_or_unsupported_input(
 async def test_empty_and_oversized_uploads_map_to_safe_errors(tmp_path: Path) -> None:
     service = _service(tmp_path)
     knowledge_base, _, _ = _timestamp_records()
-    service._knowledge_bases.get.return_value = knowledge_base  # type: ignore[attr-defined]
+    principal = _principal()
+    service._knowledge_bases.get_upload_target_for_user.return_value = (  # type: ignore[attr-defined]
+        knowledge_base,
+        KnowledgeBaseRole.OWNER,
+    )
 
     with pytest.raises(InvalidUploadError, match="empty"):
         await service.upload_document(
+            principal,
             knowledge_base.id,
             filename="empty.txt",
             media_type="text/plain",
@@ -370,6 +457,7 @@ async def test_empty_and_oversized_uploads_map_to_safe_errors(tmp_path: Path) ->
     service._max_upload_size_bytes = 2
     with pytest.raises(UploadTooLargeError):
         await service.upload_document(
+            principal,
             knowledge_base.id,
             filename="large.txt",
             media_type="text/plain",
@@ -380,9 +468,13 @@ async def test_empty_and_oversized_uploads_map_to_safe_errors(tmp_path: Path) ->
 async def test_failed_job_retry_reuses_row_and_resets_document() -> None:
     service = _service(Path("/unused"))
     _, document, job = _timestamp_records()
-    service._jobs.get.return_value = job  # type: ignore[attr-defined]
+    principal = _principal()
+    service._jobs.get_retry_target_for_user.return_value = (  # type: ignore[attr-defined]
+        job,
+        KnowledgeBaseRole.OWNER,
+    )
 
-    result = await service.retry_ingestion_job(job.id)
+    result = await service.retry_ingestion_job(principal, job.id)
 
     assert result is job
     assert job.status == "pending"
@@ -397,15 +489,20 @@ async def test_failed_job_retry_reuses_row_and_resets_document() -> None:
     assert job.next_retry_at is None
     assert job.started_at is None
     assert job.finished_at is None
+    service._session.refresh.assert_awaited_once_with(job)  # type: ignore[attr-defined]
 
 
 async def test_retry_is_idempotent_when_job_is_already_pending() -> None:
     service = _service(Path("/unused"))
     _, _, job = _timestamp_records()
     job.status = "pending"
-    service._jobs.get.return_value = job  # type: ignore[attr-defined]
+    principal = _principal()
+    service._jobs.get_retry_target_for_user.return_value = (  # type: ignore[attr-defined]
+        job,
+        KnowledgeBaseRole.OWNER,
+    )
 
-    assert await service.retry_ingestion_job(job.id) is job
+    assert await service.retry_ingestion_job(principal, job.id) is job
     service._session.flush.assert_not_awaited()  # type: ignore[attr-defined]
 
 
@@ -414,7 +511,92 @@ async def test_retry_rejects_invalid_state(job_status: str) -> None:
     service = _service(Path("/unused"))
     _, _, job = _timestamp_records()
     job.status = job_status
-    service._jobs.get.return_value = job  # type: ignore[attr-defined]
+    principal = _principal()
+    service._jobs.get_retry_target_for_user.return_value = (  # type: ignore[attr-defined]
+        job,
+        KnowledgeBaseRole.OWNER,
+    )
 
     with pytest.raises(ConflictError, match="Only failed"):
-        await service.retry_ingestion_job(job.id)
+        await service.retry_ingestion_job(principal, job.id)
+
+
+async def test_viewer_can_read_but_cannot_upload_or_retry(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    knowledge_base, document, job = _timestamp_records()
+    principal = _principal()
+    viewer = KnowledgeBaseRole.VIEWER
+    service._knowledge_bases.get_for_user.return_value = (  # type: ignore[attr-defined]
+        knowledge_base,
+        viewer,
+    )
+    service._documents.get_for_user.return_value = (document, viewer)  # type: ignore[attr-defined]
+    service._jobs.get_for_user.return_value = (job, viewer)  # type: ignore[attr-defined]
+    service._knowledge_bases.get_upload_target_for_user.return_value = (  # type: ignore[attr-defined]
+        knowledge_base,
+        viewer,
+    )
+    service._jobs.get_retry_target_for_user.return_value = (job, viewer)  # type: ignore[attr-defined]
+
+    assert await service.get_knowledge_base(principal, knowledge_base.id) is knowledge_base
+    assert await service.get_document(principal, document.id) is document
+    assert await service.get_ingestion_job(principal, job.id) is job
+
+    with pytest.raises(AuthorizationError):
+        await service.upload_document(
+            principal,
+            knowledge_base.id,
+            filename="notes.txt",
+            media_type="text/plain",
+            source=MemoryStream(b"private"),
+        )
+    with pytest.raises(AuthorizationError):
+        await service.retry_ingestion_job(principal, job.id)
+    assert not _matches(tmp_path, "*.*")
+
+
+async def test_editor_can_upload_and_retry(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    knowledge_base, _, job = _timestamp_records()
+    principal = _principal()
+    service._knowledge_bases.get_upload_target_for_user.return_value = (  # type: ignore[attr-defined]
+        knowledge_base,
+        KnowledgeBaseRole.EDITOR,
+    )
+    service._documents.get_by_digest_for_user.return_value = None  # type: ignore[attr-defined]
+    service._jobs.get_retry_target_for_user.return_value = (  # type: ignore[attr-defined]
+        job,
+        KnowledgeBaseRole.EDITOR,
+    )
+
+    uploaded = await service.upload_document(
+        principal,
+        knowledge_base.id,
+        filename="notes.txt",
+        media_type="text/plain",
+        source=MemoryStream(b"private"),
+    )
+    retried = await service.retry_ingestion_job(principal, job.id)
+
+    assert uploaded.duplicate is False
+    assert retried.status == "pending"
+
+
+async def test_nonmember_and_unowned_resources_are_hidden() -> None:
+    service = _service(Path("/unused"))
+    principal = _principal()
+    service._knowledge_bases.get_for_user.return_value = None  # type: ignore[attr-defined]
+    service._documents.get_for_user.return_value = None  # type: ignore[attr-defined]
+    service._jobs.get_for_user.return_value = None  # type: ignore[attr-defined]
+    service._jobs.get_retry_target_for_user.return_value = None  # type: ignore[attr-defined]
+
+    with pytest.raises(NotFoundError):
+        await service.get_knowledge_base(principal, uuid4())
+    with pytest.raises(NotFoundError):
+        await service.list_documents(principal, uuid4(), limit=10, offset=0)
+    with pytest.raises(NotFoundError):
+        await service.get_document(principal, uuid4())
+    with pytest.raises(NotFoundError):
+        await service.get_ingestion_job(principal, uuid4())
+    with pytest.raises(NotFoundError):
+        await service.retry_ingestion_job(principal, uuid4())
