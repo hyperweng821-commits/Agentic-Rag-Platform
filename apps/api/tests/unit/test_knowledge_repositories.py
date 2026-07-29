@@ -1,6 +1,7 @@
-"""Focused tests for AF-1 and AF-2A repository query and flush behavior."""
+"""Focused repository query, authorization-scope, and flush tests."""
 
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -15,12 +16,18 @@ from app.db.models import (
     IngestionJob,
     IngestionJobStatus,
     KnowledgeBase,
+    KnowledgeBaseRole,
+    User,
+    UserSession,
 )
 from app.db.repositories import (
     DocumentChunkRepository,
     DocumentRepository,
     IngestionJobRepository,
+    KnowledgeBaseMembershipRepository,
     KnowledgeBaseRepository,
+    UserRepository,
+    UserSessionRepository,
 )
 
 
@@ -28,48 +35,267 @@ def _postgresql_sql(statement: object) -> str:
     return str(statement.compile(dialect=postgresql.dialect()))  # type: ignore[attr-defined]
 
 
-async def test_repository_adds_flush_without_committing() -> None:
+async def test_user_repository_separates_authentication_and_operator_queries() -> None:
     session = AsyncMock(spec=AsyncSession)
     session.add = MagicMock()
-    knowledge_base = KnowledgeBase(name="Engineering")
+    user = User(
+        id=uuid4(),
+        email="owner@example.com",
+        password_hash="$argon2id$v=19$m=1,t=1,p=1$hash",  # noqa: S106
+    )
+    observed_hash = user.password_hash
+    auth_result = MagicMock()
+    auth_result.one_or_none.return_value = SimpleNamespace(
+        id=user.id,
+        email=user.email,
+        is_active=True,
+        password_hash=observed_hash,
+    )
+    session.execute.return_value = auth_result
+    session.scalar.side_effect = [user, user]
+    repository = UserRepository(session)
 
-    await KnowledgeBaseRepository(session).add(knowledge_base)
+    await repository.add_for_operator(user)
+    snapshot = await repository.get_for_authentication_by_email("owner@example.com")
+    locked = await repository.get_locked_for_authentication(user.id)
+    operator = await repository.get_for_operator_by_email(
+        "owner@example.com",
+        for_update=True,
+    )
+    replacement_hash = "$argon2id$replacement"
+    await repository.update_password_hash_for_authentication(
+        user,
+        password_hash=replacement_hash,
+    )
+
+    assert snapshot is not None
+    assert snapshot.user_id == user.id
+    assert snapshot.email == user.email
+    assert snapshot.is_active is True
+    assert snapshot.password_hash == observed_hash
+    assert locked is user
+    assert operator is user
+    assert user.password_hash == replacement_hash
+    session.add.assert_called_once_with(user)
+    assert session.flush.await_count == 2
+    auth_statement = session.execute.await_args.args[0]
+    assert "users.email =" in _postgresql_sql(auth_statement)
+    for call in session.scalar.await_args_list:
+        rendered = _postgresql_sql(call.args[0])
+        assert "FROM users" in rendered
+        assert "FOR UPDATE" in rendered
+    session.commit.assert_not_awaited()
+
+
+async def test_active_session_lookup_fences_digest_revocation_and_expiry() -> None:
+    session = AsyncMock(spec=AsyncSession)
+    session.scalar.return_value = None
+    now = datetime(2026, 7, 29, 12, tzinfo=UTC)
+
+    result = await UserSessionRepository(session).get_active_for_authentication_by_token_sha256(
+        "a" * 64, now=now
+    )
+
+    assert result is None
+    statement = session.scalar.await_args.args[0]
+    rendered = _postgresql_sql(statement)
+    assert "user_sessions.token_sha256 =" in rendered
+    assert "user_sessions.revoked_at IS NULL" in rendered
+    assert "user_sessions.expires_at >" in rendered
+
+
+async def test_session_repository_revokes_and_touches_without_committing() -> None:
+    session = AsyncMock(spec=AsyncSession)
+    session.add = MagicMock()
+    now = datetime(2026, 7, 29, 12, tzinfo=UTC)
+    user_session = UserSession(
+        user_id=uuid4(),
+        token_sha256="a" * 64,
+        csrf_token_sha256="b" * 64,
+        expires_at=now + timedelta(hours=1),
+    )
+    repository = UserSessionRepository(session)
+
+    await repository.add_for_authentication(user_session)
+    await repository.touch_for_authentication(user_session, seen_at=now)
+    await repository.revoke_for_authentication(user_session, revoked_at=now)
+
+    session.add.assert_called_once_with(user_session)
+    assert user_session.last_seen_at == now
+    assert user_session.revoked_at == now
+    assert session.flush.await_count == 3
+    session.commit.assert_not_awaited()
+
+
+async def test_knowledge_base_add_with_owner_flushes_one_aggregate() -> None:
+    session = AsyncMock(spec=AsyncSession)
+    session.add = MagicMock()
+    owner_user_id = uuid4()
+    knowledge_base = KnowledgeBase(name="Private")
+
+    await KnowledgeBaseRepository(session).add_with_owner(
+        knowledge_base,
+        owner_user_id=owner_user_id,
+    )
 
     session.add.assert_called_once_with(knowledge_base)
+    assert len(knowledge_base.memberships) == 1
+    membership = knowledge_base.memberships[0]
+    assert membership.user_id == owner_user_id
+    assert membership.role == KnowledgeBaseRole.OWNER.value
     session.flush.assert_awaited_once_with()
     session.commit.assert_not_awaited()
 
 
-async def test_knowledge_base_list_uses_bounded_deterministic_query() -> None:
+async def test_knowledge_base_access_queries_are_membership_scoped() -> None:
     session = AsyncMock(spec=AsyncSession)
-    scalar_result = MagicMock()
-    scalar_result.all.return_value = []
-    session.scalars.return_value = scalar_result
-
-    result = await KnowledgeBaseRepository(session).list(limit=20, offset=10)
-
-    assert result == []
-    statement = session.scalars.await_args.args[0]
-    rendered = str(statement)
-    assert "ORDER BY knowledge_bases.created_at ASC, knowledge_bases.id ASC" in rendered
-    assert statement._limit_clause.value == 20
-    assert statement._offset_clause.value == 10
-
-
-async def test_document_digest_query_scopes_to_knowledge_base() -> None:
-    session = AsyncMock(spec=AsyncSession)
-    session.scalar.return_value = None
+    user_id = uuid4()
     knowledge_base_id = uuid4()
+    knowledge_base = KnowledgeBase(id=knowledge_base_id, name="Private")
+    row_result = MagicMock()
+    row_result.one_or_none.return_value = (
+        knowledge_base,
+        KnowledgeBaseRole.EDITOR.value,
+    )
+    row_result.all.return_value = [(knowledge_base, KnowledgeBaseRole.EDITOR.value)]
+    session.execute.return_value = row_result
+    repository = KnowledgeBaseRepository(session)
 
-    result = await DocumentRepository(session).get_by_digest(
+    retrieved = await repository.get_for_user(
+        knowledge_base_id,
+        user_id=user_id,
+    )
+    upload_target = await repository.get_upload_target_for_user(
+        knowledge_base_id,
+        user_id=user_id,
+    )
+    listed = await repository.list_for_user(
+        user_id=user_id,
+        limit=20,
+        offset=10,
+    )
+
+    assert retrieved == (knowledge_base, KnowledgeBaseRole.EDITOR)
+    assert upload_target == (knowledge_base, KnowledgeBaseRole.EDITOR)
+    assert listed == [(knowledge_base, KnowledgeBaseRole.EDITOR)]
+    for call in session.execute.await_args_list:
+        rendered = _postgresql_sql(call.args[0])
+        assert "JOIN knowledge_base_memberships" in rendered
+        assert "knowledge_base_memberships.user_id =" in rendered
+    assert "FOR UPDATE" not in _postgresql_sql(session.execute.await_args_list[0].args[0])
+    assert "FOR UPDATE" in _postgresql_sql(session.execute.await_args_list[1].args[0])
+    list_statement = session.execute.await_args_list[-1].args[0]
+    assert list_statement._limit_clause.value == 20
+    assert list_statement._offset_clause.value == 10
+
+
+async def test_document_access_queries_join_membership_scope() -> None:
+    session = AsyncMock(spec=AsyncSession)
+    result = MagicMock()
+    result.one_or_none.return_value = None
+    result.all.return_value = []
+    session.execute.return_value = result
+    repository = DocumentRepository(session)
+    user_id = uuid4()
+
+    assert await repository.get_for_user(uuid4(), user_id=user_id) is None
+    assert (
+        await repository.list_for_knowledge_base_for_user(
+            uuid4(),
+            user_id=user_id,
+            limit=25,
+            offset=5,
+        )
+        == []
+    )
+
+    for call in session.execute.await_args_list:
+        rendered = _postgresql_sql(call.args[0])
+        assert "FROM documents JOIN knowledge_bases" in rendered
+        assert "JOIN knowledge_base_memberships" in rendered
+        assert "knowledge_bases.id = documents.knowledge_base_id" in rendered
+        assert "knowledge_base_memberships.knowledge_base_id = knowledge_bases.id" in rendered
+        assert "knowledge_base_memberships.user_id =" in rendered
+
+
+async def test_job_access_and_retry_queries_join_membership_scope() -> None:
+    session = AsyncMock(spec=AsyncSession)
+    result = MagicMock()
+    result.one_or_none.return_value = None
+    session.execute.return_value = result
+    repository = IngestionJobRepository(session)
+    user_id = uuid4()
+
+    assert await repository.get_for_user(uuid4(), user_id=user_id) is None
+    assert (
+        await repository.get_retry_target_for_user(
+            uuid4(),
+            user_id=user_id,
+        )
+        is None
+    )
+
+    read_statement = session.execute.await_args_list[0].args[0]
+    retry_statement = session.execute.await_args_list[1].args[0]
+    for statement in (read_statement, retry_statement):
+        rendered = _postgresql_sql(statement)
+        assert "FROM ingestion_jobs JOIN documents" in rendered
+        assert "JOIN knowledge_bases" in rendered
+        assert "JOIN knowledge_base_memberships" in rendered
+        assert "knowledge_bases.id = documents.knowledge_base_id" in rendered
+        assert "knowledge_base_memberships.knowledge_base_id = knowledge_bases.id" in rendered
+        assert "knowledge_base_memberships.user_id =" in rendered
+    assert "FOR UPDATE" not in _postgresql_sql(read_statement)
+    assert "FOR UPDATE" in _postgresql_sql(retry_statement)
+
+
+async def test_legacy_claim_counts_and_claims_only_unowned_knowledge_bases() -> None:
+    session = AsyncMock(spec=AsyncSession)
+    session.scalar.return_value = 2
+    scalar_result = MagicMock()
+    scalar_result.all.return_value = [uuid4(), uuid4()]
+    session.scalars.return_value = scalar_result
+    repository = KnowledgeBaseMembershipRepository(session)
+
+    count = await repository.count_unowned_internal()
+    claimed = await repository.claim_unowned_internal(owner_user_id=uuid4())
+
+    assert count == 2
+    assert claimed == 2
+    count_sql = _postgresql_sql(session.scalar.await_args.args[0])
+    claim_sql = _postgresql_sql(session.scalars.await_args.args[0])
+    assert "FROM knowledge_bases" in count_sql
+    assert "NOT (EXISTS" in count_sql
+    assert "INSERT INTO knowledge_base_memberships" in claim_sql
+    assert "NOT (EXISTS" in claim_sql
+    assert "ON CONFLICT (knowledge_base_id, user_id) DO NOTHING" in claim_sql
+    lock_sql = _postgresql_sql(session.execute.await_args.args[0])
+    assert "pg_advisory_xact_lock" in lock_sql
+    session.flush.assert_awaited_once_with()
+    session.commit.assert_not_awaited()
+
+
+async def test_document_digest_query_scopes_to_knowledge_base_and_user() -> None:
+    session = AsyncMock(spec=AsyncSession)
+    result_rows = MagicMock()
+    result_rows.one_or_none.return_value = None
+    session.execute.return_value = result_rows
+    knowledge_base_id = uuid4()
+    user_id = uuid4()
+
+    result = await DocumentRepository(session).get_by_digest_for_user(
         knowledge_base_id=knowledge_base_id,
         sha256="a" * 64,
+        user_id=user_id,
     )
 
     assert result is None
-    rendered = str(session.scalar.await_args.args[0])
+    rendered = _postgresql_sql(session.execute.await_args.args[0])
     assert "documents.knowledge_base_id" in rendered
     assert "documents.sha256" in rendered
+    assert "JOIN knowledge_bases" in rendered
+    assert "JOIN knowledge_base_memberships" in rendered
+    assert "knowledge_base_memberships.user_id" in rendered
 
 
 async def test_document_list_uses_bounded_deterministic_query() -> None:
@@ -79,7 +305,7 @@ async def test_document_list_uses_bounded_deterministic_query() -> None:
     session.scalars.return_value = scalar_result
     knowledge_base_id = uuid4()
 
-    result = await DocumentRepository(session).list_for_knowledge_base(
+    result = await DocumentRepository(session).list_for_knowledge_base_internal(
         knowledge_base_id,
         limit=25,
         offset=5,
@@ -91,16 +317,6 @@ async def test_document_list_uses_bounded_deterministic_query() -> None:
     assert "ORDER BY documents.created_at ASC, documents.id ASC" in rendered
     assert statement._limit_clause.value == 25
     assert statement._offset_clause.value == 5
-
-
-async def test_ingestion_job_retry_query_uses_row_lock() -> None:
-    session = AsyncMock(spec=AsyncSession)
-    session.scalar.return_value = None
-
-    await IngestionJobRepository(session).get(uuid4(), for_update=True)
-
-    statement = session.scalar.await_args.args[0]
-    assert "FOR UPDATE" in str(statement)
 
 
 async def test_document_and_job_add_flush_without_commit() -> None:
@@ -116,8 +332,8 @@ async def test_document_and_job_add_flush_without_commit() -> None:
     )
     job = IngestionJob(document=document)
 
-    await DocumentRepository(session).add(document)
-    await IngestionJobRepository(session).add(job)
+    await DocumentRepository(session).add_authorized_upload(document)
+    await IngestionJobRepository(session).add_for_authorized_upload(job)
 
     assert session.add.call_count == 2
     assert session.flush.await_count == 2
@@ -131,7 +347,7 @@ async def test_document_chunk_list_uses_deterministic_chunk_order() -> None:
     session.scalars.return_value = scalar_result
     document_id = uuid4()
 
-    result = await DocumentChunkRepository(session).list_for_document(document_id)
+    result = await DocumentChunkRepository(session).list_for_document_internal(document_id)
 
     assert result == []
     statement = session.scalars.await_args.args[0]
@@ -147,13 +363,13 @@ async def test_document_chunk_list_applies_and_validates_a_positive_limit() -> N
     session.scalars.return_value = scalar_result
     repository = DocumentChunkRepository(session)
 
-    await repository.list_for_document(uuid4(), limit=50)
+    await repository.list_for_document_internal(uuid4(), limit=50)
 
     statement = session.scalars.await_args.args[0]
     assert statement._limit_clause.value == 50
 
     with pytest.raises(ValueError, match="positive"):
-        await repository.list_for_document(uuid4(), limit=0)
+        await repository.list_for_document_internal(uuid4(), limit=0)
 
 
 async def test_document_chunk_replace_deletes_and_flushes_without_committing() -> None:
@@ -175,7 +391,7 @@ async def test_document_chunk_replace_deletes_and_flushes_without_committing() -
         ),
     ]
 
-    await DocumentChunkRepository(session).replace_for_document(document_id, chunks)
+    await DocumentChunkRepository(session).replace_for_document_internal(document_id, chunks)
 
     delete_statement = session.execute.await_args.args[0]
     assert "DELETE FROM document_chunks" in str(delete_statement)
@@ -197,7 +413,7 @@ async def test_document_chunk_replace_rejects_mismatched_document_ids() -> None:
     )
 
     with pytest.raises(ValueError, match="document_id"):
-        await DocumentChunkRepository(session).replace_for_document(
+        await DocumentChunkRepository(session).replace_for_document_internal(
             document_id,
             [mismatched_chunk],
         )
@@ -213,7 +429,7 @@ async def test_claim_next_uses_due_retry_eligibility_and_skip_locked() -> None:
     session.scalar.return_value = None
     claimed_at = datetime(2026, 7, 28, 12, tzinfo=UTC)
 
-    result = await IngestionJobRepository(session).claim_next(
+    result = await IngestionJobRepository(session).claim_next_internal(
         worker_id="worker-1",
         claimed_at=claimed_at,
         lease_expires_at=claimed_at + timedelta(minutes=5),
@@ -257,7 +473,7 @@ async def test_claim_next_updates_job_and_document_without_committing() -> None:
     )
     session.scalar.return_value = job
 
-    claimed = await IngestionJobRepository(session).claim_next(
+    claimed = await IngestionJobRepository(session).claim_next_internal(
         worker_id="worker-1",
         claimed_at=claimed_at,
         lease_expires_at=claimed_at + timedelta(minutes=5),
@@ -292,7 +508,7 @@ async def test_claim_next_rejects_invalid_lease_inputs(
     claimed_at = datetime(2026, 7, 28, 12, tzinfo=UTC)
 
     with pytest.raises(ValueError):
-        await IngestionJobRepository(session).claim_next(
+        await IngestionJobRepository(session).claim_next_internal(
             worker_id=worker_id,
             claimed_at=claimed_at,
             lease_expires_at=claimed_at + lease_delta,
@@ -308,7 +524,10 @@ async def test_expired_lease_query_is_bounded_ordered_and_skip_locked() -> None:
     session.scalars.return_value = scalar_result
     now = datetime(2026, 7, 28, 12, tzinfo=UTC)
 
-    result = await IngestionJobRepository(session).lock_expired_leases(now=now, limit=10)
+    result = await IngestionJobRepository(session).lock_expired_leases_internal(
+        now=now,
+        limit=10,
+    )
 
     assert result == []
     statement = session.scalars.await_args.args[0]
@@ -325,7 +544,7 @@ async def test_expired_lease_query_rejects_a_nonpositive_limit() -> None:
     session = AsyncMock(spec=AsyncSession)
 
     with pytest.raises(ValueError, match="positive"):
-        await IngestionJobRepository(session).lock_expired_leases(
+        await IngestionJobRepository(session).lock_expired_leases_internal(
             now=datetime(2026, 7, 28, 12, tzinfo=UTC),
             limit=0,
         )
@@ -341,7 +560,7 @@ async def test_owned_processing_query_fences_status_worker_and_expiry(
     session.scalar.return_value = None
     now = datetime(2026, 7, 28, 12, tzinfo=UTC)
 
-    result = await IngestionJobRepository(session).get_owned_processing(
+    result = await IngestionJobRepository(session).get_owned_processing_internal(
         uuid4(),
         worker_id="worker-1",
         now=now,

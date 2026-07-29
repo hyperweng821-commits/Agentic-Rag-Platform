@@ -8,7 +8,11 @@ import pytest
 from fastapi import FastAPI
 from httpx import AsyncClient
 
-from app.api.dependencies import get_knowledge_intake_service
+from app.api.dependencies import (
+    get_csrf_protected_principal,
+    get_current_principal,
+    get_knowledge_intake_service,
+)
 from app.api.errors import (
     InvalidUploadError,
     NotFoundError,
@@ -16,6 +20,7 @@ from app.api.errors import (
     UploadTooLargeError,
 )
 from app.db.models import Document, IngestionJob, KnowledgeBase
+from app.security import AuthenticationError, Principal
 from app.services.knowledge_intake import KnowledgeIntakeService, UploadResult
 
 
@@ -25,6 +30,19 @@ def knowledge_service(application: FastAPI) -> AsyncMock:
     service = AsyncMock(spec=KnowledgeIntakeService)
     application.dependency_overrides[get_knowledge_intake_service] = lambda: service
     return service
+
+
+@pytest.fixture(autouse=True)
+def principal(application: FastAPI) -> Principal:
+    """Authenticate existing contract tests without touching PostgreSQL."""
+    value = Principal(
+        user_id=uuid4(),
+        email="owner@example.com",
+        session_id=uuid4(),
+    )
+    application.dependency_overrides[get_current_principal] = lambda: value
+    application.dependency_overrides[get_csrf_protected_principal] = lambda: value
+    return value
 
 
 def _resources() -> tuple[KnowledgeBase, Document, IngestionJob]:
@@ -62,6 +80,7 @@ def _resources() -> tuple[KnowledgeBase, Document, IngestionJob]:
 async def test_create_list_and_retrieve_knowledge_base_contracts(
     client: AsyncClient,
     knowledge_service: AsyncMock,
+    principal: Principal,
 ) -> None:
     knowledge_base, _, _ = _resources()
     knowledge_service.create_knowledge_base.return_value = knowledge_base
@@ -81,7 +100,10 @@ async def test_create_list_and_retrieve_knowledge_base_contracts(
     assert listed.json()["items"][0]["id"] == str(knowledge_base.id)
     assert listed.json()["limit"] == 10
     assert retrieved.status_code == 200
+    for response in (created, listed, retrieved):
+        assert response.headers["cache-control"] == "private, no-store"
     knowledge_service.create_knowledge_base.assert_awaited_once_with(
+        principal,
         name="Engineering",
         description="Private notes",
     )
@@ -163,6 +185,7 @@ async def test_upload_errors_use_safe_envelope(
     assert response.status_code == expected_status
     assert response.json()["error"]["code"] == expected_code
     assert "private contents" not in response.text
+    assert response.headers["cache-control"] == "private, no-store"
 
 
 async def test_malformed_identifier_uses_existing_validation_envelope(
@@ -197,3 +220,51 @@ async def test_document_list_metadata_and_job_retry_contracts(
     assert retried.status_code == 200
     assert retrieved.json()["sha256"] == "a" * 64
     assert retried.json()["id"] == str(job.id)
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "request_kind"),
+    [
+        ("POST", "/api/v1/knowledge-bases", "create"),
+        ("GET", "/api/v1/knowledge-bases", "none"),
+        ("GET", f"/api/v1/knowledge-bases/{uuid4()}", "none"),
+        ("POST", f"/api/v1/knowledge-bases/{uuid4()}/documents", "upload"),
+        ("GET", f"/api/v1/knowledge-bases/{uuid4()}/documents", "none"),
+        ("GET", f"/api/v1/documents/{uuid4()}", "none"),
+        ("GET", f"/api/v1/ingestion-jobs/{uuid4()}", "none"),
+        ("POST", f"/api/v1/ingestion-jobs/{uuid4()}/retry", "none"),
+    ],
+)
+async def test_every_knowledge_endpoint_rejects_unauthenticated_requests(
+    application: FastAPI,
+    client: AsyncClient,
+    knowledge_service: AsyncMock,
+    method: str,
+    path: str,
+    request_kind: str,
+) -> None:
+    async def reject_authentication() -> Principal:
+        raise AuthenticationError
+
+    application.dependency_overrides[get_current_principal] = reject_authentication
+    application.dependency_overrides[get_csrf_protected_principal] = reject_authentication
+
+    if request_kind == "create":
+        response = await client.request(
+            method,
+            path,
+            json={"name": "Private", "description": None},
+        )
+    elif request_kind == "upload":
+        response = await client.request(
+            method,
+            path,
+            files={"file": ("notes.txt", b"private", "text/plain")},
+        )
+    else:
+        response = await client.request(method, path)
+
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "AUTHENTICATION_REQUIRED"
+    assert knowledge_service.method_calls == []
+    assert response.headers["cache-control"] == "private, no-store"

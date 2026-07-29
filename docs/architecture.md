@@ -2,8 +2,9 @@
 
 ## Current implementation status
 
-The Phase 3 foundation, AF-1 knowledge intake, and AF-2 durable ingestion and
-indexing work through AF-2B are implemented:
+The Phase 3 foundation, AF-1 knowledge intake, AF-2 durable ingestion and
+indexing through AF-2B, and the minimal AF-2S1 knowledge-access boundary are
+implemented:
 
 - FastAPI application factory and lifecycle;
 - typed configuration;
@@ -24,18 +25,32 @@ indexing work through AF-2B are implemented:
 - short-transaction job claiming, retry scheduling, and expired-lease recovery;
 - Ollama embedding and Chroma vector-store adapters behind provider-neutral
   boundaries;
-- idempotent document and knowledge-base vector-index rebuilds.
+- idempotent document and knowledge-base vector-index rebuilds;
+- operator-provisioned local users with Argon2id password hashes;
+- opaque, expiring, revocable server-side sessions with session-bound CSRF
+  protection;
+- owner/editor/viewer knowledge-base memberships and capability-based policy;
+- principal-scoped SQL access to knowledge bases, documents, and ingestion
+  jobs;
+- fail-closed handling and explicit operator claiming for unowned legacy
+  knowledge bases.
 
-The health and AF-1 metadata/upload/job endpoints remain unchanged. AF-2B adds
-an out-of-process worker and rebuild commands rather than new retrieval
-endpoints. Retrieval, agent, tool, approval, trace, and evaluation capabilities
-are planned and unimplemented. P1 enhancements are deferred.
+Health and readiness remain public. AF-2S1 adds only `login`, `logout`, and
+`me` authentication endpoints; every knowledge endpoint now requires a valid
+principal, and authenticated writes require CSRF proof. AF-2B adds an
+out-of-process worker and rebuild commands rather than retrieval endpoints.
+Retrieval, agent, tool, approval, trace, and evaluation capabilities are
+planned and unimplemented. Broader AF-2S2 identity and operational hardening
+is deferred to P1.
 
 ## Architectural principles
 
 - Keep a modular monolith and do not split microservices in P0.
 - Keep PostgreSQL as the business source of truth.
 - Treat ChromaDB as a rebuildable index.
+- Authenticate every user-facing private-data request.
+- Scope object authorization in PostgreSQL queries; never authorize from
+  Chroma metadata.
 - Maintain an explicit internal Agent Runtime boundary.
 - Apply deterministic Tool Policy before every execution attempt.
 - Require approval for write and external actions.
@@ -47,16 +62,18 @@ are planned and unimplemented. P1 enhancements are deferred.
 
 ## Target module architecture
 
-The diagram is implemented through the AF-2B ingestion path. Runtime, tool,
-retrieval, trace, and model-chat nodes remain planned. Arrows show permitted
-dependency direction; they do not imply that every persistence operation is
-strictly sequential:
+The diagram is implemented through the AF-2S1 access boundary and AF-2B
+ingestion path. Runtime, tool, retrieval, trace, and model-chat nodes remain
+planned. Arrows show permitted dependency direction; they do not imply that
+every persistence operation is strictly sequential:
 
 ```mermaid
 flowchart TD
     UI["React UI foundation; workflow planned"]
-    HTTP["FastAPI HTTP boundary; business APIs planned"]
-    Services["Application Services (AF-1 and AF-2B)"]
+    HTTP["FastAPI HTTP boundary"]
+    Auth["Opaque sessions + CSRF (AF-2S1)"]
+    Authorization["Capability policy + SQL-scoped access (AF-2S1)"]
+    Services["Application Services (AF-1, AF-2B, and AF-2S1)"]
     Worker["Ingestion Worker (AF-2B)"]
     Ingestion["Ingestion Pipeline (AF-2B)"]
     Runtime["Agent Runtime (planned)"]
@@ -72,14 +89,16 @@ flowchart TD
     ChatAdapter["ChatModel Adapter (planned)"]
     EmbeddingAdapter["EmbeddingModel Adapter (AF-2B)"]
     VectorAdapter["VectorStore Adapter (AF-2B)"]
-    PG[(PostgreSQL; authoritative through AF-2B)]
-    Chroma[(ChromaDB rebuildable index; AF-2B)]
+    PG[(PostgreSQL; authoritative through AF-2S1)]
+    Chroma[(ChromaDB rebuildable index; never authorization)]
     Ollama["Ollama embeddings (AF-2B); chat planned"]
     Files[(Local File Storage; AF-1)]
     LocalRepo[(Scoped Local Repository; planned)]
 
     UI --> HTTP
-    HTTP --> Services
+    HTTP --> Auth
+    Auth --> Authorization
+    Authorization --> Services
     Services -->|"Persist business state, jobs, runs, approvals"| PG
     PG -->|"Claim durable work"| Worker
 
@@ -117,6 +136,10 @@ flowchart TD
 Application Services persist durable work but never invoke worker processes.
 The AF-2B Worker claims eligible ingestion work from PostgreSQL and invokes the
 Ingestion Pipeline. A future worker path into the Agent Runtime remains planned.
+
+The health endpoint bypasses the authenticated flow shown above. Worker and
+operator commands use explicitly internal persistence operations; they do not
+fabricate an HTTP principal or reuse user-scoped repositories.
 
 The only legal planned tool invocation path is `Agent Runtime → Tool Executor →
 Tool Registry → Tool Policy`. The registry owns tool identity, version, input
@@ -201,6 +224,55 @@ reported; durable chunk content is not rolled back or inferred from Chroma.
 Knowledge-base rebuilds report and skip non-completed documents instead of
 deleting vectors from a stale status snapshot that could race active ingestion.
 
+## Knowledge-access boundary
+
+AF-2S1 establishes the minimum P0 boundary required before private-document
+retrieval:
+
+```mermaid
+flowchart LR
+    Cookie["Opaque session cookie"] --> Session["Active session + active user"]
+    CSRF["CSRF cookie + X-CSRF-Token"] --> WriteCheck["Write-request check"]
+    Session --> Principal["Principal"]
+    Principal --> Capability["Capability policy"]
+    WriteCheck --> Capability
+    Capability --> ScopedSQL["Membership-scoped PostgreSQL query"]
+    ScopedSQL --> Resource["Visible knowledge base, document, or job"]
+```
+
+The raw session and CSRF tokens are returned only through cookies; PostgreSQL
+stores their SHA-256 digests. Passwords use Argon2id hashes and are accepted
+only by the operator bootstrap command and login endpoint. There is no public
+registration or authentication bypass.
+
+Login holds no database transaction or checked-out connection during Argon2
+verification or rehash computation. One application-owned bounded executor
+limits that work to `ARGON2_MAX_CONCURRENCY` jobs per process (two by default).
+After successful verification, a short write transaction locks the user and
+rechecks active state and the observed hash before an optional rehash update
+and fresh session insert.
+
+Any active user may create a knowledge base and becomes its owner in the same
+transaction. Owners and editors may read, upload, and retry; viewers may read
+but cannot upload or retry. Endpoints request capabilities rather than testing
+role names.
+
+User-facing reads incorporate membership into their SQL. An absent resource
+and a resource owned by a non-member both return `404`; a visible resource for
+a member lacking the requested capability returns `403`. Missing or invalid
+sessions return `401`, while missing or invalid CSRF proof on an authenticated
+write returns `403`.
+
+The migration does not invent owners for existing data. Unowned legacy
+knowledge bases are invisible to user-facing SQL but remain available to the
+internal ingestion worker. An operator can explicitly and transactionally
+claim only still-unowned knowledge bases for an existing local user.
+
+Chroma contains derived text and vectors, not authority. Future AF-3 retrieval
+must scope every candidate through PostgreSQL membership, document state, and
+current chunk identity before returning it. A Chroma knowledge-base ID or
+other metadata value can never grant access.
+
 ## Planned hybrid retrieval flow
 
 This P0 flow is planned and unimplemented:
@@ -210,7 +282,7 @@ flowchart LR
     Query["Query (planned)"] --> Embedding["Embedding (planned)"]
     Embedding --> Dense["Chroma dense candidates (planned)"]
     Query --> Keyword["PostgreSQL keyword candidates (planned)"]
-    Dense --> Validate["Scope and status validation (planned)"]
+    Dense --> Validate["PostgreSQL membership, scope, status, and chunk validation (planned)"]
     Keyword --> Validate
     Validate --> RRF["RRF (planned)"]
     RRF --> Evidence["Bounded evidence (planned)"]
@@ -276,9 +348,12 @@ evaluation is planned and unimplemented.
 
 | Boundary | Rule |
 | --- | --- |
-| Endpoints | Contain no SQL, Chroma, Ollama, or filesystem logic |
+| Endpoints | Require a Principal for private data and contain no SQL, role conditionals, Chroma, Ollama, or filesystem logic |
+| Authentication | Produces a Principal from a live opaque session; SQLAlchemy models are not the public principal contract |
+| Authorization | Maps capabilities to roles and preserves `401`/`403`/hidden-object `404` behavior |
 | Application services | Own use-case sequencing and transaction boundaries |
-| Repositories | Own SQLAlchemy queries |
+| User repositories | Own principal- and capability-scoped SQLAlchemy queries |
+| Worker repositories | Own explicitly internal durable-processing queries and are never used by HTTP endpoints |
 | AgentRuntime | Exposes no LangGraph types |
 | Tools | Execute only through Tool Executor |
 | Adapters | Keep external SDK types inside adapters |
@@ -296,3 +371,4 @@ status says otherwise.
 - [ADR-004: Define the Agent Runtime boundary](adr/004-agent-runtime-boundary.md)
 - [ADR-005: Enforce tool policy and approval](adr/005-tool-policy-and-approval.md)
 - [ADR-006: Version configuration and use deterministic fakes](adr/006-versioned-config-and-fakes.md)
+- [ADR-007: Establish the knowledge-access boundary before retrieval](adr/007-knowledge-access-boundary.md)

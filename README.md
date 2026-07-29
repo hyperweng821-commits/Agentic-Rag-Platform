@@ -7,9 +7,10 @@ for private engineering workflows.
 
 AgentForge currently includes the completed Phase 3 application foundation,
 AF-0 product boundary, AF-1 private document intake, the AF-2A persistence
-foundation, and AF-2B durable document processing with rebuildable vector
-indexing. It is not production-ready. Retrieval, agent, and RAG capabilities
-described in the roadmap remain plans.
+foundation, AF-2B durable document processing with rebuildable vector
+indexing, and the minimal AF-2S1 authenticated knowledge-access boundary. It is
+not production-ready. Retrieval, agent, and RAG capabilities described in the
+roadmap remain plans.
 
 ### Implemented now
 
@@ -32,6 +33,10 @@ described in the roadmap remain plans.
 - PostgreSQL-safe worker claiming, bounded retries, and expired-lease recovery
 - Ollama embedding and Chroma vector-store adapters behind explicit boundaries
 - idempotent document and knowledge-base vector-index rebuilds
+- operator-provisioned local users with Argon2id password hashes
+- opaque, expiring and revocable server-side sessions with CSRF protection
+- owner/editor/viewer knowledge-base memberships and SQL-scoped object access
+- fail-closed legacy knowledge bases with an explicit operator claim command
 
 ### Planned only
 
@@ -44,6 +49,7 @@ described in the roadmap remain plans.
 - evaluation
 - MCP
 - memory
+- AF-2S2 external identity and production operational hardening
 
 Directories retained with `.gitkeep` reserve possible future locations; they are
 not implementations.
@@ -55,6 +61,12 @@ server-managed artifacts, writes deterministic chunks to PostgreSQL, generates
 embeddings through Ollama, and maintains Chroma as a derived index. PostgreSQL
 remains authoritative, so the vector index can be rebuilt for one document or
 one knowledge base without an HTTP retrieval API.
+
+AF-2S1 requires a live active-user session for every knowledge API. Any active
+user may create a knowledge base and becomes its owner. Owners and editors can
+read, upload, and retry; viewers can read. Non-member resources are returned as
+`404`, and Chroma metadata never grants access. There is no public registration
+or frontend authentication UI.
 
 ## Quick start with Docker
 
@@ -70,8 +82,9 @@ cp .env.example .env
 docker compose up --build
 ```
 
-The default command starts only `postgres` and `api`. When both containers are
-healthy, verify the backend:
+The default command starts only `postgres` and `api`. PostgreSQL is internal to
+Compose, while the API binds only to `127.0.0.1`. When both containers are
+healthy, verify the public health endpoint:
 
 ```bash
 curl http://localhost:8000/api/v1/health
@@ -101,6 +114,22 @@ docker compose exec api uv run alembic upgrade head
 docker compose exec api uv run alembic current
 ```
 
+Create the first local user through the operator CLI. It prompts for a password
+without echoing it:
+
+```bash
+docker compose exec api uv run python -m app.cli.security \
+  bootstrap-user --email owner@example.com
+```
+
+Existing pre-AF-2S knowledge bases intentionally remain inaccessible until an
+operator previews and applies an explicit claim:
+
+```bash
+docker compose exec api uv run python -m app.cli.security \
+  claim-legacy-knowledge-bases --owner-email owner@example.com --dry-run
+```
+
 ```bash
 docker compose down
 ```
@@ -109,7 +138,9 @@ Equivalent helpers are `make up`, `make up-rag`, and `make up-frontend`.
 `make up-rag` starts the Ollama and Chroma infrastructure consumed by AF-2B;
 it does not pull the configured embedding model automatically. The frontend
 profile remains an application shell and does not imply that planned retrieval
-or agent capabilities exist.
+or agent capabilities exist. PostgreSQL, Chroma, and Ollama have no
+host-published ports in the default project; the API and optional Web service
+bind only to loopback.
 
 ## Local backend development
 
@@ -117,14 +148,22 @@ Prerequisites:
 
 - Python 3.12
 - uv `>=0.9,<1`
-- PostgreSQL, normally started through Docker Compose
+- PostgreSQL
 
 ```bash
 cp .env.example .env
-docker compose up -d postgres
 cd apps/api
 uv sync --frozen --extra dev
-uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+Direct host-side FastAPI development requires a separately reachable
+PostgreSQL URL. The default Compose PostgreSQL service is deliberately not
+published to the host. For normal Compose development, run the API in its
+container and access the database with:
+
+```bash
+docker compose exec postgres sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 ```
 
 ## Quality checks
@@ -152,6 +191,8 @@ npm run test:e2e
 ```
 
 Ordinary unit tests do not require Ollama, ChromaDB, MCP, or network access.
+Live PostgreSQL tests opt in through `AF2A_TEST_DATABASE_URL`; CI supplies it
+and treats a missing value as a failure rather than a skip.
 
 ## Repository map
 
@@ -170,6 +211,7 @@ Ordinary unit tests do not require Ollama, ChromaDB, MCP, or network access.
 - [Product definition](docs/product.md)
 - [Roadmap](docs/roadmap.md)
 - [System architecture](docs/architecture.md)
+- [Knowledge-access boundary decision](docs/adr/007-knowledge-access-boundary.md)
 - [Backend foundation](docs/backend-foundation.md)
 - [Development guide](docs/development.md)
 - [Engineering review](docs/engineering-review.md)

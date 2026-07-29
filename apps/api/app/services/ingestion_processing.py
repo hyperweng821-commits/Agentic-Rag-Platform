@@ -288,7 +288,7 @@ class IngestionProcessingService:
         """Requeue or fail a bounded set of expired processing attempts."""
         now = self._clock()
         async with self._session_factory() as session, session.begin():
-            jobs = await IngestionJobRepository(session).lock_expired_leases(
+            jobs = await IngestionJobRepository(session).lock_expired_leases_internal(
                 now=now,
                 limit=limit,
             )
@@ -434,9 +434,9 @@ class IngestionProcessingService:
             raise ValueError("rebuild limits must be positive")
         await self.initialize()
         async with self._session_factory() as session, session.begin():
-            if await KnowledgeBaseRepository(session).get(knowledge_base_id) is None:
+            if await KnowledgeBaseRepository(session).get_internal(knowledge_base_id) is None:
                 raise RebuildNotReadyError("The knowledge base does not exist.")
-            documents = await DocumentRepository(session).list_for_knowledge_base(
+            documents = await DocumentRepository(session).list_for_knowledge_base_internal(
                 knowledge_base_id,
                 limit=max_documents + 1,
                 offset=0,
@@ -484,7 +484,7 @@ class IngestionProcessingService:
     async def _claim_next(self) -> ClaimedDocument | None:
         now = self._clock()
         async with self._session_factory() as session, session.begin():
-            job = await IngestionJobRepository(session).claim_next(
+            job = await IngestionJobRepository(session).claim_next_internal(
                 worker_id=self._worker_id,
                 claimed_at=now,
                 lease_expires_at=now + self._lease_duration,
@@ -510,7 +510,7 @@ class IngestionProcessingService:
     async def _renew_lease(self, job_id: UUID) -> bool:
         now = self._clock()
         async with self._session_factory() as session, session.begin():
-            job = await IngestionJobRepository(session).get_owned_processing(
+            job = await IngestionJobRepository(session).get_owned_processing_internal(
                 job_id,
                 worker_id=self._worker_id,
                 now=now,
@@ -580,7 +580,7 @@ class IngestionProcessingService:
         ]
         now = self._clock()
         async with self._session_factory() as session, session.begin():
-            job = await IngestionJobRepository(session).get_owned_processing(
+            job = await IngestionJobRepository(session).get_owned_processing_internal(
                 claimed.job_id,
                 worker_id=self._worker_id,
                 now=now,
@@ -588,7 +588,7 @@ class IngestionProcessingService:
             )
             if job is None:
                 raise LeaseLostError("The chunk replacement no longer owns its job lease.")
-            await DocumentChunkRepository(session).replace_for_document(
+            await DocumentChunkRepository(session).replace_for_document_internal(
                 claimed.document_id,
                 durable_chunks,
             )
@@ -646,7 +646,7 @@ class IngestionProcessingService:
     async def _complete_success(self, job_id: UUID) -> None:
         now = self._clock()
         async with self._session_factory() as session, session.begin():
-            job = await IngestionJobRepository(session).get_owned_processing(
+            job = await IngestionJobRepository(session).get_owned_processing_internal(
                 job_id,
                 worker_id=self._worker_id,
                 now=now,
@@ -667,7 +667,7 @@ class IngestionProcessingService:
     async def _complete_failure(self, job_id: UUID, failure: _Failure) -> None:
         now = self._clock()
         async with self._session_factory() as session, session.begin():
-            job = await IngestionJobRepository(session).get_owned_processing(
+            job = await IngestionJobRepository(session).get_owned_processing_internal(
                 job_id,
                 worker_id=self._worker_id,
                 now=now,
@@ -705,12 +705,12 @@ class IngestionProcessingService:
         max_chunks: int,
     ) -> tuple[Document, list[DocumentChunk]]:
         async with self._session_factory() as session, session.begin():
-            document = await DocumentRepository(session).get(document_id)
+            document = await DocumentRepository(session).get_internal(document_id)
             if document is None:
                 raise RebuildNotReadyError("The document does not exist.")
             if document.status != DocumentStatus.COMPLETED.value:
                 raise RebuildNotReadyError("Only completed documents can be rebuilt.")
-            chunks = await DocumentChunkRepository(session).list_for_document(
+            chunks = await DocumentChunkRepository(session).list_for_document_internal(
                 document_id,
                 limit=max_chunks + 1,
             )

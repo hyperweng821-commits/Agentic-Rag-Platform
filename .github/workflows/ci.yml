@@ -17,6 +17,23 @@ jobs:
   backend:
     name: Backend quality
     runs-on: ubuntu-latest
+    env:
+      CI: "true"
+      AF2A_TEST_DATABASE_URL: postgresql+asyncpg://agentforge_ci:agentforge_ci_test_only@127.0.0.1:5432/agentforge_ci
+    services:
+      postgres:
+        image: postgres:18.4-alpine
+        env:
+          POSTGRES_DB: agentforge_ci
+          POSTGRES_USER: agentforge_ci
+          POSTGRES_PASSWORD: agentforge_ci_test_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U agentforge_ci -d agentforge_ci"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 20
     defaults:
       run:
         working-directory: apps/api

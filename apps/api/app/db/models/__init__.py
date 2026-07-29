@@ -1,4 +1,4 @@
-"""Durable AF-1 and AF-2 knowledge models."""
+"""Durable knowledge, ingestion, and access-boundary models."""
 
 from app.db.models.knowledge import (
     Document,
@@ -7,6 +7,10 @@ from app.db.models.knowledge import (
     IngestionJob,
     IngestionJobStatus,
     KnowledgeBase,
+    KnowledgeBaseMembership,
+    KnowledgeBaseRole,
+    User,
+    UserSession,
 )
 
 __all__ = [
@@ -16,4 +20,8 @@ __all__ = [
     "IngestionJob",
     "IngestionJobStatus",
     "KnowledgeBase",
+    "KnowledgeBaseMembership",
+    "KnowledgeBaseRole",
+    "User",
+    "UserSession",
 ]

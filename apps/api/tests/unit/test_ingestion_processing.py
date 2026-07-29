@@ -306,14 +306,42 @@ class _Repositories:
         ) -> list[Document]:
             return harness.knowledge_base_documents[offset : offset + limit]
 
-        monkeypatch.setattr(IngestionJobRepository, "lock_expired_leases", lock_expired)
-        monkeypatch.setattr(IngestionJobRepository, "claim_next", claim_next)
-        monkeypatch.setattr(IngestionJobRepository, "get_owned_processing", get_owned)
-        monkeypatch.setattr(DocumentChunkRepository, "replace_for_document", replace_chunks)
-        monkeypatch.setattr(DocumentChunkRepository, "list_for_document", list_chunks)
-        monkeypatch.setattr(DocumentRepository, "get", get_document)
-        monkeypatch.setattr(DocumentRepository, "list_for_knowledge_base", list_documents)
-        monkeypatch.setattr(KnowledgeBaseRepository, "get", get_knowledge_base)
+        monkeypatch.setattr(
+            IngestionJobRepository,
+            "lock_expired_leases_internal",
+            lock_expired,
+        )
+        monkeypatch.setattr(
+            IngestionJobRepository,
+            "claim_next_internal",
+            claim_next,
+        )
+        monkeypatch.setattr(
+            IngestionJobRepository,
+            "get_owned_processing_internal",
+            get_owned,
+        )
+        monkeypatch.setattr(
+            DocumentChunkRepository,
+            "replace_for_document_internal",
+            replace_chunks,
+        )
+        monkeypatch.setattr(
+            DocumentChunkRepository,
+            "list_for_document_internal",
+            list_chunks,
+        )
+        monkeypatch.setattr(DocumentRepository, "get_internal", get_document)
+        monkeypatch.setattr(
+            DocumentRepository,
+            "list_for_knowledge_base_internal",
+            list_documents,
+        )
+        monkeypatch.setattr(
+            KnowledgeBaseRepository,
+            "get_internal",
+            get_knowledge_base,
+        )
 
 
 def _records(content: bytes, *, max_attempts: int = 3) -> tuple[Document, IngestionJob]:
@@ -956,7 +984,7 @@ async def test_cancellation_cancels_a_blocked_heartbeat_and_requeues(
 
     monkeypatch.setattr(
         IngestionJobRepository,
-        "get_owned_processing",
+        "get_owned_processing_internal",
         block_first_owned_lookup,
     )
     service = _service(

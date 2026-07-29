@@ -8,7 +8,7 @@ services:
       POSTGRES_USER: agentic_rag_test
       POSTGRES_PASSWORD: test_only
     ports:
-      - "55432:5432"
+      - "127.0.0.1:55432:5432"
     volumes:
       - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
     tmpfs:
@@ -23,6 +23,6 @@ services:
     image: chromadb/chroma:1.5.9
     profiles: ["rag"]
     ports:
-      - "58001:8000"
+      - "127.0.0.1:58001:8000"
     tmpfs:
       - /data

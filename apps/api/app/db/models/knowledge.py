@@ -1,4 +1,4 @@
-"""Durable PostgreSQL records for AF-1 intake and AF-2 ingestion."""
+"""Durable PostgreSQL records for knowledge intake, ingestion, and access."""
 
 from datetime import datetime
 from enum import StrEnum
@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -40,6 +41,14 @@ class IngestionJobStatus(StrEnum):
     FAILED = "failed"
 
 
+class KnowledgeBaseRole(StrEnum):
+    """Roles granted by a knowledge-base membership."""
+
+    OWNER = "owner"
+    EDITOR = "editor"
+    VIEWER = "viewer"
+
+
 class TimestampMixin:
     """Server-timestamped fields shared by durable knowledge records."""
 
@@ -54,6 +63,95 @@ class TimestampMixin:
         server_default=func.now(),
         onupdate=func.now(),
     )
+
+
+class User(TimestampMixin, Base):
+    """A local user whose password is stored only as an Argon2id hash."""
+
+    __tablename__ = "users"
+    __table_args__ = (
+        UniqueConstraint("email", name="uq_users_email"),
+        CheckConstraint(
+            "char_length(btrim(email)) > 0 AND email = lower(email) AND email = btrim(email)",
+            name="normalized_email",
+        ),
+        CheckConstraint(
+            "char_length(btrim(password_hash)) > 0 AND password_hash LIKE '$argon2id$%'",
+            name="valid_password_hash",
+        ),
+        Index("ix_users_is_active_id", "is_active", "id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+    )
+    email: Mapped[str] = mapped_column(String(320), nullable=False)
+    password_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default="true",
+    )
+
+    sessions: Mapped[list["UserSession"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    knowledge_base_memberships: Mapped[list["KnowledgeBaseMembership"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+
+class UserSession(TimestampMixin, Base):
+    """A revocable session containing only digests of opaque browser tokens."""
+
+    __tablename__ = "user_sessions"
+    __table_args__ = (
+        UniqueConstraint("token_sha256", name="uq_user_sessions_token_sha256"),
+        CheckConstraint(
+            "token_sha256 ~ '^[0-9a-f]{64}$'",
+            name="valid_token_sha256",
+        ),
+        CheckConstraint(
+            "csrf_token_sha256 ~ '^[0-9a-f]{64}$'",
+            name="valid_csrf_token_sha256",
+        ),
+        Index("ix_user_sessions_user_id", "user_id"),
+        Index("ix_user_sessions_expires_at", "expires_at"),
+        Index(
+            "ix_user_sessions_active_user_expires_at",
+            "user_id",
+            "revoked_at",
+            "expires_at",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    token_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    csrf_token_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_seen_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    user: Mapped[User] = relationship(back_populates="sessions")
 
 
 class KnowledgeBase(TimestampMixin, Base):
@@ -85,6 +183,48 @@ class KnowledgeBase(TimestampMixin, Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    memberships: Mapped[list["KnowledgeBaseMembership"]] = relationship(
+        back_populates="knowledge_base",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+
+class KnowledgeBaseMembership(TimestampMixin, Base):
+    """A user's role within one private knowledge-base boundary."""
+
+    __tablename__ = "knowledge_base_memberships"
+    __table_args__ = (
+        UniqueConstraint(
+            "knowledge_base_id",
+            "user_id",
+            name="uq_knowledge_base_memberships_knowledge_base_id_user_id",
+        ),
+        CheckConstraint(
+            "role IN ('owner', 'editor', 'viewer')",
+            name="valid_role",
+        ),
+        Index(
+            "ix_knowledge_base_memberships_user_id_knowledge_base_id",
+            "user_id",
+            "knowledge_base_id",
+        ),
+    )
+
+    knowledge_base_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        ForeignKey("knowledge_bases.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    role: Mapped[str] = mapped_column(String(20), nullable=False)
+
+    knowledge_base: Mapped[KnowledgeBase] = relationship(back_populates="memberships")
+    user: Mapped[User] = relationship(back_populates="knowledge_base_memberships")
 
 
 class Document(TimestampMixin, Base):
