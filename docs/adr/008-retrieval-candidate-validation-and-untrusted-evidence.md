@@ -69,19 +69,19 @@ than assigned to an incapable test layer.
 | ADR-008-R08 | A chunk is retrieval- and citation-eligible only when its document is completed and its persisted `content_sha256` is a non-null lowercase 64-hex SHA-256 value; no retrieval-time revision fallback is allowed. |
 | ADR-008-R09 | Citation resolution reauthenticates, scopes to one knowledge base, and requires the same current persisted chunk hash; citation possession never authorizes access. |
 | ADR-008-R10 | Chroma filters, IDs, text, metadata, scores, and provenance never authorize, widen scope, or supply authoritative response fields. |
-| ADR-008-R11 | Provider-response limit profile P0-v1 bounds wire bytes, decoded bytes, candidate-ID bytes, string fields, metadata, and JSON depth before normal candidate processing. |
-| ADR-008-R12 | Every response-fatal provider-contract condition produces the planned generic `503`, no partial dense result, no Evidence, and no keyword-only fallback. |
+| ADR-008-R11 | Provider-response limit profile P0-v1 applies inclusive wire, decoded, candidate-ID, string, and metadata ceilings plus the exact container-counting JSON-depth algorithm before normal candidate processing. |
+| ADR-008-R12 | Every response-fatal provider-contract condition, including an absent required candidate collection, produces the planned generic `503`, no partial dense result, no Evidence, and no keyword-only fallback. |
 | ADR-008-R13 | Every candidate-local condition omits only that bounded record; an authorized request whose candidates are all locally omitted returns empty Evidence without disclosing reasons. |
 | ADR-008-R14 | Provider score is optional and non-authoritative; present wrong-type or non-finite scores omit that candidate, while fusion uses provider list rank and ignores bounded provider text/metadata disagreement. |
 | ADR-008-R15 | Duplicate IDs retain the earliest rank per source and produce at most one Evidence item per authoritative chunk. |
 | ADR-008-R16 | Query characters, query UTF-8 bytes, requested results, dense over-fetch, keyword candidates, provider candidates, candidate union, and SQL work have finite versioned bounds. |
-| ADR-008-R17 | Keyword SQL is scoped from its first query by principal, exact target, capabilities, document eligibility, and chunk ownership; HTTP retrieval cannot call unscoped worker/internal paths or expose global counts. |
+| ADR-008-R17 | P0-v1 keyword SQL is scoped before scoring and deterministically ranks PostgreSQL-authoritative `simple` text-search matches by score then native UUID; HTTP retrieval cannot call unscoped worker/internal paths or expose global counts. |
 | ADR-008-R18 | Candidate union ordering, partitioning, validation query count, record reconstruction, and failure behavior follow the deterministic batching contract. |
 | ADR-008-R19 | P0 fusion uses the fixed `RRF_K = 60`, one-based source ranks, the specified formula and tie order, and no raw-score fusion or reranker. |
 | ADR-008-R20 | Evidence uses an allowlisted PostgreSQL projection, stable citation identity, and `untrusted_document_content`; it excludes secrets, storage paths, embeddings, and provider authority. |
 | ADR-008-R21 | AF-3 enforces the P0 semantic trust boundary: content cannot create trusted instructions, authorization/scope, provider configuration, tools, approvals, secret requests, or citation authority. |
 | ADR-008-R22 | Every later RAG, ChatModel, Agent Runtime, or tool-consuming phase adds its own consuming-phase acceptance cases; AF-3 does not claim to test nonexistent consumers. |
-| ADR-008-R23 | Authentication, hidden-resource, provider-failure, authorized-empty, and private cache behavior are deterministic; current AF-3 roles do not fabricate an unreachable retrieval `403`. |
+| ADR-008-R23 | Authentication, hidden-resource, provider-failure, valid present-empty provider response, authorized-empty, and private cache behavior are deterministic; current AF-3 roles do not fabricate an unreachable retrieval `403`. |
 | ADR-008-R24 | Normal logs exclude queries, content, secrets, raw payloads, and identifying retrieval artifacts; telemetry is bounded and content-free. |
 | ADR-008-R25 | P0 retrieval response bounds and semantic trust controls remain distinct from AF-2S2/P1 parser sandboxing and broader hostile-document, identity, and deployment hardening. |
 
@@ -234,10 +234,12 @@ The versioned initial provider-response profile is:
 These values are P0 defaults and hard ceilings for the initial contract. Only a
 later reviewed version may revise them.
 
-The byte ceilings are inclusive. Raw/wire bytes less than or equal to
-1,048,576 and decoded bytes less than or equal to 2,097,152 are eligible to
-continue to subsequent bounds and bounded parsing. A counter rejects only when
-the applicable value exceeds its ceiling.
+Every ceiling in this table is inclusive. Raw/wire bytes, decoded bytes,
+candidate-ID bytes, individual-string bytes, metadata-entry count,
+metadata-key bytes, metadata-value bytes, and JSON depth are accepted when the
+measured value is less than or equal to the applicable ceiling. Equality does
+not cause truncation or omission. A counter rejects only when the applicable
+value exceeds its ceiling.
 
 The adapter enforces the profile in this order:
 
@@ -257,6 +259,59 @@ The adapter enforces the profile in this order:
 7. Any transport, decode, body, nesting, or per-field hard-limit violation is
    a whole-response provider-contract failure.
 
+#### Exact P0-v1 JSON depth counting
+
+JSON depth is the maximum number of JSON container nodes on any path from the
+root to a value. Only objects and arrays are containers. The bounded streaming
+parser applies this exact algorithm:
+
+1. A scalar root has depth 0.
+2. A root object or root array has depth 1.
+3. Entering a child object or child array increments container depth by exactly
+   one.
+4. A scalar object value or scalar array element does not increment depth.
+5. An empty object or empty array still counts as one container at its assigned
+   depth.
+6. Object keys do not count as values or containers.
+7. The maximum depth is the highest active container depth encountered while
+   streaming tokens.
+8. Before pushing a new object or array onto the parser stack, compute
+   `next_depth = current_container_depth + 1`.
+9. Reject immediately when `next_depth > 16`.
+10. Do not fully materialize a structure whose next container would exceed the
+    limit.
+
+The following simple fixtures therefore have exact depths:
+
+| JSON | Depth |
+| --- | ---: |
+| `0` | 0 |
+| `{}` | 1 |
+| `[]` | 1 |
+| `{"v": 0}` | 1 |
+| `{"v": []}` | 2 |
+| `[{"v": [0]}]` | 3 |
+
+The canonical recursive boundary fixtures are:
+
+```text
+D0 = 0
+
+For n >= 1:
+    Dn = {"v": D(n-1)}  when n is odd
+    Dn = [D(n-1)]       when n is even
+```
+
+Under this algorithm, D0 has depth 0, D1 has depth 1, D16 has depth 16,
+and D17 has depth 17. The depth guard accepts D16 and passes control to the
+next validation stage. Passing the depth guard does not make an otherwise
+invalid provider envelope valid: a canonical D16 fixture that later fails
+envelope validation is classified as that later envelope error, never
+`DEPTH_LIMIT_EXCEEDED`. The parser rejects D17 before full materialization,
+envelope validation, or candidate processing. A D17 failure is whole-response
+fatal and produces planned generic `503 RETRIEVAL_UNAVAILABLE`, no Evidence,
+no partial dense list, and no keyword-only fallback.
+
 These provider-response bounds do not claim complete hostile-document
 containment. Parser sandboxing and broader resource containment remain
 AF-2S2/P1 work.
@@ -266,6 +321,19 @@ AF-2S2/P1 work.
 The classification pivot is whether the bounded, structurally valid provider
 envelope can still preserve a deterministic position for each candidate
 record. An invalid ID value alone does not make an envelope response-fatal.
+
+A supported, bounded envelope whose required candidate collection is present
+with the correct empty collection type is a structurally valid zero-result
+provider response. Every required parallel collection is also present with
+length zero, there are deterministically zero provider positions, and no
+malformed placeholder record is introduced. The adapter returns an empty dense
+candidate list. This result does not produce `503`, synthesize a candidate,
+raise a missing-collection error, enable keyword-only degraded mode, or skip
+final authorization.
+
+An absent required candidate collection is different: it remains a
+response-fatal provider-contract violation with the generic failure and
+no-fallback behavior below.
 
 For a position-preserving record envelope made of independently identifiable
 candidate records whose positions are deterministic, each of the following is
@@ -385,19 +453,94 @@ the service discards both lists and produces planned generic
 
 ### Keyword retrieval boundary
 
-The first keyword SQL query is scoped by:
+The exact versioned P0-v1 PostgreSQL keyword-ranking contract uses the
+`simple` text-search configuration. The normalized, bounded user query is
+passed as a bound parameter to:
+
+```sql
+plainto_tsquery('simple', normalized_query)
+```
+
+Here `normalized_query` denotes the bound parameter, not interpolated SQL.
+User text is not interpreted as PostgreSQL web-search operators or raw
+`tsquery` syntax. The authoritative chunk vector is:
+
+```sql
+to_tsvector('simple', document_chunks.normalized_text)
+```
+
+The match predicate is:
+
+```sql
+to_tsvector('simple', document_chunks.normalized_text)
+@@ plainto_tsquery('simple', normalized_query)
+```
+
+The P0-v1 keyword score is:
+
+```sql
+ts_rank_cd(
+    to_tsvector('simple', document_chunks.normalized_text),
+    plainto_tsquery('simple', normalized_query),
+    0
+)
+```
+
+The score expression is computed from PostgreSQL-authoritative
+`document_chunks.normalized_text`. A later generated `tsvector` column or index
+may optimize the query only when it preserves these exact observable
+tokenization, matching, score, ordering, rank, and limit semantics. A change
+that alters any of those semantics requires reviewed contract versioning. If
+`plainto_tsquery` produces no lexemes, the keyword candidate list is empty; it
+does not become a global match or bypass final authorization.
+
+Before score or rank assignment, rows must already satisfy:
 
 - the live principal;
 - exact target knowledge-base ID;
 - current membership and read capabilities;
 - `Document.status = 'completed'`;
 - a non-null, valid persisted `DocumentChunk.content_sha256`; and
-- current document/chunk ownership.
+- current document/chunk ownership; and
+- the matching PostgreSQL text-search predicate above.
 
-Keyword retrieval must not search globally and filter in Python, expose global
-hit or document counts, search inaccessible or ineligible documents, or call
-unrestricted `_internal` worker repository methods from HTTP or user-facing
-services.
+Inaccessible or ineligible rows receive no keyword score or rank and cannot
+affect an accessible row's rank. Keyword retrieval must not search globally
+and filter in Python, expose global hit or document counts, search inaccessible
+or ineligible documents, or call unrestricted `_internal` worker repository
+methods from HTTP or user-facing services.
+
+The total P0-v1 keyword candidate order is exactly:
+
+1. `keyword_score` descending; then
+2. authoritative `document_chunks.id` ascending using PostgreSQL's native UUID
+   ordering.
+
+The UUID is not cast to locale-sensitive text. Insertion order, heap order,
+index traversal order, planner output order, chunk index, database row-arrival
+order, Python set or dictionary iteration, random order, and locale-sensitive
+ordering are not source-order or tie-break inputs. The same scoped
+authoritative database state and normalized query produce the same total
+keyword order.
+
+The one-based keyword source rank has semantics equivalent to:
+
+```sql
+row_number() OVER (
+    ORDER BY keyword_score DESC, document_chunks.id ASC
+)
+```
+
+`MAX_KEYWORD_CANDIDATES` is applied using that same total order. The selected
+top-N list therefore has ranks 1 through N without gaps or post-limit
+reranking. A CTE or equivalent query shape may avoid inconsistent score
+recomputation, but observable score, order, rank, and limit semantics remain
+exact.
+
+The raw keyword score is used only to create this deterministic keyword source
+order. RRF consumes the resulting one-based keyword rank. Raw keyword score is
+not added to or multiplied with dense score, used for cross-source
+calibration, or used after source-rank assignment as a hidden RRF tie break.
 
 Keyword candidates remain candidates. They enter the same final transaction,
 authorization, eligibility, authoritative loading, deduplication, and fusion

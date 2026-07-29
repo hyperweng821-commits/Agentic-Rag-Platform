@@ -72,6 +72,19 @@ The P0-v1 provider-response hard ceilings used by the cases are:
 | Metadata scalar/string value | 1,024 UTF-8 bytes |
 | JSON nesting depth | 16 |
 
+Every listed Provider ceiling is inclusive: equality is accepted and only a
+measured value above the ceiling is a hard-limit violation. A “valid
+present-empty Provider envelope” below means a supported version and valid
+top-level shape whose required candidate collection is present with the
+correct empty collection type, whose required parallel collections are
+present with length zero, and which contains no placeholder record.
+
+Canonical depth fixtures use `D0 = 0`; for `n >= 1`, `Dn = {"v": D(n-1)}` when
+`n` is odd and `Dn = [D(n-1)]` when `n` is even. Depth counts container nodes
+only: scalar `0` has depth 0; `{}`, `[]`, and `{"v": 0}` have depth 1;
+`{"v": []}` has depth 2; and `[{"v": [0]}]` has depth 3. Thus D16 has depth 16
+and D17 has depth 17 under ADR-008's exact streaming-stack algorithm.
+
 Every case below contains the same required fields. Membership-removal cases
 are intentionally separate only where they prove a different layer or timing
 point: final-transaction linearization, zero-candidate authorization, or
@@ -201,12 +214,12 @@ citation reauthorization.
 - **Category:** Authentication and request scope.
 - **Initial database state:** Target membership and access are current; no eligible content matches.
 - **Authenticated principal and membership state:** Live owner, editor, or viewer retains read capability through final snapshot.
-- **Provider or Chroma input:** Legal keyword query returns zero and bounded dense provider returns zero.
+- **Provider or Chroma input:** Legal keyword retrieval returns zero; the bounded Provider response is a valid present-empty Provider envelope, including every required parallel collection at length zero, so parsing succeeds with zero deterministic Provider positions and zero dense candidates.
 - **Concurrent state change:** None.
 - **Expected public result:** Successful authorized empty Evidence and private/no-store.
-- **Expected internal validation result:** Final authorization statement still runs; validation-batch query count is zero.
-- **Forbidden behavior:** `404`, `503`, skipping final authorization, or fabricating a hit.
-- **Planned test level:** PostgreSQL integration, HTTP integration.
+- **Expected internal validation result:** The adapter returns an empty dense candidate list without error; final authorization still runs; the unique union is empty and validation-batch query count is zero.
+- **Forbidden behavior:** `404`, `503`, a synthetic candidate, a missing-collection error, keyword-only degraded mode, skipped final authorization, or fabricated Evidence.
+- **Planned test level:** unit, provider-adapter contract, PostgreSQL integration, HTTP integration.
 - **Implementation status:** `REQUIRED_NOT_YET_IMPLEMENTED`.
 
 ### RET-AUTH-011 — Session revoked before request begins
@@ -224,16 +237,16 @@ citation reauthorization.
 
 ## Final transaction and concurrency
 
-### RET-CONC-001 — Membership revoked before final snapshot
+### RET-CONC-001 — Membership revoked across a provider barrier with no held database resources
 
 - **Category:** Final transaction and concurrency.
-- **Initial database state:** Caller initially has target membership and eligible content.
-- **Authenticated principal and membership state:** Live member passes the initial check.
-- **Provider or Chroma input:** Controlled provider blocks, then returns a valid current candidate.
-- **Concurrent state change:** Membership deletion commits before the final transaction's first authoritative statement.
+- **Initial database state:** Caller initially has target membership and eligible content. A test-only lifecycle harness runs against the real PostgreSQL pool at PostgreSQL integration level and surrounds the actual authenticated request at HTTP integration level without production diagnostics or public API exposure. It assigns distinct correlation tokens to the request, concurrent mutation actor, health checks, and background work; for the request token it observes actual SQLAlchemy pool checkout/checkin events, request-scoped Session and `SessionTransaction` begin/end state, transaction begin/end state, checked-out backend identity while owned, and the final transaction's first-statement snapshot acquisition.
+- **Authenticated principal and membership state:** A live member passes the initial check, with the HTTP-level variant driving the actual authenticated HTTP request. Initial authorization and any permitted pre-provider keyword SQL complete; every request-owned initial transaction commits, rolls back, or closes and every request-owned connection is checked in before the external provider is invoked.
+- **Provider or Chroma input:** The controlled external provider is invoked only after the lifecycle ledger records all initial transaction ends and connection checkins. Its first observable event signals a deterministic `entered` latch; it then blocks on a deterministic `release` latch without sleep-based timing or eventual polling and returns a valid current candidate after release.
+- **Concurrent state change:** While the provider remains at the `entered` latch, the request-correlated lifecycle ledger and PostgreSQL observer directly assert that the request owns zero checked-out connections, has zero active transactions and no open `SessionTransaction`, has no connection idle in transaction, retains no initial-authorization or keyword transaction, and has not begun the final `REPEATABLE READ` transaction or acquired its snapshot. A separately correlated database actor then acquires its own connection and commits membership deletion; instrumentation proves that this actor was not waiting on or blocked by a request-owned connection or transaction rather than inferring release from spare pool capacity or eventual success. The provider is released only after these assertions and the concurrent commit.
 - **Expected public result:** Generic hidden `404 NOT_FOUND`, no Evidence, and private/no-store.
-- **Expected internal validation result:** Final snapshot observes access loss and aborts before candidate Evidence survives.
-- **Forbidden behavior:** Initial-principal authority, empty success, partial Evidence, or asynchronous-cancellation claims.
+- **Expected internal validation result:** The request-correlated event order is all initial database transaction ends and connection checkins, provider `entered`, barrier lifecycle assertions, concurrent membership commit, provider `release` and completion, then—and only then—request checkout, final `REPEATABLE READ` transaction begin, and first-statement snapshot acquisition. Final authorization observes the committed membership deletion, discards every accumulated candidate and Evidence value, ends the final transaction, and returns every request-owned final connection before the request finishes.
+- **Forbidden behavior:** Retaining the initial authorization or keyword transaction, including a `READ COMMITTED` transaction, during provider work; retaining any checked-out request-owned connection; leaving the request idle in transaction at the provider barrier; opening the final transaction or acquiring its snapshot before provider completion; reusing one transaction across initial authorization, external work, and final authorization; treating a correct status, authorization result, Evidence result, or snapshot as sufficient when resource lifetime is wrong; inferring release only from pool capacity, concurrent-actor success, logs, sleeps, polling, or a mock that does not exercise a real PostgreSQL pool and transaction; initial-principal authority; empty success; partial Evidence; or asynchronous-cancellation claims.
 - **Planned test level:** PostgreSQL integration, HTTP integration.
 - **Implementation status:** `REQUIRED_NOT_YET_IMPLEMENTED`.
 
@@ -382,17 +395,21 @@ citation reauthorization.
 
 ## Provider transport, decoding, and taxonomy
 
-### RET-PROV-001 — Bounded valid response
+### RET-PROV-001 — Bounded valid response at exact field and metadata ceilings
 
 - **Category:** Provider transport, decoding, and taxonomy.
 - **Initial database state:** Authorized target has one eligible hashed chunk.
 - **Authenticated principal and membership state:** Live target member with read capabilities.
-- **Provider or Chroma input:** Version-supported JSON within every byte, field, metadata, count, and depth ceiling contains the canonical ID.
+- **Provider or Chroma input:** A parameterized supported envelope contains the valid canonical chunk ID and stays within wire, decoded, candidate-count, and depth limits. Four variants are independently executable, and every non-target bound remains below its ceiling unless the variant explicitly exercises it:
+  1. **Variant A — exact individual untrusted string ceiling:** One otherwise ignored untrusted string is exactly 4,096 UTF-8 bytes, deterministically constructed as 4,096 ASCII `a` bytes; every other field is below its limit.
+  2. **Variant B — exact metadata-entry ceiling:** One candidate has exactly 32 distinct metadata entries and no 33rd entry; every key and value is below its separate limit.
+  3. **Variant C — exact metadata-key ceiling:** One metadata key is exactly 128 UTF-8 bytes using deterministic ASCII; metadata-entry count and every value remain below their limits.
+  4. **Variant D — exact metadata-value ceiling:** One metadata scalar/string representation is exactly 1,024 UTF-8 bytes using deterministic ASCII; key size and metadata-entry count remain below their limits.
 - **Concurrent state change:** None.
-- **Expected public result:** One authorized Evidence item and private/no-store.
-- **Expected internal validation result:** Transport, bounded decode, structural parsing, canonical parsing, and PostgreSQL validation all succeed.
-- **Forbidden behavior:** Requesting or using provider text/provenance as authority or performing unbounded decode.
-- **Planned test level:** provider-adapter contract, PostgreSQL integration, HTTP integration.
+- **Expected public result:** Every variant returns the expected authoritative Evidence item and private/no-store.
+- **Expected internal validation result:** Every comparison uses `value <= ceiling`; equality is accepted without truncation or omission, bounded parsing succeeds, and ordinary PostgreSQL candidate validation and authoritative Evidence loading continue.
+- **Forbidden behavior:** Rejecting with `>= ceiling`, imposing an effective ceiling one unit lower, truncating an at-limit field, omitting the otherwise valid candidate, performing unbounded decode, or treating bounded Provider text, metadata, or provenance as Evidence authority.
+- **Planned test level:** unit, provider-adapter contract, PostgreSQL integration, HTTP integration.
 - **Implementation status:** `REQUIRED_NOT_YET_IMPLEMENTED`.
 
 ### RET-PROV-002 — Exact inclusive wire ceiling is accepted
@@ -551,16 +568,18 @@ citation reauthorization.
 - **Planned test level:** unit, provider-adapter contract, PostgreSQL integration, HTTP integration.
 - **Implementation status:** `REQUIRED_NOT_YET_IMPLEMENTED`.
 
-### RET-PROV-014 — Excessive JSON nesting
+### RET-PROV-014 — Exact JSON depth boundary
 
 - **Category:** Provider transport, decoding, and taxonomy.
 - **Initial database state:** Authorized target may have keyword candidates.
 - **Authenticated principal and membership state:** Live target member passes initial authorization.
-- **Provider or Chroma input:** Body is within byte limits but reaches nesting depth 17.
+- **Provider or Chroma input:** Two independently executable canonical parser fixtures remain within wire and decoded limits:
+  1. **Variant A — exact depth ceiling:** Canonical D16 reaches depth 16. The depth guard accepts it and passes control to subsequent structural validation. Because canonical D16 is not itself a valid Provider envelope, its later wrong-shape classification remains separate and is never labeled `DEPTH_LIMIT_EXCEEDED`.
+  2. **Variant B — depth ceiling plus one:** Canonical D17 would reach depth 17. The parser rejects it before full materialization, envelope validation, or candidate processing.
 - **Concurrent state change:** None.
-- **Expected public result:** Generic planned `503 RETRIEVAL_UNAVAILABLE`, no Evidence, and private/no-store.
-- **Expected internal validation result:** Bounded parser rejects depth before normal candidate handling.
-- **Forbidden behavior:** Recursive unbounded decode, partial result, or fallback.
+- **Expected public result:** Variant A emits no depth-limit result and proceeds to its separate later wrong-shape classification; Variant B produces generic planned `503 RETRIEVAL_UNAVAILABLE`, no Evidence, no partial dense list, no fallback, and private/no-store.
+- **Expected internal validation result:** Unit and Provider-adapter fixtures distinguish D16 passing the depth guard from D17 failing it; PostgreSQL and HTTP fixtures exercise the response-fatal D17 service path and confirm `503`, no Evidence, and no keyword-only fallback.
+- **Forbidden behavior:** Counting the root container as depth 0, counting a scalar as an added depth, failing to count an empty container, accepting D17, rejecting D16 as a depth violation, letting D17 reach envelope or candidate processing, recursive unbounded decode, partial result, fallback, or parser-dependent classification.
 - **Planned test level:** unit, provider-adapter contract, PostgreSQL integration, HTTP integration.
 - **Implementation status:** `REQUIRED_NOT_YET_IMPLEMENTED`.
 
@@ -595,7 +614,7 @@ citation reauthorization.
 - **Category:** Provider transport, decoding, and taxonomy.
 - **Initial database state:** Authorized target may have keyword candidates.
 - **Authenticated principal and membership state:** Live target member passes initial authorization.
-- **Provider or Chroma input:** Supported bounded envelope omits the required candidate collection.
+- **Provider or Chroma input:** Supported bounded envelope omits the required candidate collection; this absent-field fixture is distinct from a valid present-empty collection.
 - **Concurrent state change:** None.
 - **Expected public result:** Generic planned `503 RETRIEVAL_UNAVAILABLE`, no Evidence, and private/no-store.
 - **Expected internal validation result:** Required-field validation makes the whole response fatal.
@@ -1000,12 +1019,12 @@ citation reauthorization.
 - **Category:** Request, result, union, and SQL bounds.
 - **Initial database state:** Authorized target remains current.
 - **Authenticated principal and membership state:** Live target member passes final authorization.
-- **Provider or Chroma input:** Both bounded source lists are empty.
+- **Provider or Chroma input:** Both source lists are empty; the dense empty list comes from the same valid present-empty Provider envelope, which parses successfully to zero deterministic Provider positions and zero dense candidates.
 - **Concurrent state change:** None.
-- **Expected public result:** Authorized empty Evidence.
-- **Expected internal validation result:** `U = 0`, validation-batch query count is 0, and the separate first authorization statement still runs.
-- **Forbidden behavior:** Empty `IN` query, skipped authorization, or `503`.
-- **Planned test level:** unit, PostgreSQL integration, HTTP integration.
+- **Expected public result:** Authorized empty Evidence and private/no-store.
+- **Expected internal validation result:** The adapter returns the empty dense list; `U = 0`; validation-batch query count is zero; and the separate first final-authorization statement still runs.
+- **Forbidden behavior:** Empty `IN` query, synthetic or placeholder candidate, missing-collection error, keyword-only degraded mode, skipped final authorization, or `503`.
+- **Planned test level:** unit, provider-adapter contract, PostgreSQL integration, HTTP integration.
 - **Implementation status:** `REQUIRED_NOT_YET_IMPLEMENTED`.
 
 ### RET-BND-009 — One unique candidate
@@ -1101,17 +1120,17 @@ citation reauthorization.
 
 ## Keyword SQL scope
 
-### RET-KEY-001 — Legal keyword SQL excludes out-of-target chunks
+### RET-KEY-001 — Scoped deterministic PostgreSQL keyword ranking
 
 - **Category:** Keyword SQL scope.
-- **Initial database state:** A and B contain identical searchable text; caller requests A.
-- **Authenticated principal and membership state:** Live A member; B may be visible separately or inaccessible.
-- **Provider or Chroma input:** Dense response is empty and valid.
-- **Concurrent state change:** None.
-- **Expected public result:** Only A Evidence or authorized empty, never B.
-- **Expected internal validation result:** First keyword query predicates exact A, current membership/capabilities, completed status, valid hash, and ownership.
-- **Forbidden behavior:** Global keyword search, Python post-filter as primary scope, or B hit/count exposure.
-- **Planned test level:** PostgreSQL integration, HTTP integration.
+- **Initial database state:** One parameterized PostgreSQL/HTTP fixture gives knowledge bases A and B identical matching text. A contains two eligible chunks with deliberately tied `ts_rank_cd` scores and UUIDs chosen so insertion order differs from native UUID-ascending order, plus an eligible chunk with a controlled lower score; otherwise irrelevant rows permit deliberate row-order variation.
+- **Authenticated principal and membership state:** A live member requests exactly A; B is excluded by current SQL authorization and scope predicates before keyword score or rank assignment.
+- **Provider or Chroma input:** The dense source list is empty and valid so the same deterministic A keyword ranks enter RRF without dense-score calibration.
+- **Concurrent state change:** No authorization change; repeat the fixture while varying insertion order, physical row-return order where the harness can do so, and otherwise irrelevant database row order.
+- **Expected public result:** Every repetition returns the identical A-only authoritative Evidence order, with the tied higher-score chunks ordered by authoritative chunk UUID ascending and the lower-score chunk following them; B never appears.
+- **Expected internal validation result:** Unit assertions fix the `simple` configuration, bound `plainto_tsquery` construction, `ts_rank_cd` normalization `0`, `MAX_KEYWORD_CANDIDATES`, one-based rank semantics, and pure ordering expectations. PostgreSQL assertions prove actual `simple` matching, `ts_rank_cd` tied scores, B exclusion before ranking, native UUID tie order, the identical A-only one-based keyword-rank map across repetitions, and ranks entering RRF unchanged. HTTP assertions prove identical final Evidence ordering and exposed source ranks.
+- **Forbidden behavior:** B influencing A ranks; `ORDER BY score DESC` without a total tie break; insertion-, SQL-row-, heap-, index-, planner-, random-, or locale-sensitive UUID text order; Python post-hoc ranking after an unordered or unbounded query; rank assignment after a nondeterministic limit; B hit/count exposure; or raw keyword score fused directly with dense score or used as a hidden RRF tie break.
+- **Planned test level:** unit, PostgreSQL integration, HTTP integration.
 - **Implementation status:** `REQUIRED_NOT_YET_IMPLEMENTED`.
 
 ### RET-KEY-002 — Injected cross-scope keyword candidate is revalidated
@@ -1581,7 +1600,7 @@ that cannot observe them.
 | ADR requirement | Stable acceptance cases |
 | --- | --- |
 | ADR-008-R01 — Initial live-session authentication, exact target, and no client-ID authorization | RET-AUTH-001 through RET-AUTH-011 |
-| ADR-008-R02 — Initial check and no transaction across provider work | RET-AUTH-001, RET-AUTH-011, RET-CONC-001 through RET-CONC-003 |
+| ADR-008-R02 — Initial database work ends before external work; no request-owned transaction or checked-out connection spans external work; the final transaction and snapshot start only after provider completion | RET-AUTH-001, RET-AUTH-011, RET-CONC-001 (request-correlated real-pool, Session, `SessionTransaction`, transaction, and snapshot lifecycle at the controlled provider barrier directly proves resource release and post-provider final start), RET-CONC-002 through RET-CONC-003 (final-snapshot reauthorization) |
 | ADR-008-R03 — Final fixed `REPEATABLE READ` authorization statement | RET-CONC-001 through RET-CONC-003, RET-CONC-012 |
 | ADR-008-R04 — Same snapshot for all batches and Evidence fields | RET-CONC-006 through RET-CONC-010, RET-EVID-001 |
 | ADR-008-R05 — Request linearization and revocation timing | RET-CONC-001 through RET-CONC-009 |
@@ -1590,19 +1609,19 @@ that cannot observe them.
 | ADR-008-R08 — Completed status plus persisted non-null valid hash | RET-KEY-001, RET-EVID-002, RET-EVID-009, RET-EVID-010 |
 | ADR-008-R09 — Citation reauthorization and revision binding | RET-EVID-003 through RET-EVID-009 |
 | ADR-008-R10 — Chroma never authorizes or supplies authoritative fields | RET-PROV-030, RET-PROV-031, RET-PROV-040, RET-EVID-001 |
-| ADR-008-R11 — Inclusive wire/decode ceilings and P0-v1 field bounds | RET-PROV-002 (wire ceiling), RET-PROV-003 through RET-PROV-005 (wire ceiling plus one), RET-PROV-006 (decoded ceiling plus one), RET-PROV-007 (decoded ceiling), RET-PROV-008 through RET-PROV-014, RET-PROV-019 |
-| ADR-008-R12 — Response-fatal taxonomy, provider outage, and no fallback | RET-PROV-003 through RET-PROV-006, RET-PROV-009 through RET-PROV-022, RET-BND-007, RET-PRIV-004 |
+| ADR-008-R11 — Inclusive wire/decode ceilings, exact field/metadata bounds, and exact depth counting | RET-PROV-001 (four exact positive field/metadata ceilings) paired with RET-PROV-010 through RET-PROV-013 (their plus-one failures), RET-PROV-002 (wire ceiling), RET-PROV-003 through RET-PROV-005 (wire ceiling plus one), RET-PROV-006 (decoded ceiling plus one), RET-PROV-007 (decoded ceiling), RET-PROV-008, RET-PROV-009, RET-PROV-014 (exact D16/D17 boundary), RET-PROV-019 |
+| ADR-008-R12 — Response-fatal taxonomy, missing-collection fatality, provider outage, and no fallback | RET-PROV-003 through RET-PROV-006, RET-PROV-009 through RET-PROV-016, RET-PROV-017 (missing required collection), RET-PROV-018 through RET-PROV-022, RET-BND-007, RET-PRIV-004 |
 | ADR-008-R13 — Position-preserving candidate-local taxonomy and authorized empty | RET-PROV-008, RET-PROV-025 through RET-PROV-038 (including missing and non-string ID variants), RET-EVID-010 |
 | ADR-008-R14 — Optional score, provider order, and ignored bounded disagreement | RET-PROV-023 through RET-PROV-031 |
 | ADR-008-R15 — Duplicate earliest-rank behavior | RET-PROV-039, RET-BND-013, RET-RANK-003 |
 | ADR-008-R16 — Query/result/dense/keyword/provider/union bounds | RET-BND-001 through RET-BND-007, RET-PROV-019 |
-| ADR-008-R17 — Keyword SQL scope and internal-path exclusion | RET-KEY-001 through RET-KEY-004 |
+| ADR-008-R17 — Scoped deterministic PostgreSQL keyword rank generation and internal-path exclusion | RET-KEY-001 (scoped deterministic score, total order, and one-based ranks), RET-KEY-002 through RET-KEY-004 |
 | ADR-008-R18 — Deterministic union, batching, query count, and failure | RET-BND-008 through RET-BND-015, RET-CONC-010, RET-CONC-011 |
-| ADR-008-R19 — Exact RRF and tie-breaking | RET-RANK-001 through RET-RANK-005 |
+| ADR-008-R19 — Exact RRF, source-rank prerequisite, and tie-breaking | RET-KEY-001 (deterministic source-rank-generation prerequisite), RET-RANK-001 through RET-RANK-005 |
 | ADR-008-R20 — Evidence allowlist, trust class, and excluded data | RET-EVID-001, RET-PRIV-002, RET-PRIV-003 |
 | ADR-008-R21 — P0 AF-3 semantic injection boundary | RET-INJ-001 through RET-INJ-006 |
 | ADR-008-R22 — Later consumer-specific acceptance | RET-FUT-001 through RET-FUT-004 |
-| ADR-008-R23 — Public errors, authorized empty, no synthetic `403`, and cache | RET-AUTH-004, RET-AUTH-005, RET-AUTH-010, RET-AUTH-011, RET-CONC-011, RET-PRIV-004, RET-PRIV-005 |
+| ADR-008-R23 — Public errors, valid present-empty behavior, authorized empty, no synthetic `403`, and cache | RET-AUTH-004, RET-AUTH-005, RET-AUTH-010 (present-empty provider response), RET-AUTH-011, RET-CONC-011, RET-BND-008 (present-empty dense source and zero union), RET-PRIV-004, RET-PRIV-005 |
 | ADR-008-R24 — Privacy logging and bounded telemetry | RET-PRIV-001 through RET-PRIV-003, RET-PRIV-006 |
 | ADR-008-R25 — P0 response/trust controls remain distinct from P1 hardening | RET-PROV-006, RET-PROV-010, RET-INJ-001 through RET-INJ-006, RET-FUT-001 through RET-FUT-004 |
 
