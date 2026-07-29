@@ -67,6 +67,11 @@ planned retrieval, runtime, tool, approval, UI, and evaluation work:
 - PostgreSQL keyword retrieval;
 - dense + keyword + RRF retrieval;
 - stable citations;
+- AF-3 semantic trust boundary: retrieved document content is
+  `untrusted_document_content`; document instructions have no policy authority,
+  cannot alter authorization or knowledge-base scope, create approvals, choose
+  or configure tools, establish citation/provenance authority, or configure
+  providers; adversarial untrusted-evidence fixtures are required;
 - bounded Agent Runtime;
 - code-defined Tool Registry;
 - Knowledge Search Tool;
@@ -88,15 +93,27 @@ The following work is deferred until after P0:
 - reranking;
 - MCP adapter and one MCP server;
 - long-term memory;
-- prompt-injection guard;
+- advanced prompt-injection detection beyond the P0 semantic trust boundary;
+- model- and runtime-specific untrusted-evidence consumer guardrails;
+- parser sandboxing and broader hostile-document resource containment;
+- quotas and rate limits;
+- production secrets and TLS;
+- broader deployment hardening;
 - OpenTelemetry;
 - real GitHub issue creation;
 - SSO and external identity providers;
 - MFA, password reset, and email verification;
 - organization and advanced membership administration;
 - enterprise audit retention;
-- separate worker/database roles and hostile-document resource containment;
+- separate worker/database roles;
 - multiple LLM providers.
+
+P0 does not defer all prompt-injection handling: AF-3 must preserve the
+semantic boundary above even before later consumers exist. It does not claim
+to prevent every prompt injection. Each later RAG, ChatModel, Agent Runtime, or
+tool-consuming phase must add its own future consuming-phase acceptance cases.
+The P1 items provide advanced detection, consumer-specific guardrails, and
+operational containment rather than replacing the P0 trust classification.
 
 ## Non-goals before the recruiting demo
 

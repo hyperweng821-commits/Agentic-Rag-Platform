@@ -203,12 +203,16 @@ support scheduled-retry and expired-lease queries.
 `DocumentChunk` has a cascading document association, a zero-based
 `chunk_index`, normalized text, a non-negative token count, and the shared
 timestamps. AF-2B adds a content SHA-256 plus optional character offsets and
-PDF page ranges. It derives each chunk UUID deterministically from the document
-UUID, chunk index, and content hash, so unchanged reprocessing preserves
-identity. Database constraints require non-negative ordering, nonempty text,
-valid paired provenance ranges, and uniqueness of `(document_id, chunk_index)`.
-Embeddings remain outside PostgreSQL because they are regenerated data; stable
-Chroma IDs derive from durable chunk UUIDs.
+PDF page ranges. The hash column remains nullable for preserved legacy rows,
+and its database format when present is 64 lowercase hexadecimal characters.
+Future AF-3 retrieval requires the persisted hash to be non-null and valid;
+`completed` document status alone does not make a legacy null-hash chunk
+retrievable or citable. AF-2B derives each new chunk UUID deterministically
+from the document UUID, chunk index, and content hash, so unchanged
+reprocessing preserves identity. Database constraints require non-negative
+ordering, nonempty text, valid paired provenance ranges, and uniqueness of
+`(document_id, chunk_index)`. Embeddings remain outside PostgreSQL because they
+are regenerated data; stable Chroma IDs derive from durable chunk UUIDs.
 
 Workers claim due jobs with `FOR UPDATE SKIP LOCKED` in a short transaction.
 Parsing, embedding calls, and Chroma writes occur without holding that
@@ -275,21 +279,174 @@ other metadata value can never grant access.
 
 ## Planned hybrid retrieval flow
 
-This P0 flow is planned and unimplemented:
+AF-3 remains planned and unimplemented. ADR-008 defines the required design
+boundary and `retrieval-security-acceptance.md` defines future executable
+tests; neither document supplies runtime retrieval behavior.
 
 ```mermaid
-flowchart LR
-    Query["Query (planned)"] --> Embedding["Embedding (planned)"]
-    Embedding --> Dense["Chroma dense candidates (planned)"]
-    Query --> Keyword["PostgreSQL keyword candidates (planned)"]
-    Dense --> Validate["PostgreSQL membership, scope, status, and chunk validation (planned)"]
-    Keyword --> Validate
-    Validate --> RRF["RRF (planned)"]
-    RRF --> Evidence["Bounded evidence (planned)"]
-    Evidence --> Citations["Stable citations (planned)"]
+flowchart TD
+    Principal["Authenticated Principal (AF-2S1)"]
+    Initial["Initial PostgreSQL target membership + read-capability check (planned)"]
+    Normalize["Bounded deterministic query normalization (planned)"]
+    Keyword["Scoped PostgreSQL keyword candidates; completed documents only (planned)"]
+    Embed["Bounded query embedding through EmbeddingModel (planned consumer)"]
+    Dense["Bounded Chroma dense query; target filter is only a hint (planned)"]
+    Untrusted["Untrusted candidate IDs + provider ranks only (planned)"]
+    Combine["Bounded deterministic ID parsing + deduplication (planned)"]
+    Revocation["Committed session, user, or membership change"]
+    Final["Final REPEATABLE READ, normally READ ONLY transaction (planned)"]
+    Snapshot["First statement fixes snapshot + revalidates access (planned)"]
+    Batches["Deterministic validation batches in the same snapshot (planned)"]
+    Denied["Existing 401 / hidden-object 404, or planned 503; no evidence"]
+    Load["All authoritative text, non-null hash, state, and provenance in-snapshot (planned)"]
+    RRF["Deterministic RRF, k = 60 (planned)"]
+    Evidence["Bounded Evidence; untrusted_document_content (planned)"]
+    Citations["Stable citation resolution with current PostgreSQL access + revision check (planned)"]
+
+    Principal --> Initial
+    Initial -->|"transaction closes before slow provider work"| Normalize
+    Normalize --> Keyword
+    Normalize --> Embed
+    Embed -->|"no retained database transaction"| Dense
+    Dense --> Untrusted
+    Keyword --> Combine
+    Untrusted --> Combine
+    Combine --> Final
+    Final --> Snapshot
+    Revocation -. "observed if committed before snapshot acquisition" .-> Snapshot
+    Snapshot -->|"access invalid"| Denied
+    Snapshot --> Batches
+    Batches -->|"batch/transaction failure: discard all"| Denied
+    Batches --> Load
+    Load --> RRF
+    RRF --> Evidence
+    Evidence --> Citations
 ```
 
-P0 has no reranker. Reranking is deferred P1 work.
+Every request targets exactly one knowledge base. The initial PostgreSQL check
+requires a live principal, current target membership, and the existing
+knowledge-base read capability before embedding or Chroma work begins.
+Keyword candidates are scoped in SQL by the same principal, target knowledge
+base, read capability, completed-document state, and current chunk ownership;
+global keyword search followed by Python filtering is not a legal path.
+
+Embedding and Chroma are slow external work and run without an open database
+transaction or checked-out connection. The Chroma request asks principally for
+candidate IDs and rank/distance information, not provider documents or
+provenance as authoritative response material. Chroma filters, text, metadata,
+and scores never establish access, state, content, revision, or citation
+provenance.
+
+The versioned P0-v1 provider-response hard ceilings are:
+
+| Bound | Ceiling |
+| --- | ---: |
+| Raw/wire response | 1,048,576 bytes |
+| Decoded/decompressed response | 2,097,152 bytes |
+| Candidate ID | 128 UTF-8 bytes |
+| Individual untrusted string | 4,096 UTF-8 bytes |
+| Metadata entries per candidate | 32 |
+| Metadata key | 128 UTF-8 bytes |
+| Metadata scalar/string value | 1,024 UTF-8 bytes |
+| JSON nesting depth | 16 |
+
+`Content-Length` above the wire ceiling is rejected before body read. Missing
+or dishonest lengths cannot bypass streaming wire-byte accounting. Compressed
+responses must pass both wire and decoded ceilings, and no unbounded full-body
+JSON decode occurs first. A body, decode, nesting, field, count, envelope, or
+position-reconstruction violation is a whole-response provider-contract
+failure: planned generic `503 RETRIEVAL_UNAVAILABLE`, no partial dense list, no
+Evidence, and no keyword-only fallback.
+
+Within a bounded structurally valid response, a bounded non-canonical ID,
+unknown/stale/cross-scope/inaccessible/ineligible candidate, individually
+invalid record, or present wrong-type/non-finite optional score is omitted
+locally. A missing optional score is valid. Fusion uses provider list rank, not
+raw score. Bounded text and metadata disagreement are ignored for authority;
+oversized fields are response-fatal. Duplicate IDs retain the earliest source
+rank.
+
+Keyword and dense candidates preserve separate UUID-to-rank maps. Their unique
+union is sorted by canonical chunk UUID ascending and split into contiguous
+configured-size batches, with only the last batch possibly shorter. For `U`
+unique candidates and batch size `B`, the validation-batch query count is zero
+when `U = 0`, otherwise `ceil(U / B)`. The initial final-transaction
+authorization statement is counted separately.
+
+After provider work, one short final PostgreSQL transaction runs at
+`REPEATABLE READ` and normally `READ ONLY`. No external I/O occurs inside it.
+Its first authoritative statement fixes the snapshot and revalidates the
+session, active user, exact target, membership, and current read capabilities.
+Every candidate batch and every authoritative Evidence value loads from that
+same snapshot. PostgreSQL row order is ignored; records are reconstructed by
+canonical UUID. No content/provenance reload occurs after commit, although
+already-loaded immutable response values may be serialized.
+
+The fixed snapshot is the request linearization point. Changes committed
+before acquisition are visible. Authentication loss produces generic `401`;
+target access loss produces hidden-resource `404`; document/chunk ineligibility
+omits the affected candidate. A change committed after acquisition does not
+cancel the current request and governs later requests. This is not a claim of
+asynchronous cancellation of Python, provider, or serialization work. Any
+batch or transaction failure discards all accumulated records and produces
+planned generic `503`, never partial Evidence.
+
+Document status `completed` is necessary but not sufficient. A chunk must have
+a persisted non-null `content_sha256` matching `^[0-9a-f]{64}$`. Retrieval may
+not invent a revision from a runtime hash, timestamp, UUID, Chroma, or provider
+metadata. Legacy null-hash chunks require an explicitly approved reprocessing
+or re-ingestion path before becoming retrievable. Citation creation and
+resolution require the persisted hash; resolution reauthenticates and fails
+closed when access, eligibility, identity, or hash no longer matches.
+
+Deterministic P0 reciprocal rank fusion uses one-based keyword/dense ranks and
+fixed `RRF_K = 60`:
+
+```text
+sum(1 / (60 + source_rank))
+```
+
+Raw scores are not combined. Results sort by fused score descending, best
+contributing rank ascending, keyword rank ascending with absence last, dense
+rank ascending with absence last, then authoritative chunk UUID ascending.
+SQL batch order is not result order. P0 has no reranker and returns at most one
+Evidence item per authoritative chunk.
+
+Evidence uses an allowlisted PostgreSQL projection and trust classification
+`untrusted_document_content`. It may be quoted and cited, but content cannot
+create a system/developer instruction field, authorization or retrieval scope,
+provider configuration, Tool Policy, tool name/arguments, execution object,
+approval, secret request, or citation/provenance authority. AF-3 tests only
+this retrieval-layer semantic boundary. Each later RAG, ChatModel, Agent
+Runtime, or tool-consuming phase must add its own future consuming-phase
+acceptance cases; AF-3 does not claim to test nonexistent consumers.
+
+P0 semantic trust separation and provider-response bounds are distinct from
+P1/AF-2S2 advanced prompt-injection detection, model/runtime consumer
+guardrails, parser sandboxing, separate worker/database roles, broader
+hostile-document resource containment, quotas/rate limits, production secrets,
+TLS, and deployment hardening. Neither P0 nor P1 wording claims complete
+prompt-injection prevention or hostile-document containment.
+
+The current owner/editor/viewer matrix grants retrieval read capabilities to
+every member role. Generic framework `403` remains representable, but AF-3 has
+no reachable member-without-read retrieval fixture; missing and non-member
+targets use hidden `404`. Every private success and failure uses
+`Cache-Control: private, no-store`, and normal telemetry is bounded and
+content-free.
+
+AF-3 is split into AF-3A scoped contracts and SQL keyword candidates, AF-3B
+dense validation/fixed-snapshot batching/RRF, and AF-3C Evidence, citations,
+authenticated API integration, and AF-3 adversarial evaluation. P0 has no
+reranker. RAG, answer generation, Agent Runtime, tools, and approvals remain
+unimplemented.
+
+The design governance sequence is defined in ADR-008 and `roadmap.md`.
+Independent re-review of the exact remediated manifest, separate commit and PR
+approvals, merge-gate review, merge to `main`, local synchronization, and a
+separate AF-3A implementation-start authorization must all occur before a new
+AF-3A branch is created. A local review PASS, local commit, or open/merged
+design PR is not implementation authorization.
 
 ## Planned Agent execution flow
 
@@ -354,6 +511,7 @@ evaluation is planned and unimplemented.
 | Application services | Own use-case sequencing and transaction boundaries |
 | User repositories | Own principal- and capability-scoped SQLAlchemy queries |
 | Worker repositories | Own explicitly internal durable-processing queries and are never used by HTTP endpoints |
+| Planned retrieval | Uses one target knowledge base, bounded candidates, one shared final PostgreSQL authorization/evidence boundary, and untrusted provider output |
 | AgentRuntime | Exposes no LangGraph types |
 | Tools | Execute only through Tool Executor |
 | Adapters | Keep external SDK types inside adapters |
@@ -372,3 +530,4 @@ status says otherwise.
 - [ADR-005: Enforce tool policy and approval](adr/005-tool-policy-and-approval.md)
 - [ADR-006: Version configuration and use deterministic fakes](adr/006-versioned-config-and-fakes.md)
 - [ADR-007: Establish the knowledge-access boundary before retrieval](adr/007-knowledge-access-boundary.md)
+- [ADR-008: Validate retrieval candidates in PostgreSQL and treat evidence as untrusted](adr/008-retrieval-candidate-validation-and-untrusted-evidence.md)
