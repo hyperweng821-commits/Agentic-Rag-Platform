@@ -36,9 +36,9 @@ It performs:
 1. a short PostgreSQL access check before embedding or Chroma work;
 2. bounded keyword and dense candidate generation without retaining a
    PostgreSQL transaction or checked-out connection across external work; and
-3. one short, final PostgreSQL `REPEATABLE READ` transaction that reauthorizes,
-   validates every candidate batch, and loads every authoritative response
-   value.
+3. one short, final PostgreSQL `REPEATABLE READ`, `READ ONLY` transaction in
+   AF-3A, AF-3B, and AF-3C that reauthorizes, validates every candidate batch,
+   and loads every authoritative response value.
 
 PostgreSQL is authoritative. Chroma output is a bounded untrusted candidate
 hint. Keyword and dense identities enter one final validator. Retrieved text is
@@ -59,35 +59,153 @@ than assigned to an incapable test layer.
 
 | ID | Normative requirement |
 | --- | --- |
-| ADR-008-R01 | Every request initially authenticates a live, active principal from an existing, unexpired, unrevoked session, names exactly one target knowledge base, and authorizes from PostgreSQL; client document or chunk IDs never establish access. |
-| ADR-008-R02 | Initial authorization completes before external provider work, and no PostgreSQL transaction or connection is retained across embedding, Chroma, network, parser, or filesystem work. |
-| ADR-008-R03 | The final transaction is normatively `REPEATABLE READ` and normally `READ ONLY`; its first authoritative statement fixes the snapshot and revalidates session, user, target, membership, and current read capabilities. |
+| ADR-008-R01 | Each of the exactly two AF-3C public operations uses its one strict P0-v1 request shape, the shared bounded-body contract, and the fixed gate order; retrieval additionally uses the exact normalization/count contract. Every request authenticates a live, active principal from an existing, unexpired, unrevoked session, names exactly one target knowledge base, and authorizes from PostgreSQL; client document or chunk IDs never establish access. |
+| ADR-008-R02 | Initial authentication, exact-target authorization, and request validation complete before query embedding; no PostgreSQL transaction, connection, Session, or SessionTransaction is retained across embedding, Chroma, network, parser, or filesystem work, and embedding failure or cancellation cannot retain a database resource or begin final validation. |
+| ADR-008-R03 | In AF-3A, AF-3B, and AF-3C, the actual final request transaction MUST be PostgreSQL `REPEATABLE READ` and `READ ONLY`; its actual first final authorization query or an order-preserving same-transaction test hook proves both settings in that transaction, and its first authoritative statement fixes the snapshot and revalidates session, user, target, membership, and current read capabilities. |
 | ADR-008-R04 | Every validation batch and every authoritative Evidence field loads within the same fixed final snapshot, with no authorization-sensitive PostgreSQL reload after commit. |
 | ADR-008-R05 | The final snapshot is the request linearization point; changes before it are visible, changes after it govern later requests, and no asynchronous cancellation is claimed. |
 | ADR-008-R06 | Final validation and Evidence loading are all-or-nothing; any required batch or transaction failure discards accumulated records and produces the planned generic retrieval failure. |
-| ADR-008-R07 | PostgreSQL alone supplies authoritative identity, scope, document/chunk state, text, hash, source identity, provenance, and citation resolution. |
+| ADR-008-R07 | PostgreSQL alone supplies authoritative identity, scope, document/chunk state, text, hash, source identity, provenance, and every field of the public citation-resolution result; caller-provided CitationReference fields are locators only. |
 | ADR-008-R08 | A chunk is retrieval- and citation-eligible only when its document is completed and its persisted `content_sha256` is a non-null lowercase 64-hex SHA-256 value; no retrieval-time revision fallback is allowed. |
-| ADR-008-R09 | Citation resolution reauthenticates, scopes to one knowledge base, and requires the same current persisted chunk hash; citation possession never authorizes access. |
-| ADR-008-R10 | Chroma filters, IDs, text, metadata, scores, and provenance never authorize, widen scope, or supply authoritative response fields. |
-| ADR-008-R11 | Provider-response limit profile P0-v1 applies inclusive wire, decoded, candidate-ID, string, and metadata ceilings plus the exact container-counting JSON-depth algorithm before normal candidate processing. |
-| ADR-008-R12 | Every response-fatal provider-contract condition, including an absent required candidate collection, produces the planned generic `503`, no partial dense result, no Evidence, and no keyword-only fallback. |
+| ADR-008-R09 | The one public citation-resolution operation reauthenticates, scopes to the canonical route knowledge base, strictly accepts the existing CitationReference wire structure, and requires the same current persisted chunk hash; citation possession and caller-provided reference fields never authorize access. |
+| ADR-008-R10 | The pinned Chroma 1.5.9 HTTP v2 version probe and query use their single canonical bounded contracts; the query sends exactly one validated configured-dimension embedding, while Chroma filters, IDs, text, metadata, distances, scores, and provenance never authorize, widen scope, or supply authoritative response fields. |
+| ADR-008-R11 | Provider-response limit profile P0-v1 applies to both the version probe and query, with inclusive wire and decoded ceilings, streaming content-encoding enforcement, and early abort; query responses additionally apply candidate-ID, string, metadata, and exact container-counting JSON-depth limits before normal candidate processing. |
+| ADR-008-R12 | Every response-fatal provider-contract condition, including a version mismatch, non-UTF-8 or non-RFC 8259 wire JSON, a JSON distance outside the supported finite numeric domain, or an absent required canonical collection, prevents candidate iteration and produces the planned generic `503`, no partial result, no Evidence, no keyword-only fallback, and no candidate-local continuation. |
 | ADR-008-R13 | Every candidate-local condition omits only that bounded record; an authorized request whose candidates are all locally omitted returns empty Evidence without disclosing reasons. |
-| ADR-008-R14 | Provider score is optional and non-authoritative; present wrong-type or non-finite scores omit that candidate, while fusion uses provider list rank and ignores bounded provider text/metadata disagreement. |
+| ADR-008-R14 | Provider distance/score is non-authoritative; a conforming canonical wire distance must decode into the supported finite domain, while a present wrong-type distance/score or a typed value equivalent to `float("nan")`, `float("inf")`, or `float("-inf")` supplied only at the post-decoder typed adapter boundary omits that candidate without compacting its absolute source position; fusion uses the preserved source rank and ignores bounded provider disagreement. |
 | ADR-008-R15 | Duplicate IDs retain the earliest rank per source and produce at most one Evidence item per authoritative chunk. |
-| ADR-008-R16 | Query characters, query UTF-8 bytes, requested results, dense over-fetch, keyword candidates, provider candidates, candidate union, and SQL work have finite versioned bounds. |
+| ADR-008-R16 | Each AF-3 POST body, normalized query scalar values and UTF-8 bytes, public requested results, configured Provider results, raw Provider positions, dense and keyword rank maps, candidate union, validation batches, and final public results use the exact finite P0-v1 domains and relationships. |
 | ADR-008-R17 | P0-v1 keyword SQL is scoped before scoring and deterministically ranks PostgreSQL-authoritative `simple` text-search matches by score then native UUID; HTTP retrieval cannot call unscoped worker/internal paths or expose global counts. |
 | ADR-008-R18 | Candidate union ordering, partitioning, validation query count, record reconstruction, and failure behavior follow the deterministic batching contract. |
-| ADR-008-R19 | P0 fusion uses the fixed `RRF_K = 60`, one-based source ranks, the specified formula and tie order, and no raw-score fusion or reranker. |
-| ADR-008-R20 | Evidence uses an allowlisted PostgreSQL projection, stable citation identity, and `untrusted_document_content`; it excludes secrets, storage paths, embeddings, and provider authority. |
+| ADR-008-R19 | P0 fusion uses fixed `RRF_K = 60`, preserved one-based absolute source ranks, exact rational comparison, the specified tie order, display-only decimal serialization, and no raw-score fusion or reranker. |
+| ADR-008-R20 | Evidence explicitly separates an allowlisted PostgreSQL-authoritative projection from narrowly defined deterministic derived fields, including stable citation identity and `untrusted_document_content`; it excludes secrets, storage paths, embeddings, and provider authority. |
 | ADR-008-R21 | AF-3 enforces the P0 semantic trust boundary: content cannot create trusted instructions, authorization/scope, provider configuration, tools, approvals, secret requests, or citation authority. |
 | ADR-008-R22 | Every later RAG, ChatModel, Agent Runtime, or tool-consuming phase adds its own consuming-phase acceptance cases; AF-3 does not claim to test nonexistent consumers. |
 | ADR-008-R23 | Authentication, hidden-resource, provider-failure, valid present-empty provider response, authorized-empty, and private cache behavior are deterministic; current AF-3 roles do not fabricate an unreachable retrieval `403`. |
-| ADR-008-R24 | Normal logs exclude queries, content, secrets, raw payloads, and identifying retrieval artifacts; telemetry is bounded and content-free. |
+| ADR-008-R24 | The same recursive exact-and-substring secrecy scan covers every observable logging, tracing, access, exception, SQL/driver, Provider transport/client, and response-metadata sink on every private success and failure; only exact field-specific public Evidence or citation-resolution response paths are allowlisted, and telemetry is bounded and content-free. |
 | ADR-008-R25 | P0 retrieval response bounds and semantic trust controls remain distinct from AF-2S2/P1 parser sandboxing and broader hostile-document, identity, and deployment hardening. |
 
 ## Detailed security contract
 
 ### Request and initial authorization boundary
+
+AF-3C exposes exactly two public P0-v1 operations and no others:
+
+```text
+POST /api/v1/knowledge-bases/{knowledge_base_id}/retrieval
+Content-Type: application/json
+
+POST /api/v1/knowledge-bases/{knowledge_base_id}/citations/resolve
+Content-Type: application/json
+```
+
+For both operations, `knowledge_base_id` is the one target. Its accepted
+textual form is a lowercase, hyphenated canonical UUID. The retrieval JSON
+body is exactly:
+
+```json
+{
+  "query": "required JSON string",
+  "requested_count": 10
+}
+```
+
+The body contract is closed:
+
+| Field | Required | Exact JSON type | Default | P0-v1 rule |
+| --- | --- | --- | --- | --- |
+| `query` | Yes | string | None | Normalize and measure exactly as specified below. |
+| `requested_count` | No | integer | `10` | Accept only `1` through `50`, inclusive. |
+
+No coercion is permitted. In particular, a JSON string or floating-point
+number is not an integer, and JSON `true` and `false` are not integers.
+Duplicate object keys, an absent body, a non-object body, an unsupported media
+type, and every unknown or extra field produce the existing generic
+`422 VALIDATION_ERROR` after the authentication and hidden-target ordering
+below. `document_id`, `document_ids`, `chunk_id`, `chunk_ids`, `limit`,
+`count`, and aliases for either accepted field are not accepted. There is no
+second equivalent request shape.
+
+Both POST operations share `MAX_APPLICATION_BODY_BYTES = 65,536`. The
+measured value is exactly the cumulative number of application-body octets in
+ASGI `http.request` events exposed to the application before JSON decoding;
+headers, transfer framing, and any server-private representation are not part
+of the count. Body collection MUST read incrementally into a bounded
+collector. It MUST NOT call an unbounded `body()` or equivalent full-body
+materializer and then check the length. Exactly 65,536 observed octets may
+proceed. Observation of byte 65,537 immediately aborts collection without
+retaining a byte above the ceiling, parsing the remainder of that event, or
+requesting another body event, and returns the existing generic
+`422 VALIDATION_ERROR`. No JSON parser, duplicate-key detector, schema
+validator, normalization, semantic count validator, keyword query, embedding,
+Provider call, or final PostgreSQL transaction may run after overflow.
+
+The common public gate order is exact:
+
+1. Resolve the current opaque session and active user.
+2. Parse the canonical route UUID and perform exact-target PostgreSQL
+   authorization with hidden `404` behavior.
+3. Require the supported request media type `application/json`.
+4. Incrementally collect at most 65,536 application-body octets.
+5. Parse strict UTF-8 JSON with duplicate-key rejection.
+6. Validate the operation's closed request schema without coercion.
+7. Apply operation-specific normalization and semantic validation: retrieval
+   applies the query/count rules below; citation resolution validates the
+   canonical CitationReference grammar below.
+8. Begin retrieval work or final authoritative citation-resolution work.
+
+Thus unauthenticated requests return generic `401` without target lookup,
+media validation, or application-body processing; malformed or hidden targets
+return generic hidden `404` without media validation or application-body
+processing; and unsupported media returns generic `422` before body
+collection. Every private response, including all failures at these gates,
+uses `Cache-Control: private, no-store`.
+
+The P0-v1 normalization pipeline is exact and ordered:
+
+1. Strictly decode the JSON string into Unicode scalar values. A lone
+   surrogate or any value that cannot be encoded as strict UTF-8 is invalid.
+2. Apply Unicode Normalization Form C (`NFC`) once.
+3. Define whitespace as exactly U+0009 through U+000D, U+0020, U+0085,
+   U+00A0, U+1680, U+2000 through U+200A, U+2028, U+2029, U+202F, U+205F,
+   and U+3000.
+4. Remove every leading and trailing code point in that set.
+5. Replace each maximal nonempty interior run of those code points with one
+   U+0020 SPACE.
+6. Perform no case folding, stemming, punctuation removal, locale mapping, or
+   other transformation.
+
+The result is `normalized_query`. An empty result is invalid. Its character
+count is the number of Unicode scalar values, not UTF-16 code units,
+graphemes, or bytes. Its byte count is the length of its strict UTF-8
+encoding. Both inclusive P0-v1 limits apply independently:
+
+| Request limit | Minimum | Maximum |
+| --- | ---: | ---: |
+| `normalized_query` Unicode scalar values | 1 | 2,048 |
+| `normalized_query` UTF-8 bytes | 1 | 4,096 |
+| `requested_count` | 1 | 50 |
+
+For independently constructible boundary fixtures, one ASCII `a` is the
+minimum query; 2,048 ASCII `a` values meet the character maximum and 2,049
+exceed it; 1,024 U+1F642 values occupy exactly 4,096 UTF-8 bytes and appending
+one ASCII `a` produces 4,097 bytes while remaining below the character
+maximum. Whitespace-only input is empty after normalization. Zero, a negative
+integer, `51`, a boolean, a float, and a numeric string are invalid
+`requested_count` values. All of these request-domain failures produce
+`422`, no Evidence, and no keyword, embedding, or Chroma call.
+
+For retrieval, the operation-specific portion of the common order ends the
+initial database operation and returns its connection before body collection;
+then it parses the bounded JSON, validates the closed schema, normalizes
+`query`, and validates both query measurements and `requested_count`. Only a
+fully authenticated, initially authorized, valid bounded request may run
+keyword, embedding, or Chroma work.
+
+This ordering means malformed request fields and oversized bodies cannot
+replace a required `401` or reveal a hidden target through `422`. It does not
+permit retention of the target-authorization transaction or connection while
+reading, parsing, or normalizing the body.
 
 Every future private retrieval request must:
 
@@ -116,6 +234,22 @@ separate short operations. No transaction or checked-out connection may be
 retained while waiting for embedding, Chroma, network, parser, filesystem, or
 other external I/O.
 
+Query embedding has its own resource-lifecycle boundary; a later Chroma
+barrier is not evidence for it. Authentication, exact-target authorization,
+bounded body processing, retrieval schema validation, query normalization and
+count validation, and every database operation permitted before embedding
+must have completed before the single bounded
+`EmbeddingModel.embed([normalized_query])` call begins. At an observable
+embedding-entry barrier, the request owns no checked-out PostgreSQL connection,
+open transaction, ORM Session with retained connection, or open
+SessionTransaction, and the final transaction has neither begun nor acquired
+a snapshot. Successful embedding returns exactly one configured-dimension
+finite vector. Embedding failure is required-Provider-fatal and permits no
+keyword-only fallback; controlled request-task cancellation while the
+embedding await is blocked may publish no response but must unwind without a
+retained database resource, Chroma call, or final transaction. This cleanup
+rule does not claim instantaneous cancellation of arbitrary external work.
+
 The current production role matrix gives owner, editor, and viewer the
 retrieval read capabilities. AF-3 therefore has no reachable
 member-without-read-capability runtime fixture and must not invent one,
@@ -125,20 +259,103 @@ lacking a requested capability, but a future policy that makes retrieval
 `403` reachable requires a separately approved policy change and a new
 fixture. Current non-member, missing, and hidden targets use generic `404`.
 
+### Public citation-resolution operation
+
+The one citation operation is exactly:
+
+```text
+POST /api/v1/knowledge-bases/{knowledge_base_id}/citations/resolve
+Content-Type: application/json
+```
+
+Its body is a strict JSON object with exactly one required field and no
+default, alias, duplicate, coercion, or extra field:
+
+```json
+{
+  "citation_reference": "af3:citation:v1:123e4567-e89b-42d3-a456-426614174000:11111111-1111-4111-8111-111111111111:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}
+```
+
+`citation_reference` is a JSON string containing the already-defined
+CitationReference wire structure, exactly
+`af3:citation:v1:<knowledge_base_uuid>:<chunk_uuid>:<content_sha256>`. Both
+UUID components use lowercase hyphenated canonical text and the hash is
+exactly 64 lowercase hexadecimal characters. No signed token, opaque citation
+token, alternate identifier, query parameter, path token, or second request
+shape exists. A malformed reference or request shape produces the same
+generic `422 VALIDATION_ERROR` as other authenticated request-validation
+failures. A syntactically valid reference whose embedded target does not equal
+the already-authorized route target is not authority and resolves to the same
+generic hidden `404 NOT_FOUND` as any absent current authoritative match.
+
+After the common authentication, exact-target, media, bounded-body, JSON,
+schema, and CitationReference-syntax gates succeed, final citation resolution
+uses one short PostgreSQL `REPEATABLE READ`, `READ ONLY` transaction. Its first
+authoritative statement fixes the snapshot and rechecks the current session,
+active user, exact route target, membership, and read capabilities. The same
+snapshot requires a completed current document, the exact current chunk, and
+a persisted non-null valid hash equal to the reference hash, and loads every
+response value. Authentication loss at this recheck is generic `401`; target
+access loss or any absent, ineligible, replaced, cross-target, null-hash, or
+hash-mismatched citation is generic hidden `404`. A database or transaction
+failure is the existing planned generic `503 RETRIEVAL_UNAVAILABLE`. No
+authorization-sensitive reload follows commit.
+
+Caller-provided reference components are lookup assertions only. They never
+supply authorization, content, revision, source identity, or provenance. The
+resolver performs no query embedding, keyword retrieval, Chroma or other
+Provider call, candidate validation, RRF, storage read, filesystem read,
+dynamic content hashing, revision repair, cache fallback, or alternate-token
+work on success or failure.
+
+A successful resolution returns HTTP `200` with exactly this JSON object
+shape, where every non-literal value is loaded from PostgreSQL in the final
+snapshot and `citation_reference` is reconstructed from those authoritative
+values rather than echoed as caller authority:
+
+```json
+{
+  "citation_reference": "af3:citation:v1:123e4567-e89b-42d3-a456-426614174000:11111111-1111-4111-8111-111111111111:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "knowledge_base_id": "123e4567-e89b-42d3-a456-426614174000",
+  "document_id": "22222222-2222-4222-8222-222222222222",
+  "chunk_id": "11111111-1111-4111-8111-111111111111",
+  "content": "PostgreSQL-authoritative normalized text",
+  "content_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "source_display_name": "approved-display-name.txt",
+  "page_start": null,
+  "page_end": null,
+  "character_start": 0,
+  "character_end": 40,
+  "trust_classification": "untrusted_document_content"
+}
+```
+
+The four page/character fields are their persisted permitted integer values or
+JSON `null`. No source rank, fused value, storage key/path, Provider field,
+secret, diagnostic, alternate citation value, or additional response field is
+permitted. Every citation success and failure uses
+`Cache-Control: private, no-store`.
+
 ### Atomic final PostgreSQL boundary
 
 After all external embedding and Chroma work completes, retrieval enters one
 short final PostgreSQL transaction with these normative properties:
 
 - isolation level is `REPEATABLE READ`;
-- mode is `READ ONLY`, unless a later implementation demonstrates that the
-  selected driver or database cannot support read-only mode for this flow and
-  records a separately reviewed exception;
+- mode is `READ ONLY`; AF-3A, AF-3B, and AF-3C have no read-write exception;
 - no embedding, Chroma, network, parser, filesystem, or other external I/O
   occurs inside it;
 - the first authoritative statement acquires the fixed transaction snapshot
   and atomically revalidates session validity, active-user status, the exact
   target knowledge base, current membership, and current read capabilities;
+- the actual first final authorization query or an equivalent order-preserving
+  same-transaction test hook proves in the real request transaction that
+  `current_setting('transaction_isolation') = 'repeatable read'` and
+  `current_setting('transaction_read_only') = 'on'`; this proof may not add an
+  earlier authorization-sensitive query, move snapshot acquisition earlier,
+  or inspect a helper transaction, the concurrent mutation actor's
+  transaction, or an unrelated database session;
 - every candidate-validation batch and every authoritative Evidence field is
   read using that same fixed snapshot;
 - authoritative content, hash, source display identity, and provenance load
@@ -151,6 +368,10 @@ short final PostgreSQL transaction with these normative properties:
   required batch, transaction failure, or database failure; and
 - transaction or database failure produces the explicit planned generic
   `503 RETRIEVAL_UNAVAILABLE` response and never partial Evidence.
+
+Any future read-write exception requires a separately approved ADR change, a
+new acceptance case, and an explicit security and transaction review before
+implementation. The current AF-3 contract does not permit such an exception.
 
 The initial session/user/membership/capability statement is accounted for
 separately from candidate-validation batch queries.
@@ -201,11 +422,21 @@ eligible only after an explicitly approved reprocessing or re-ingestion
 pipeline persists the normal authoritative hash.
 
 Citation creation requires the persisted non-null hash. A stable citation
-reference binds at least the authoritative chunk UUID and that hash. Citation
-resolution is another authenticated, one-knowledge-base PostgreSQL operation.
-It rechecks current access, completed document state, chunk identity, and the
-persisted expected hash. It fails closed with generic `404` when access is
-absent, the expected hash is absent, or the current hash no longer matches.
+reference binds exactly the authoritative knowledge-base UUID, chunk UUID,
+and that hash in the CitationReference wire structure defined above. Citation
+resolution is the authenticated, one-knowledge-base PostgreSQL operation
+defined above.
+The resolver starts from the presented opaque session cookie and
+reauthenticates the current session row and active user; it MUST NOT accept a
+cached, caller-supplied, or prebuilt `Principal` as proof of current
+authentication. Missing, expired, revoked, and inactive-user sessions each
+produce the same generic `401`, no citation or Evidence content, no target,
+membership, citation, document, or chunk SQL after the failed authentication,
+no Provider call, and private/no-store behavior. Only after successful
+reauthentication does it recheck current target membership/access, completed
+document state, chunk identity, and the persisted expected hash. It fails
+closed with generic `404` when access is absent, the expected hash is absent,
+or the current hash no longer matches.
 
 No response text, filename, page range, offsets, content hash, document
 identity, knowledge-base identity, or citation identity may be sourced from
@@ -213,12 +444,178 @@ Chroma `documents` or `metadatas`.
 
 ### Chroma provider request and P0-v1 response limits
 
-The Chroma request asks only for fields required by candidate handling,
-principally candidate IDs and provider rank/distance information. Provider
-documents, text, and provenance are not requested as authoritative response
-material.
+Repository truth pins `chromadb/chroma:1.5.9` and uses raw HTTP v2 through
+`httpx`; no Chroma SDK is a dependency. AF-3B may add a query operation to the
+existing provider-neutral `VectorStore` boundary only alongside its first
+retrieval consumer. Its compatibility identifier is exactly
+`chroma-http-v2-1.5.9`.
 
-The versioned initial provider-response profile is:
+Before its first query, that adapter calls `GET /api/v2/version` and requires
+HTTP `200`, JSON media type, strict UTF-8, and the exact JSON string
+`"1.5.9"`. A missing, malformed, or different version result is a required-
+Provider contract failure. The Provider query response has no invented
+version field: the version probe, pinned deployment image, v2 path, and
+canonical schema together are the supported-version mechanism. An upgrade
+requires a reviewed contract/version change rather than best-effort parsing.
+
+The version response is not a special unbounded read. The same Provider HTTP
+profile defined below applies before equality comparison: parsed media type
+`application/json` with no parameter or sole case-insensitive
+`charset=utf-8`; absent, `identity`, or single-token `gzip`
+`Content-Encoding`; a 1,048,576-byte inclusive raw/wire ceiling; a
+2,097,152-byte inclusive decoded/decompressed ceiling; incremental raw and
+decoded counters; and immediate abort on the first byte above either ceiling
+before complete materialization or JSON parsing. A truthful oversized
+`Content-Length`, a streamed plus-one byte, unsupported or stacked encoding,
+decoded expansion above the ceiling, invalid UTF-8/JSON, or any result other
+than the exact JSON string is one generic required-Provider failure. It stops
+before `/query`, returns planned generic `503 RETRIEVAL_UNAVAILABLE`, and
+permits no fallback, partial dense list, or Evidence. JSON whitespace may pad
+an otherwise exact version string to exercise equality at a byte ceiling;
+the parsed value must still equal exactly `"1.5.9"`.
+
+The one outbound query operation is:
+
+```text
+POST /api/v2/tenants/{tenant}/databases/{database}/collections/{collection_uuid}/query
+Content-Type: application/json
+```
+
+The adapter emits exactly these request keys:
+
+```json
+{
+  "query_embeddings": [[0.25, -0.5, 0.0, 1.0]],
+  "n_results": 40,
+  "where": {
+    "knowledge_base_id": {
+      "$eq": "00000000-0000-0000-0000-000000000000"
+    }
+  },
+  "include": ["distances"]
+}
+```
+
+The displayed request is also the exact outbound conformance fixture: its
+test configuration fixes embedding dimension `4`, and the deterministic fake
+returns the ordered vector `[0.25, -0.5, 0.0, 1.0]`. The captured body must
+contain exactly that one vector, preserving all four finite values and their
+order. It may not truncate, pad, replace, duplicate, normalize, reorder, or
+send a second vector. In every non-fixture configuration,
+`query_embeddings` likewise contains exactly one array with exactly the
+configured embedding dimension and the one validated embedding result's
+finite binary64-compatible JSON numbers in unchanged order.
+`n_results` is exactly the configured Provider count defined below. `where`
+contains exactly the one target UUID equality as a defense-in-depth hint; it
+never authorizes. `include` is exactly `["distances"]`; Chroma returns IDs
+unconditionally. The adapter sends no `documents`, `metadatas`, `embeddings`,
+`uris`, `data`, `where_document`, or additional request key. Provider text,
+metadata, and provenance are therefore not requested at all.
+
+The canonical Chroma 1.5.9 wire response is one JSON object with exactly eight
+top-level keys: `ids`, `embeddings`, `documents`, `uris`, `data`,
+`metadatas`, `distances`, and `include`. Key order is immaterial, but unknown
+keys and duplicate keys are response-fatal. A nonempty canonical fixture is:
+
+```json
+{
+  "ids": [
+    [
+      "chunk:11111111-1111-4111-8111-111111111111",
+      "chunk:22222222-2222-4222-8222-222222222222"
+    ]
+  ],
+  "embeddings": null,
+  "documents": null,
+  "uris": null,
+  "data": null,
+  "metadatas": null,
+  "distances": [
+    [
+      0.125,
+      0.25
+    ]
+  ],
+  "include": [
+    "distances"
+  ]
+}
+```
+
+The only canonical empty fixture is:
+
+```json
+{
+  "ids": [
+    []
+  ],
+  "embeddings": null,
+  "documents": null,
+  "uris": null,
+  "data": null,
+  "metadatas": null,
+  "distances": [
+    []
+  ],
+  "include": [
+    "distances"
+  ]
+}
+```
+
+`ids` and `distances` are required, non-null arrays with outer cardinality
+exactly one because the request contains one query embedding. Their inner
+array lengths must be equal. `include` is required, non-null, and exactly
+`["distances"]`. `embeddings`, `uris`, and `data` are required and exactly
+JSON `null`; any non-null value is response-fatal.
+
+Although the adapter never requests them, an untrusted Provider may
+unsolicitedly populate `documents` or `metadatas`. Each key is therefore
+required and may be either JSON `null` or an outer array of cardinality one
+whose inner array has the same length as `ids[0]`. A document element is null
+or a bounded string. A metadata element is null or an object with bounded
+distinct string keys and scalar string, finite JSON number, or boolean values;
+nested metadata objects, nested metadata arrays, and metadata null values are
+invalid. JSON booleans are the boolean branch and are not numeric values; all
+numeric metadata values must be supported finite IEEE-754 binary64 values.
+No document element may be a boolean, number, object, or array, and no
+metadata element may be a string, number, boolean, or array. These bounded
+unsolicited values are ignored after structural/limit validation and never
+become authority. This is the only permitted non-null return-field variation,
+and it does not alter the required `include` value. No required field may be
+missing, and no array, scalar, singleton, or null coercion is allowed. Parsed
+`Content-Type` must be `application/json` with either no parameter or the sole
+case-insensitive parameter `charset=utf-8`; a missing header, another media
+type/parameter/charset, invalid UTF-8, or a UTF-8 byte-order mark is
+response-fatal. `Content-Encoding` may be absent, `identity`, or the single
+token `gzip`; any other or stacked encoding is response-fatal. Gzip is
+streamed through both the raw and decoded counters before JSON
+materialization.
+
+The absolute dense source position is the zero-based index `i` in
+`ids[0]`/`distances[0]`; its one-based source rank is fixed as `i + 1` before
+any candidate-local validation. The parallel arrays are validated for
+cardinality before iteration. A wrong-type ID or distance at one otherwise
+reconstructable position is candidate-local as defined below. Omitting it
+never compacts or renumbers later positions. Missing arrays, unequal lengths,
+an outer cardinality other than one, or any shape that prevents this
+reconstruction is response-fatal.
+
+The conversion boundary is ordered and explicit:
+
+1. bounded raw wire bytes;
+2. bounded decompression, when declared;
+3. strict UTF-8 and strict RFC 8259 tokenization with duplicate-key rejection;
+4. the decoded generic JSON object, still untrusted;
+5. canonical top-level/cardinality/limit validation and absolute-position
+   assignment; then
+6. typed candidate conversion retaining the immutable absolute rank.
+
+A Provider SDK or deterministic fake may enter only at step 6 through the same
+bounded typed-candidate contract. It cannot bypass the byte/structure
+requirements for a raw-wire test or reclassify a raw numeric-domain failure.
+
+The versioned initial Provider HTTP response profile is:
 
 | P0-v1 limit | Hard ceiling |
 | --- | ---: |
@@ -241,7 +638,25 @@ measured value is less than or equal to the applicable ceiling. Equality does
 not cause truncation or omission. A counter rejects only when the applicable
 value exceeds its ceiling.
 
-The adapter enforces the profile in this order:
+The Provider wire format is strict RFC 8259 JSON. Literal `NaN`, `Infinity`,
+and `-Infinity` tokens are not valid JSON. Each numeric-domain fixture is the
+complete canonical nonempty response above with exactly one intended change:
+replace the first `0.125` token in `distances[0]` with `NaN`, `Infinity`,
+`-Infinity`, or `1e400`. The first three responses are invalid JSON. The
+fourth is syntactically valid JSON, but its numeric token cannot be represented
+in the supported finite IEEE-754 binary64 distance domain. It is therefore a
+response-fatal unsupported Provider numeric representation. A raw fragment
+such as `{"score":1e400}` is not a numeric-domain fixture because it would
+false-pass through the wrong-envelope branch. A permissive decoder must not
+turn a literal non-RFC 8259 constant into a candidate-local value, and a
+decoder that maps `1e400` to infinity must not reclassify that wire-fatal
+response. These failures occur before candidate iteration and produce the
+generic failure, no partial result, no Evidence, no keyword-only fallback, and
+no candidate-local continuation.
+
+The adapter enforces the wire/decode portions of this profile for both
+`/version` and `/query`, and enforces the query-envelope portions after a
+bounded `/query` decode, in this order:
 
 1. If a truthful `Content-Length` is present and exceeds 1,048,576, reject
    before reading the body.
@@ -253,11 +668,16 @@ The adapter enforces the profile in this order:
 4. Do not invoke an unbounded full-body JSON decoder before transport and
    decode limits pass.
 5. Materialize a decoded body only after both applicable byte ceilings pass.
-6. Enforce ID, individual string, metadata-entry, metadata-key,
+6. The bounded parser accepts only strict RFC 8259 JSON and rejects non-standard
+   numeric tokens such as `NaN`, `Infinity`, and `-Infinity`.
+7. Convert a JSON numeric token in a distance position only into the supported
+   finite IEEE-754 binary64 domain; reject an unsupported-range value such as
+   `1e400` before candidate iteration even if a decoder maps it to infinity.
+8. Enforce ID, individual string, metadata-entry, metadata-key,
    metadata-value, and nesting ceilings during or immediately after bounded
    parsing and before normal candidate processing.
-7. Any transport, decode, body, nesting, or per-field hard-limit violation is
-   a whole-response provider-contract failure.
+9. Any transport, decode, numeric-domain, body, nesting, or per-field
+   hard-limit violation is a whole-response provider-contract failure.
 
 #### Exact P0-v1 JSON depth counting
 
@@ -310,7 +730,7 @@ envelope validation is classified as that later envelope error, never
 `DEPTH_LIMIT_EXCEEDED`. The parser rejects D17 before full materialization,
 envelope validation, or candidate processing. A D17 failure is whole-response
 fatal and produces planned generic `503 RETRIEVAL_UNAVAILABLE`, no Evidence,
-no partial dense list, and no keyword-only fallback.
+no partial result, and no keyword-only fallback.
 
 These provider-response bounds do not claim complete hostile-document
 containment. Parser sandboxing and broader resource containment remain
@@ -366,20 +786,39 @@ The following conditions are whole-response fatal:
 
 - network or timeout failure;
 - wire or decoded body-limit violation;
-- invalid JSON;
+- wire data that is not strict RFC 8259 JSON, including literal `NaN`,
+  `Infinity`, or `-Infinity` tokens;
+- a syntactically valid JSON numeric distance that cannot be represented in the
+  supported finite IEEE-754 binary64 domain, such as `1e400`;
 - excessive nesting;
 - wrong top-level response shape;
 - missing required candidate collection;
 - mismatched parallel-array lengths;
 - candidate count above the configured maximum;
-- unsupported envelope version;
+- a missing, malformed, or unsupported Provider version result;
+- an unknown/duplicate top-level key, forbidden non-null
+  `embeddings`/`uris`/`data`, malformed optional `documents`/`metadatas`, or
+  noncanonical `include` value;
 - any per-field hard-limit violation; and
 - a data structure that prevents deterministic candidate-position
   reconstruction.
 
 Every whole-response fatal condition produces generic planned
-`503 RETRIEVAL_UNAVAILABLE`, no partial dense list, no keyword-only fallback,
-and no Evidence.
+`503 RETRIEVAL_UNAVAILABLE`, no partial result, no keyword-only fallback, no
+candidate-local continuation, and no Evidence.
+
+Candidate-local non-finite distance/score handling exists only at the explicitly named
+post-decoder typed adapter boundary. At that boundary, the wire response has
+already been successfully and boundedly decoded, and a provider SDK, adapter,
+or deterministic test double returns a typed candidate object whose diagnostic
+distance/score is equivalent to `float("nan")`, `float("inf")`, or
+`float("-inf")`. The invalid record is placed at a known absolute position;
+only that typed candidate is omitted, valid companions before and after it
+retain their original absolute ranks, and those ranks supply their unchanged
+RRF contributions. These cases do not claim that a non-finite value was
+transported in conforming JSON.
+PostgreSQL remains the only authorization, Evidence, provenance, and citation
+authority.
 
 The following conditions are candidate-local omissions when the surrounding
 decoded response is bounded and structurally valid:
@@ -394,19 +833,30 @@ decoded response is bounded and structurally valid:
 - the candidate is outside the exact target knowledge base;
 - the candidate belongs to an inaccessible object;
 - the current document or chunk is ineligible;
-- an optional present score is wrong-type, `NaN`, positive infinity, or
-  negative infinity; or
+- a present distance/score at a reconstructable position is a string, object,
+  boolean, null, or array; or
+- a post-decoder typed adapter candidate has a score equivalent to
+  `float("nan")`, `float("inf")`, or `float("-inf")`; or
 - the individual candidate record is otherwise invalid without making
   candidate positions ambiguous.
 
 Candidate-local omissions do not disclose their reasons. Remaining candidates
-retain their original source ranks and relative provider order. If every
-candidate is locally omitted and final authorization succeeds, the response is
+retain their original absolute source ranks and relative Provider order;
+positions are never compacted or re-enumerated. RRF uses those unchanged
+absolute ranks, not the ordinal positions of the survivors. If every candidate
+is locally omitted and final authorization succeeds, the response is
 authorized empty Evidence.
 
-Provider score is optional and non-authoritative. A finite present score is
-accepted only as a diagnostic hint; fusion uses list rank, not raw score.
-Absence of a score does not invalidate an otherwise valid candidate.
+Provider distance/score is non-authoritative. The canonical Chroma wire
+response requires one aligned distance value at every position, and each JSON
+number must decode into the supported finite IEEE-754 binary64 domain. The
+provider-neutral step-6 `TypedCandidate` may represent its diagnostic
+`provider_score` as `float | None`; `None` is valid only for an injected typed
+adapter/fake that did not originate from a missing or short canonical Chroma
+array. A finite present value is only a diagnostic hint; fusion uses the
+preserved absolute list rank, not the raw value. The candidate-local
+non-finite cases begin only after bounded wire decoding at the typed adapter
+boundary and never represent non-finite JSON transport.
 
 Bounded provider text is ignored. Bounded metadata disagreement is ignored for
 authority: knowledge-base, document, chunk, content-hash, and provenance
@@ -420,36 +870,68 @@ PostgreSQL remains the identity authority.
 
 ### Request, result, and candidate bounds
 
-The first consuming AF-3 slice introduces finite, positive, versioned values
-for:
+P0-v1 fixes these positive constants; they are not implementation-selected
+defaults:
 
-- maximum normalized query characters;
-- maximum normalized query UTF-8 bytes;
-- maximum requested result count;
-- dense over-fetch factor;
-- maximum dense candidates;
-- maximum keyword candidates;
-- maximum provider candidates;
-- maximum unique candidate union; and
-- SQL candidate validation batch size.
+| Constant | Exact value |
+| --- | ---: |
+| `MAX_APPLICATION_BODY_BYTES` | 65,536 |
+| `DEFAULT_REQUESTED_COUNT` | 10 |
+| `MAX_REQUESTED_COUNT` | 50 |
+| `DENSE_OVERFETCH_FACTOR` | 4 |
+| `MAX_DENSE_CANDIDATES` | 128 |
+| `MAX_PROVIDER_CANDIDATES` | 128 |
+| `MAX_KEYWORD_CANDIDATES` | 128 |
+| `MAX_UNIQUE_CANDIDATES` | 192 |
+| `VALIDATION_BATCH_SIZE` (`B`) | 64 |
 
-Normalization rejects either an excessive character count or an excessive
-UTF-8 byte count before provider work. Requested result count is validated
-before arithmetic. These caller-field bound violations use the existing
-`422 VALIDATION_ERROR` envelope. Dense request size is:
+The query character/byte constants are fixed in the request contract above.
+Normalization rejects either an excessive scalar-value count or an excessive
+UTF-8 byte count before provider work. `requested_count` is validated before
+arithmetic. These caller-field violations use the existing
+`422 VALIDATION_ERROR` envelope. For an accepted public requested count `R`,
+the configured outbound Provider count `C` is:
 
 ```text
-dense_fetch_count =
-    min(MAX_DENSE_CANDIDATES,
-        checked_multiply(requested_count, DENSE_OVERFETCH_FACTOR))
+C = min(
+        MAX_PROVIDER_CANDIDATES,
+        MAX_DENSE_CANDIDATES,
+        checked_multiply(R, DENSE_OVERFETCH_FACTOR)
+    )
 ```
 
-The multiplication is overflow-safe and the configured ceiling is always
-applied. A provider response with more candidates than requested or configured
-is fatal rather than truncated. If individually legal bounded source lists
-produce more unique identities than the configured candidate-union maximum,
-the service discards both lists and produces planned generic
-`503 RETRIEVAL_UNAVAILABLE`, with no truncation, partial Evidence, or fallback.
+The count domains and relationships are exact:
+
+| Symbol | Meaning and invariant |
+| --- | --- |
+| `R` | Validated public `requested_count`; `1 <= R <= 50`. |
+| `C` | Configured `n_results` in the one outbound query; `4 <= C <= 128` and it equals the formula above. |
+| `P` | Raw canonical Provider position count, `len(ids[0])`; `0 <= P <= C`. `P > C` or `P > MAX_PROVIDER_CANDIDATES` is response-fatal, not truncated. |
+| `D` | Dense count, defined as the number of unique UUID keys in the dense absolute-rank map after candidate-local ID/score omission and earliest-rank deduplication; `0 <= D <= P`. |
+| `K` | Keyword count, defined as the number of rows/rank-map keys returned after the deterministic SQL top-N cutoff; `0 <= K <= 128`. |
+| `U` | Cardinality of the union of the dense and keyword rank-map key sets; `max(D, K) <= U <= D + K`. If `U > 192`, discard both maps and fail generically without SQL validation. |
+| `Q` | Candidate-validation batch query count; `0` when `U = 0`, otherwise `ceil(U / 64)`. The final authorization statement is not part of `Q`. |
+| `E` | Eligible authoritative record count after every batch succeeds in the fixed snapshot; `0 <= E <= U`. |
+| `F` | Final public Evidence count after exact RRF sort and cutoff; `F = min(R, E)`. |
+
+`P` counts original Provider positions, including candidate-local invalid and
+duplicate records. `D` counts only retained unique dense identities, while
+each retained identity maps to its earliest unchanged absolute rank. `K`
+already contains unique authoritative chunk rows with one-based ranks. `U`,
+`Q`, and `E` are computed before the public result cutoff; `F` is applied only
+after all validation and exact deterministic fusion complete.
+
+The multiplication is checked even though the public P0-v1 range is bounded.
+For example, the default `R = 10` produces `C = 40`, while `R = 50` produces
+the dense ceiling `C = 128`. At `R = 10`, a canonical response with exactly
+`P = 40` raw positions is accepted and one with exactly `P = 41` is
+response-fatal even though `41 <= MAX_PROVIDER_CANDIDATES`. At every valid
+`R`, a canonical Provider response with exactly `C` positions is accepted for
+candidate processing; `C + 1` positions is fatal.
+Individually legal disjoint dense and keyword maps can produce `U = 193`,
+which exercises the union failure without violating either source maximum.
+No count is silently clamped except the explicit calculation of `C`, and no
+fatal source or union overflow permits partial Evidence or fallback.
 
 ### Keyword retrieval boundary
 
@@ -533,7 +1015,13 @@ row_number() OVER (
 
 `MAX_KEYWORD_CANDIDATES` is applied using that same total order. The selected
 top-N list therefore has ranks 1 through N without gaps or post-limit
-reranking. A CTE or equivalent query shape may avoid inconsistent score
+reranking. SQL MUST establish `keyword_score DESC, document_chunks.id ASC` and
+the corresponding one-based ranks before applying the `128`-row cutoff; it may
+not `LIMIT` an unordered intermediate relation and sort afterward. The
+conformance fixture contains 129 eligible rows, including equal-score UUIDs on
+both sides of the cutoff, and varies insertion and physical row-return order.
+The selected UUID set and ranks 1 through 128 must always equal the normative
+total order. A CTE or equivalent query shape may avoid inconsistent score
 recomputation, but observable score, order, rank, and limit semantics remain
 exact.
 
@@ -588,45 +1076,99 @@ unbounded `IN` query.
 ### Deterministic fusion
 
 P0 fusion is reciprocal rank fusion over at most two bounded normalized lists:
-keyword and dense. It uses one-based ranks and fixed `RRF_K = 60`:
+keyword and dense. It uses preserved one-based absolute source ranks and fixed
+`RRF_K = 60`. The authoritative ordering score is an exact rational value,
+never a binary64 value:
 
 ```text
-rrf_score(chunk) =
-    sum(1 / (60 + source_rank) for each source containing the chunk)
+one source at rank r:
+    numerator = 1
+    denominator = 60 + r
+
+keyword rank k and dense rank d:
+    numerator = 120 + k + d
+    denominator = (60 + k) * (60 + d)
 ```
 
+A missing source contributes no term; it is not rank zero, infinity, or a
+configured sentinel contribution. Implementations may reduce the fraction but
+need not do so. To compare positive scores `n1/d1` and `n2/d2`, compare the
+exact integers `n1 * d2` and `n2 * d1`; bounded checked integers or arbitrary-
+precision integers must make overflow impossible. Equal cross-products mean
+an exact rational tie and advance to the next comparator. Binary64 conversion,
+decimal display text, epsilon comparison, and source-score values are
+forbidden as authoritative sort keys.
+
+Operation order is fixed: retain the earliest absolute rank per source,
+construct the one- or two-source rational above, compare every candidate by
+exact cross-multiplication, apply all tie breakers, assign one-based fused
+ranks, apply the public `R` cutoff, and only then serialize display values.
 Raw keyword and vector scores are not added, multiplied, calibrated, or used
-to override rank. The earliest occurrence supplies each source rank. One
-Evidence item remains per authoritative chunk.
+to override rank. One Evidence item remains per authoritative chunk.
 
 Results sort by:
 
-1. fused score descending;
+1. exact fused rational descending;
 2. best contributing rank ascending;
 3. keyword rank ascending, with absence last;
 4. dense rank ascending, with absence last; and
 5. canonical authoritative chunk UUID ascending.
 
-Evidence retains contributing source ranks and receives a one-based fused rank.
-P0 has no reranker, model-based ordering, or hidden nondeterministic tie-break.
-The UUID order used for SQL batching is not the final RRF result order.
+The public `fused_score` is a JSON string matching
+`^0\.[0-9]{12}$`. It is the exact rational rounded to 12 digits after the
+decimal point using decimal round-half-to-even and rendered with all 12
+digits. It is display-only: clients and the server may not use the serialized
+value to reconstruct ordering or ties. For example, the mathematically equal
+rank pairs `(keyword=3, dense=80)` and `(keyword=24, dense=30)` both equal
+`29/1260` and serialize as `"0.023015873016"`. Straight binary64 evaluation
+can produce respectively `0.023015873015873014` and
+`0.023015873015873017`; treating those artifacts as unequal would incorrectly
+rank the second candidate first. Exact comparison identifies a tie, after
+which best contributing rank correctly places `(3, 80)` first.
+
+Evidence retains contributing absolute source ranks and receives a one-based
+fused rank. P0 has no reranker, model-based ordering, or hidden
+nondeterministic tie-break. The UUID order used for SQL batching is not the
+final RRF result order.
 
 ### Evidence and citation trust boundary
 
 This documentation change introduces no source-level `Evidence` or `Citation`
-type. Future Evidence is constructed only from records loaded in the fixed
-final snapshot and carries:
+type. Future Evidence has two disjoint field partitions.
 
-- authoritative chunk, document, and knowledge-base IDs;
-- authoritative normalized content;
-- the persisted non-null authoritative content hash;
-- approved source display identity such as original filename, never a storage
-  path;
-- page range and character offsets when present;
-- keyword and dense ranks when present;
-- fused rank and score;
-- a stable citation reference; and
-- trust classification `untrusted_document_content`.
+The PostgreSQL-authoritative partition is loaded through one allowlisted
+projection in the fixed final snapshot:
+
+| Evidence field | Exact authority |
+| --- | --- |
+| `knowledge_base_id` | Current PostgreSQL knowledge-base UUID selected by the exact-target predicate. |
+| `document_id` | Current PostgreSQL document UUID joined to the eligible chunk. |
+| `chunk_id` | Current PostgreSQL chunk UUID. |
+| `content` | `DocumentChunk.normalized_text`. |
+| `content_sha256` | Persisted non-null valid `DocumentChunk.content_sha256`. |
+| `source_display_name` | Approved persisted display identity, such as original filename, never a storage key or path. |
+| `page_start`, `page_end` | Persisted permitted page range or null. |
+| `character_start`, `character_end` | Persisted permitted character offsets or null. |
+
+The deterministic derived partition is not described as loaded from
+PostgreSQL:
+
+| Evidence field | Only permitted derivation |
+| --- | --- |
+| `keyword_rank` | The preserved validated one-based keyword absolute-rank map, or null when absent. |
+| `dense_rank` | The preserved validated one-based dense absolute-rank map, or null when absent. |
+| internal fused rational | The exact fixed `RRF_K = 60` construction from those rank maps. |
+| `fused_score` | The 12-place round-half-even display-only serialization of that exact rational. |
+| `fused_rank` | One-based position after the complete exact rational and tie-break ordering. |
+| `trust_classification` | The fixed literal `untrusted_document_content`; content does not select it. |
+| `citation_reference` | Deterministic construction from the PostgreSQL-authoritative target UUID, chunk UUID, and persisted hash, using exactly `af3:citation:v1:<knowledge_base_uuid>:<chunk_uuid>:<content_sha256>`. |
+
+Every derived value is computed only after all authoritative rows have loaded
+and every required validation batch has succeeded. Provider distance, text,
+metadata, completion order, SQL row order, and content semantics cannot supply
+or alter either partition. The transparent citation reference is an identity
+and revision locator, not a bearer credential; the resolver reauthenticates
+and reauthorizes it as specified above.
 
 Evidence and citations never expose host filesystem paths, password hashes,
 session or CSRF tokens or digests, database credentials, provider secrets, raw
@@ -672,6 +1214,17 @@ P1 controls does not defer or weaken the P0 semantic boundary.
 
 ### Failure, cache, and privacy contract
 
+In AF-3B and AF-3C hybrid retrieval, both the scoped keyword path and the
+required dense Provider path are required components. A fatal keyword
+database failure cannot return dense-only Evidence, and a fatal Provider
+failure cannot return keyword-only Evidence. Source-isolation tests prove
+dense-only success with a valid present-empty keyword result, keyword-only
+success with the canonical present-empty Provider response, and mixed success
+with source-distinct sentinels. Fatal-path tests deliberately retain a known
+eligible nonempty sentinel from the other source and still require no
+Evidence. Completion order or previously accumulated candidates never creates
+a fallback mode.
+
 Public behavior is:
 
 - invalid authentication or inactive user: generic
@@ -679,9 +1232,11 @@ Public behavior is:
 - missing, hidden, unowned, or inaccessible target: generic `404 NOT_FOUND`;
 - an authorized request with zero surviving candidates: successful empty
   Evidence;
+- a current authoritative citation match: the exact citation-resolution
+  object defined above;
 - required provider, provider-contract, final-transaction, or database failure:
   planned generic `503 RETRIEVAL_UNAVAILABLE`; and
-- every private retrieval success or failure:
+- every private retrieval or citation-resolution success or failure:
   `Cache-Control: private, no-store`.
 
 The existing framework's generic `403 FORBIDDEN` remains available, but the
@@ -689,7 +1244,7 @@ current owner/editor/viewer retrieval role matrix has no executable
 member-without-read-capability state. AF-3 has no synthetic current `403`
 fixture.
 
-Normal retrieval logs must not contain:
+Observable private-operation sinks must not contain:
 
 - raw query text;
 - chunk or document content;
@@ -698,7 +1253,46 @@ Normal retrieval logs must not contain:
 - session/CSRF values or digests, passwords, provider credentials, or database
   secrets;
 - raw embeddings; or
-- raw provider bodies and internal exception details.
+- raw Provider bodies, Provider exception details, or database exception
+  details.
+
+The secrecy oracle is identical on success and failure. Before every private
+retrieval and citation-resolution execution, the harness captures application
+log messages; access logs; exception/error records and exception string/
+`repr` forms; every structured log key and recursively nested value; trace and
+span names, attributes, status descriptions, and events; HTTP client and
+transport diagnostics; Provider client and transport records; exposed SQL,
+database-client, driver, and transaction diagnostics; response status,
+headers, metadata, and body; and every other privacy-contract sink exposed to
+the harness. A recursive scanner walks all nested keys, values, sequence
+members, byte strings, and rendered representations. For every pairwise-
+distinct high-entropy sentinel, both exact equality and substring presence are
+failures.
+
+Success executions use success-only sentinels, including values created or
+loaded only after successful final authorization, so a leak guarded by a
+success branch is observable. Retrieval success separately exercises a
+nonempty Evidence response and authorized-empty response; citation success
+exercises the exact resolution object. The response-body allowlist is
+field-specific, not object-wide. For retrieval, a sensitive value may occur
+only as the value of its intended serialized Evidence field from this exact
+set: `knowledge_base_id`, `document_id`, `chunk_id`, `content`,
+`content_sha256`, `source_display_name`, `page_start`, `page_end`,
+`character_start`, `character_end`, `keyword_rank`, `dense_rank`,
+`fused_score`, `fused_rank`, `trust_classification`, and
+`citation_reference`. For citation resolution, a value may occur only as the
+value of its intended field in the exact response object defined above. No
+allowlist applies to an enclosing response object, response metadata or
+headers, an unexpected field, a nested diagnostic, transport state, or any
+other sink. Query, session, credential, secret, embedding, raw-body, and
+exception/diagnostic sentinels have no public allowlisted field.
+
+Provider-fatal and final-database-fatal conformance fixtures inject distinct
+sentinels for the same sensitive classes plus Provider and database failure
+details. The provider-fatal fixture has a known eligible nonempty keyword
+sentinel, and the database-fatal fixture has accumulated eligible candidates.
+Each fatal fixture returns no Evidence, citation, or fallback and has no
+response-body sentinel allowlist.
 
 Permitted telemetry is bounded content-free metadata: validated request
 correlation ID, provider name, elapsed time, requested result limit, bounded
@@ -807,12 +1401,16 @@ authorization is issued.
 Only after that sequence may separately approved slices proceed:
 
 1. AF-3A: bounded one-knowledge-base contracts, SQL-scoped keyword candidates,
-   shared validation design, deterministic fakes, and unit/PostgreSQL tests;
+   the first final `REPEATABLE READ`, `READ ONLY` fixed-snapshot authoritative
+   transaction, deterministic fakes, and unit/PostgreSQL tests;
 2. AF-3B: query embedding, bounded dense adapter with its first consumer,
-   response validation, fixed-snapshot final transaction, deterministic
+   response validation, reuse of the AF-3A final transaction, deterministic
    batching and RRF, and provider-failure tests; and
-3. AF-3C: source-level Evidence and citations, authenticated API, cache/error
-   integration, privacy telemetry, and executable AF-3 adversarial fixtures.
+3. AF-3C: source-level Evidence and citations, exactly the retrieval and
+   citation-resolution POST operations with the shared bounded-body gate,
+   cache/error integration, real-request transaction-setting proof, success/
+   failure privacy telemetry and all-sink scanning, and executable AF-3
+   adversarial fixtures.
 
 RAG, prompt construction, ChatModel execution, Agent Runtime, tools, and
 approvals remain outside AF-3.
