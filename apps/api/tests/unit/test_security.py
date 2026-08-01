@@ -302,6 +302,67 @@ def test_session_authentication_proof_repr_hides_principal_and_digest() -> None:
         assert token_digest not in rendered
 
 
+@pytest.mark.parametrize(
+    ("operation", "expected_message"),
+    [
+        pytest.param(
+            vars,
+            "vars() argument must have __dict__ attribute",
+            id="vars",
+        ),
+        pytest.param(
+            iter,
+            "'SessionAuthenticationProof' object is not iterable",
+            id="iter",
+        ),
+        pytest.param(
+            tuple,
+            "'SessionAuthenticationProof' object is not iterable",
+            id="tuple",
+        ),
+        pytest.param(
+            dict,
+            "'SessionAuthenticationProof' object is not iterable",
+            id="dict",
+        ),
+    ],
+)
+def test_session_authentication_proof_rejects_direct_generic_serialization(
+    operation: Callable[[SessionAuthenticationProof], object],
+    expected_message: str,
+) -> None:
+    principal = Principal(user_id=uuid4(), email="private@example.com", session_id=uuid4())
+    token_digest = hash_token(SESSION_TOKEN)
+    proof = SessionAuthenticationProof(
+        principal=principal,
+        session_token_sha256=token_digest,
+    )
+    sensitive_values = (
+        SESSION_TOKEN,
+        token_digest,
+        principal.email,
+        str(principal.session_id),
+        str(principal.user_id),
+    )
+    sentinel = object()
+    observed_messages: list[str] = []
+
+    for _ in range(2):
+        result = sentinel
+        with pytest.raises(TypeError) as exc_info:
+            result = operation(proof)
+
+        assert result is sentinel
+        assert type(exc_info.value) is TypeError
+        message = str(exc_info.value)
+        assert message == expected_message
+        for sensitive_value in sensitive_values:
+            assert sensitive_value not in message
+        observed_messages.append(message)
+
+    assert observed_messages == [expected_message, expected_message]
+
+
 def test_session_authentication_proof_rejects_dataclass_serialization() -> None:
     token_digest = hash_token(SESSION_TOKEN)
     proof = SessionAuthenticationProof(
