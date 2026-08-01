@@ -37,7 +37,7 @@ new stable ID.
 | --- | ---: |
 | `unit` | 51 |
 | `provider-adapter contract` | 40 |
-| `PostgreSQL integration` | 102 |
+| `PostgreSQL integration` | 103 |
 | `HTTP integration` | 109 |
 | `future consuming-phase acceptance` | 4 |
 
@@ -176,6 +176,10 @@ declared capable levels.
 | F1I retrieval body equality | `RET-BND-003::BODY-EXACT-65536` | Canonical retrieval path; live session; authorized target. | Exact `application/json`; constructible valid 65,536-byte `R` fixture above. | Bounded collection accepts equality; JSON/schema/semantics and retrieval each execute once; deterministic Evidence success with private/no-store. |
 | F1J retrieval body plus one | `RET-BND-003::BODY-PLUS-ONE-65537` | Same as F1I. | Exact `application/json`; constructible valid 65,537-byte `R` fixture in one body event. | Byte 65,537 produces generic `422`; parser and every later call count are zero; private/no-store. |
 | F1K retrieval chunked plus one | `RET-BND-003::CHUNKED-BODY-PLUS-ONE-65537` | Same as F1I. | Same valid 65,537-byte `R` fixture split 32,768/32,768/1. | The final byte aborts immediately; no further receive, parse, schema, normalization, retrieval, or final SQL; generic `422`, private/no-store. |
+| F1L literal NUL JSON rejection | `RET-BND-003::LITERAL-NUL-JSON-PARSER-REJECTION` | Canonical path; live session; authorized target. | Exact `application/json`; one literal unescaped byte `0x00` occurs between the quotes of the `query` JSON string. | Strict JSON parsing rejects the unescaped control byte with generic `422 VALIDATION_ERROR`; schema, query-domain, normalization, and retrieval call counts are zero; private/no-store. |
+| F1M escaped U+0000 semantic handoff | `RET-BND-003::ESCAPED-U0000-DOMAIN-HANDOFF` | Canonical path; live session; authorized target. | Exact `application/json`; parameterized once with the valid ASCII JSON query escape `"\u0000"` and once with the embedded escape `"a\u0000b"`. | Both parse as strict JSON and hand their decoded values to RET-BND-001's same pre-NFC semantic rejection; each returns generic `422 VALIDATION_ERROR` with zero normalization, retrieval, or Evidence work and private/no-store. |
+| F1N U+0000 authentication precedence | `RET-BND-003::U0000-AUTHENTICATION-PRECEDENCE` | Canonical route form; missing session; target exists. | Parameterized once with the F1L literal-NUL body and once with the F1M escaped-U+0000-alone body. | Authentication returns generic `401`; target, media, body receive, parsing, query-domain, normalization, and retrieval call counts are zero; private/no-store. |
+| F1O U+0000 hidden-target precedence | `RET-BND-003::U0000-HIDDEN-TARGET-PRECEDENCE` | Canonical path; live session; target hidden by absent membership. | Parameterized once with the F1L literal-NUL body and once with the F1M escaped-U+0000-alone body. | Exact-target authorization returns generic hidden `404`; media, body receive, parsing, query-domain, normalization, and retrieval call counts are zero; private/no-store. |
 | F2A citation supported-media control | `RET-EVID-003::CITATION-SUPPORTED-MEDIA-CONTROL` | Canonical citation route; live session; authorized current target. | Exact `application/json`; valid strict body `C`. | Media/body/schema gates and final PostgreSQL resolution each execute once; exact citation object success with private/no-store. |
 | F2B citation body equality | `RET-EVID-003::CITATION-BODY-EXACT-65536` | Same as F2A. | Constructible valid 65,536-byte `C` fixture. | Bounded collection accepts equality and exact authoritative resolution succeeds. |
 | F2C citation body plus one | `RET-EVID-003::CITATION-BODY-PLUS-ONE-65537` | Same as F2A. | Constructible valid 65,537-byte `C` fixture in one body event. | Byte 65,537 produces generic `422`; parser/schema/reference/final-SQL calls are zero. |
@@ -195,13 +199,20 @@ unsupported-media branch. It does not define a missing request
 `Content-Type`, or structured-suffix branch; no matrix row assigns a new
 outcome to those inputs.
 
-Query fixtures apply NFC; trim the exact Unicode whitespace set U+0009–U+000D,
-U+0020, U+0085, U+00A0, U+1680, U+2000–U+200A, U+2028, U+2029, U+202F,
-U+205F, and U+3000; collapse each interior run of that set to U+0020; and make
-no other transformation. The normalized query must contain 1–2,048 Unicode
-scalar values and 1–4,096 strict UTF-8 bytes. Boundary fixtures use one ASCII
-`a`, 2,048/2,049 ASCII `a` values, and 1,024 U+1F642 values with/without one
-trailing ASCII `a`, as appropriate.
+Query fixtures require the exact JSON string type, strict decoded Unicode
+scalars, and strict UTF-8 representability; then reject any U+0000 before NFC
+as semantic validation rather than normalization. They next apply NFC exactly
+once; trim the exact Unicode whitespace set U+0009–U+000D, U+0020, U+0085,
+U+00A0, U+1680, U+2000–U+200A, U+2028, U+2029, U+202F, U+205F, and U+3000;
+collapse each interior run of that set to U+0020; and make no other
+transformation. They then validate 1–2,048 normalized Unicode scalar values,
+followed by 1–4,096 strict UTF-8 bytes, before retrieval. A literal unescaped
+NUL in a JSON string fails strict JSON parsing, while the ASCII escape
+`"\u0000"` is valid JSON and fails only after decoding at the query semantic
+gate. Boundary fixtures use
+one ASCII `a`, 2,048/2,049 ASCII `a` values, 1,024 U+1F642 values with/without
+one trailing ASCII `a`, and the U+0000/U+0001 controls defined below, as
+appropriate.
 
 The fixed P0-v1 count constants are:
 
@@ -1464,7 +1475,7 @@ rounded half-to-even from the exact rational after ordering.
 
 ## Request, result, union, and SQL bounds
 
-### RET-BND-001 — Query character limit
+### RET-BND-001 — Query semantic and scalar domain
 
 - **Category:** Request, result, union, and SQL bounds. The stable
   parameterized execution group is
@@ -1479,38 +1490,81 @@ rounded half-to-even from the exact rational after ordering.
   which both normalize exactly to NFC `"\u00e9"`; (G) missing `query`; (H)
   `query` as number, boolean, null, array, or object; and (I) a JSON string
   containing a lone escaped surrogate. The following additional stable
-  variants are separately constructible and use a downstream embedding fake
+  variants are separately constructible. The case-sensitive, no-NFKC, U+200B,
+  and post-normalization boundary variants use a downstream embedding fake
   keyed to the exact expected normalized string plus a keyword-bound-parameter
-  ledger. Only the expected string produces that row's unique dense Evidence
-  sentinel; a transformed string produces no sentinel.
+  ledger; only the expected string produces that row's unique dense Evidence
+  sentinel, and a transformed string produces no sentinel.
+  The U+0001 row is instead executed at every declared level as a supporting
+  semantic-validation observation with no downstream retrieval or result
+  oracle. U+0000 rejection variants use the exact stage-call ledger.
 
-  | Stable variant label | Raw query and exact downstream value |
+  | Stable variant label | JSON query fixture and exact gate/downstream value |
   | --- | --- |
   | `RET-BND-001::CASE-SENSITIVE-PRESERVATION` | Raw `"AgentForge agentforge"`; both embedding input and keyword SQL bound value are exactly `"AgentForge agentforge"`. |
   | `RET-BND-001::NO-NFKC-COMPATIBILITY-FOLD` | Raw `"\uFF21gent"`, beginning U+FF21 FULLWIDTH LATIN CAPITAL LETTER A whose NFKC value is ASCII `A`; downstream remains exactly `"\uFF21gent"`. |
   | `RET-BND-001::EXCLUDED-U200B-PRESERVATION` | Raw `"\u200Balpha\u200B\u200Bbeta\u200B"`, using specifically excluded U+200B ZERO WIDTH SPACE at both edges and twice inside; every U+200B remains in the exact downstream value and is neither trimmed nor collapsed. |
   | `RET-BND-001::POST-NORMALIZATION-SCALAR-BOUNDARY` | Raw TAB + 2,048 ASCII `a` values + U+3000 has 2,050 scalars; permitted edge whitespace is removed first, producing exactly 2,048 `a` values, which pass and reach both downstream spies unchanged. |
+  | `RET-BND-001::U0000-ALONE-REJECTION` | The valid JSON source escape `"\u0000"` decodes to U+0000 alone; exact string type, Unicode-scalar validity, and strict UTF-8 representability pass, then the query is rejected before NFC. |
+  | `RET-BND-001::EMBEDDED-U0000-REJECTION` | The valid JSON source `"a\u0000b"` decodes with embedded U+0000 and follows the same pre-NFC semantic rejection path. |
+  | `RET-BND-001::ADJACENT-U0001-PRESERVATION` | The valid JSON source `"a\u0001b"` decodes with embedded U+0001 and passes query semantic validation with the exact sequence preserved. U+0001 is neither deleted, replaced, normalized, collapsed, nor treated as whitespace. This supporting parameter assigns no downstream retrieval or public-result behavior. |
 - **Concurrent state change:** None.
 - **Expected public result:** A, B, E, and both F subvariants return authorized
-  empty Evidence and private/no-store. Every named preservation/boundary row
-  returns exactly its unique dense Evidence sentinel and private/no-store. C,
-  D, G, every H type, and I return existing `422 VALIDATION_ERROR`, no
+  empty Evidence and private/no-store. The case-sensitive, no-NFKC, U+200B,
+  and post-normalization boundary rows return exactly their unique dense
+  Evidence sentinels and private/no-store. C, D, G, every H type, I, and both
+  U+0000 rejection rows return the existing generic `422 VALIDATION_ERROR`, no
   Evidence, and private/no-store.
-- **Expected internal validation result:** The pipeline strictly decodes
-  Unicode scalars, applies NFC once, trims/collapses only the enumerated set,
-  and only then measures scalars. Equality 2,048 passes; plus one fails before
-  retrieval work. Each named row asserts exact code-point equality at the
-  keyword SQL bind and sole embedding input, the unique fake-vector/candidate
-  branch, and exact returned sentinel, making transformation observable beyond
-  a preservation-only prose assertion.
+  The supporting U+0001 parameter assigns no U+0001-specific public retrieval
+  result.
+- **Expected internal validation result:** After exact string-type validation,
+  the pipeline strictly decodes Unicode scalars, proves strict UTF-8
+  representability, rejects any U+0000 before NFC, applies NFC once,
+  trims/collapses only the enumerated set, and only then validates the
+  normalized scalar bound followed by the strict UTF-8 byte bound. U+0000
+  rejection is semantic validation, not normalization. It does not remove,
+  replace, collapse, whitespace-map, or U+FFFD-map the value, and it is not
+  generalized to all Unicode `Cc` controls. Equality 2,048 passes; plus one
+  fails before retrieval work. The case-sensitive, no-NFKC, U+200B, and post-
+  normalization boundary rows assert exact code-point equality at the keyword
+  SQL bind and sole embedding input, the unique fake-vector/candidate branch,
+  and exact returned sentinel, making transformation observable beyond a
+  preservation-only prose assertion. The U+0001 supporting parameter asserts
+  only semantic acceptance and exact preservation; it assigns no keyword,
+  embedding, Chroma/Provider, candidate, ranking, or Evidence behavior. For
+  either authenticated, initially
+  authorized escaped-U+0000 row, initial authentication/target PostgreSQL may
+  have completed, but NFC/whitespace-normalization calls, keyword statements,
+  embedding calls, Chroma/Provider calls, final authoritative transactions,
+  and Evidence counts are all zero. The PostgreSQL integration execution
+  observes that ledger and must not send U+0000 to PostgreSQL to manufacture a
+  driver or database error.
+
+  Query-derived text is absent from fixed validation classifications,
+  exception `str`/`repr`, internal request-value diagnostic representations,
+  public responses, and captured sinks; only fixed, non-user-controlled field
+  and classification labels are permitted. The future implementation may use
+  `field(repr=False)` as one acceptable mechanism, but this case mandates no
+  exclusive Python mechanism. The complete recursive all-sink runtime proof
+  remains with the capable AF-3C privacy acceptance layer.
 - **Forbidden behavior:** Treating a variant as coverage for another;
-  preserving decomposed F rather than NFC; NFKC or compatibility
+  preserving decomposed F rather than NFC; NFKC, NFKD, or compatibility
   normalization; ASCII or Unicode case folding; trimming/collapsing U+200B;
   measuring the raw scalar count before normalization; retaining permitted
   edge whitespace; failing to collapse the permitted interior run; accepting
   empty/missing/wrong-type/surrogate input; truncation; Provider work on a
-  failing variant; raw query logging; or byte-only validation.
-- **Planned test level:** unit, HTTP integration.
+  failing variant; removing/replacing/collapsing U+0000; treating U+0000 as
+  whitespace, U+FFFD, an empty query, or an empty keyword result; sending it to
+  PostgreSQL and translating the resulting failure; rejecting or altering the
+  positive U+0001 row, treating U+0001 as whitespace, or rejecting all Unicode
+  `Cc` controls; disclosing query-derived text in a
+  classification, diagnostic, exception, response, or captured sink; raw
+  query logging; or byte-only validation.
+- **Planned test level:** unit, PostgreSQL integration, HTTP integration. The
+  PostgreSQL execution permits the initial authentication/target statements,
+  requires zero keyword statements and zero final authoritative transactions,
+  and cannot pass by deliberately binding U+0000 and catching a
+  driver/database failure.
 - **Implementation status:** `REQUIRED_NOT_YET_IMPLEMENTED`.
 
 ### RET-BND-002 — Query UTF-8 byte limit
@@ -1533,15 +1587,21 @@ rounded half-to-even from the exact rational after ordering.
 - **Category:** Request, result, union, and SQL bounds. This parent owns the
   independently executable ADR-008-R01 strict-request decision matrix and the
   requested-count domain.
-- **Initial database state:** Except for path-rejection executions, the live
-  caller owns one target whose lowercase hyphenated canonical UUID is
+- **Initial database state:** Except for path-rejection and explicit
+  precedence executions, the live caller owns one target whose lowercase
+  hyphenated canonical UUID is
   `123e4567-e89b-42d3-a456-426614174000`; it contains at least 50 eligible
   chunks in deterministic exact RRF order. Path-rejection executions use that
   same existing authorized target so a hidden or absent target cannot mask the
-  textual path defect.
-- **Authenticated principal and membership state:** Every execution has a
-  live, active target member and a current session. Authentication succeeds
-  before path, target, request-media, or body processing.
+  textual path defect. U+0000 authentication-precedence executions have an
+  existing target; U+0000 hidden-target-precedence executions use that target
+  without caller membership.
+- **Authenticated principal and membership state:** Every ordinary execution
+  has a live, active target member and a current session, so authentication
+  succeeds before path, target, request-media, or body processing. The
+  U+0000 authentication-precedence parameters have no session. The U+0000
+  hidden-target-precedence parameters have a live session but no target
+  membership.
 - **Provider or Chroma input:** Each row below is a separate deterministic
   execution at every declared capable level. Controls use source-isolated,
   bounded keyword and canonical Provider fixtures that return the exact
@@ -1561,6 +1621,10 @@ rounded half-to-even from the exact rational after ordering.
   | `RET-BND-003::BODY-EXACT-65536` | The canonical path, exact `Content-Type: application/json`, and the valid exact 65,536-byte `R` fixture defined in Test conventions exercise inclusive body equality. |
   | `RET-BND-003::BODY-PLUS-ONE-65537` | The same path/media and valid 65,537-byte `R` fixture arrive in one ASGI body event. |
   | `RET-BND-003::CHUNKED-BODY-PLUS-ONE-65537` | The identical valid 65,537-byte `R` fixture arrives in ASGI chunks of 32,768, 32,768, and 1 byte. |
+  | `RET-BND-003::LITERAL-NUL-JSON-PARSER-REJECTION` | The canonical path and exact media carry a body whose `query` JSON string contains one literal unescaped byte `0x00`; that byte is a strict-JSON defect, not a decoded-query semantic fixture. |
+  | `RET-BND-003::ESCAPED-U0000-DOMAIN-HANDOFF` | The canonical path and exact media carry, as separate parameters, exact ASCII JSON bodies `{"query":"\u0000"}` and `{"query":"a\u0000b"}`. Both are syntactically valid strict JSON; parsing must decode them and hand the decoded values to RET-BND-001, which owns the query-domain decision. |
+  | `RET-BND-003::U0000-AUTHENTICATION-PRECEDENCE` | With no session, separately execute the literal-NUL body and escaped-U+0000-alone body from the preceding two rows. |
+  | `RET-BND-003::U0000-HIDDEN-TARGET-PRECEDENCE` | With a live user but no membership in the existing target, separately execute the same literal-NUL and escaped-U+0000-alone bodies. |
   | `RET-BND-003::REQUESTED-COUNT-DOMAIN` | The canonical path and exact `Content-Type: application/json` parameterize `requested_count` as omitted; integer `1`; integer `0`; integer `-1`; integer `50`; integer `51`; boolean `true`; float `1.0`; and numeric string `"1"`. Each is a separate execution with valid query `"a"`. |
 
   The authorized body-validation group additionally executes one field at a
@@ -1581,9 +1645,16 @@ rounded half-to-even from the exact rational after ordering.
   count values `0`, `-1`, `51`, `true`, `1.0`, and `"1"` each return exactly
   the existing generic
   `422 VALIDATION_ERROR` envelope, zero Evidence, and
-  `Cache-Control: private, no-store`. Omitted count, integer `1`, and integer
-  `50` return exactly the first 10, 1, and 50 deterministic Evidence items
-  with `Cache-Control: private, no-store`.
+  `Cache-Control: private, no-store`. The authorized literal-NUL parser row and
+  both escaped-U+0000 semantic-handoff parameters produce that same generic
+  `422 VALIDATION_ERROR`, private/no-store envelope through distinct internal
+  gates. Each
+  U+0000 authentication-precedence parameter returns generic
+  `401 AUTHENTICATION_REQUIRED`; each U+0000 hidden-target-precedence parameter
+  returns generic hidden `404 NOT_FOUND`; neither precedence group processes
+  its body. Omitted count, integer `1`, and integer `50` return exactly the
+  first 10, 1, and 50 deterministic Evidence items with
+  `Cache-Control: private, no-store`.
 - **Expected internal validation result:** The canonical-path control accepts
   the path text, completes exact-target authorization, passes request-media
   and body validation, and reaches keyword, embedding, Provider, and final
@@ -1608,7 +1679,28 @@ rounded half-to-even from the exact rational after ordering.
   without requesting another event. Both overflow rows record zero full-body
   materializations, JSON parses, duplicate-key/schema calls,
   normalization/count calls, keyword queries, embedding/Provider calls, and
-  final transactions. Every authorized-body-validation execution passes authentication,
+  final transactions. The authorized literal-NUL row attempts strict JSON
+  parsing and rejects there, with zero completed parses, schema/type/query-
+  domain validations, normalizations, or retrieval calls. The authorized
+  escaped-U+0000 row records one successful strict parse and successful closed-
+  schema validation before handing the decoded value to RET-BND-001. That case
+  owns the decoded query-domain decision: both values pass exact query string-
+  type, Unicode-scalar, and strict-UTF-8 validity and reach its same pre-NFC
+  U+0000 semantic rejection. In particular, the exact ASCII JSON body
+  `{"query":"a\u0000b"}` is syntactically valid strict JSON and decodes to
+  the string containing `a`, U+0000, and `b`. After the semantic rejection,
+  each parameter records zero NFC calls, zero whitespace-normalization calls,
+  zero keyword statements, zero embedding calls, zero Chroma/Provider calls,
+  zero final authoritative transactions, and zero Evidence construction or
+  publication. The literal-NUL parser row and escaped-U+0000 semantic rows
+  therefore have different internal gate ledgers even though their public
+  outcomes are generic `422 VALIDATION_ERROR`. For both precedence-body
+  parameters, the
+  authentication-precedence parameters stop at authentication with zero
+  target/media/body work, and the
+  hidden-target-precedence parameters stop after authentication at exact-
+  target authorization with zero media/body work. Every
+  authorized-body-validation execution passes authentication,
   exact-target authorization, and request-media validation, then reaches the
   strict body parser/schema stage and rejects there before keyword,
   embedding, Provider, or final-transaction work. Requested-count omission
@@ -1625,10 +1717,16 @@ rounded half-to-even from the exact rational after ordering.
   parser or returning a parser/schema-specific alternative. An
   authorized-body-validation execution bypassing strict schema validation,
   accepting an alias or client ID, using duplicate-key last-wins, or reaching
-  retrieval work. Rejecting body equality; accepting or truncating body plus
-  one; using unbounded `body()` or complete materialization before a length
-  check; parsing or schema-validating after overflow; continuing body receive
-  after the first overflow byte. Treating count minimum, equality, maximum, plus-one, or
+  retrieval work. Treating the literal unescaped NUL as valid JSON; treating
+  the ASCII U+0000 escape as a JSON parse failure; merging the parser and
+  semantic ledgers; running NFC or retrieval after decoded U+0000; exposing
+  query content in either generic `422 VALIDATION_ERROR`; allowing either
+  defective body to supersede required `401` or hidden `404` precedence.
+  Rejecting body equality;
+  accepting or truncating body plus one; using unbounded `body()` or complete
+  materialization before a length check; parsing or schema-validating after
+  overflow; continuing body receive after the first overflow byte. Treating
+  count minimum, equality, maximum, plus-one, or
   wrong JSON types as one execution; accepting booleans as integers; silently
   clamping; overflow arithmetic; partial Evidence; fallback Evidence; or a
   Provider call on any failing `422` execution.
@@ -2626,7 +2724,7 @@ that cannot observe them.
 
 | ADR requirement | Stable acceptance cases |
 | --- | --- |
-| ADR-008-R01 — Exactly two strict public shapes, shared bounded body, retrieval normalization/count contract, ordered live-session authentication, exact target, and no client-ID authorization | Retrieval matrix `RET-AUTH-001::UNAUTHENTICATED-PRECEDENCE`, `RET-AUTH-005::HIDDEN-TARGET-PRECEDENCE`, and all RET-BND-003 stable variants, including exact/plus-one/chunked body rows; every individually named public-operation variant in RET-EVID-003 plus `RET-EVID-008::CITATION-HIDDEN-TARGET-PRECEDENCE` and `RET-EVID-008::CITATION-REFERENCE-TARGET-MISMATCH`; normalization variants in RET-BND-001; UTF-8 domain in RET-BND-002; RET-AUTH-002 through RET-AUTH-011 for remaining authentication/scope branches |
+| ADR-008-R01 — Exactly two strict public shapes, shared bounded body, decoded-query domain/normalization/count contract, ordered live-session authentication, exact target, and no client-ID authorization | Retrieval matrix `RET-AUTH-001::UNAUTHENTICATED-PRECEDENCE`, `RET-AUTH-005::HIDDEN-TARGET-PRECEDENCE`, and all RET-BND-003 stable variants, including exact/plus-one/chunked body rows and the distinct literal-NUL/escaped-U+0000 gate and precedence rows; every individually named public-operation variant in RET-EVID-003 plus `RET-EVID-008::CITATION-HIDDEN-TARGET-PRECEDENCE` and `RET-EVID-008::CITATION-REFERENCE-TARGET-MISMATCH`; U+0000 rejection, adjacent-U+0001 preservation, and normalization/scalar variants in RET-BND-001; UTF-8 domain in RET-BND-002; RET-AUTH-002 through RET-AUTH-011 for remaining authentication/scope branches |
 | ADR-008-R02 — Initial request/database work ends before embedding; no request-owned transaction, connection, Session, or SessionTransaction spans embedding or Chroma; failure/cancellation cleanup precedes final work | RET-AUTH-001, RET-AUTH-011; `RET-CONC-001::EMBEDDING-LIFECYCLE-SUCCESS`; `RET-CONC-001::EMBEDDING-LIFECYCLE-FAILURE`; `RET-CONC-001::EMBEDDING-LIFECYCLE-CANCELLATION`; `RET-CONC-001::CHROMA-LIFECYCLE-REVOCATION`; RET-CONC-002 through RET-CONC-003 |
 | ADR-008-R03 — Actual final request transaction is fixed `REPEATABLE READ` and `READ ONLY`, with first-statement reauthorization | RET-CONC-001 (the actual first final retrieval authorization query or order-preserving same-transaction hook proves both settings in the real request), RET-CONC-002 through RET-CONC-003, RET-CONC-012, and RET-EVID-003 success/failure rows for the citation final transaction and first-statement recheck; never a helper, mutation actor, or unrelated session |
 | ADR-008-R04 — Same snapshot for all batches and every authoritative Evidence/citation field | RET-CONC-006 through RET-CONC-010, RET-EVID-001, RET-EVID-003 |
@@ -2641,7 +2739,7 @@ that cannot observe them.
 | ADR-008-R13 — Position-preserving candidate-local taxonomy and authorized empty | RET-PROV-008, RET-PROV-025 through RET-PROV-038 (including missing and non-string ID variants), RET-EVID-010 |
 | ADR-008-R14 — Finite wire-distance domain, typed diagnostic `None`, post-decoder typed non-finite/wrong-type omission, absolute-position preservation, and ignored bounded disagreement | RET-PROV-015, RET-PROV-023 through RET-PROV-024, RET-PROV-025 through RET-PROV-026 (`float("nan")`, `float("inf")`, and `float("-inf")` at exact rank 2 with valid ranks 1/3), RET-PROV-027 (string/object/boolean/null/array matrix at exact rank 2), RET-PROV-028 (mixed absolute ranks), RET-PROV-030 through RET-PROV-031, RET-PROV-038 |
 | ADR-008-R15 — Duplicate earliest-rank behavior | RET-PROV-039, RET-BND-013, RET-RANK-003 |
-| ADR-008-R16 — Exact body/request/configured-Provider/raw-position/dense/keyword/union/batch/final-result domains and bounded SQL work | RET-BND-001 through RET-BND-003, including 65,536/65,537 body rows; RET-EVID-003 citation body rows; RET-BND-004 through RET-BND-015; RET-PROV-002 through RET-PROV-007; all four RET-PROV-019 C40/C128 equality/plus-one rows; RET-KEY-001 |
+| ADR-008-R16 — Exact body/decoded-query/request/configured-Provider/raw-position/dense/keyword/union/batch/final-result domains and bounded SQL work | RET-BND-001 through RET-BND-003, including the U+0000 exclusion, adjacent-U+0001 control, distinct raw/escaped JSON paths, and 65,536/65,537 body rows; RET-EVID-003 citation body rows; RET-BND-004 through RET-BND-015; RET-PROV-002 through RET-PROV-007; all four RET-PROV-019 C40/C128 equality/plus-one rows; RET-KEY-001 |
 | ADR-008-R17 — Scoped deterministic PostgreSQL keyword rank generation and internal-path exclusion | RET-KEY-001 (scoped deterministic score, total order, and one-based ranks), RET-KEY-002 through RET-KEY-004 |
 | ADR-008-R18 — Deterministic union, batching, non-rank-bearing permutations, query count, reconstruction, and independent failure branches | RET-BND-008 through RET-BND-015 (especially RET-BND-012's byte-identical source lists/rank maps), RET-CONC-010, RET-CONC-011 |
 | ADR-008-R19 — Exact rational RRF, absolute source-rank prerequisites, earliest-rank preservation, display serialization, and tie-breaking | RET-KEY-001 (deterministic keyword source ranks), RET-PROV-025 through RET-PROV-028 (dense invalid-position ranks remain 1/3 and 1/3/5/7), RET-PROV-038 (valid companion retains original position), RET-PROV-039 (earliest dense rank/contribution), RET-BND-013 (earliest ranks across duplicates), RET-RANK-001 through RET-RANK-005 (exact rational formula, mixed sources, collision, full tie order) |

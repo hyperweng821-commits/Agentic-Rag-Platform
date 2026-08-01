@@ -67,9 +67,27 @@ Future private AF-3 operations are required to:
   ASGI before JSON decoding; allow equality, abort immediately on byte 65,537,
   never use an unbounded `body()` followed by a length check, and perform no
   parsing/schema/normalization/retrieval/final-resolution work after overflow;
-- normalize `query` by NFC, the exact ADR-008 Unicode-whitespace trim/collapse
-  rule, and no other transform; require 1–2,048 Unicode scalar values and
-  1–4,096 strict UTF-8 bytes;
+- after strict JSON decoding, closed-schema validation, exact string-type
+  validation, Unicode-scalar validation, and strict UTF-8 representability,
+  reject any occurrence of U+0000 before NFC; this is
+  semantic validation, not normalization, and must not remove, replace,
+  collapse, whitespace-map, or
+  U+FFFD-map U+0000, convert it to an empty/zero-keyword query, send it to
+  PostgreSQL and translate a driver/database failure, or reject all Unicode
+  `Cc` controls; a literal unescaped NUL in a JSON string fails strict JSON,
+  while the ASCII escape `"\u0000"` is valid JSON and reaches this semantic
+  gate;
+- only after the U+0000 gate, normalize `query` by NFC exactly once, the exact
+  ADR-008 Unicode-whitespace trim/collapse rule, and no other transform;
+  validate 1–2,048 normalized Unicode scalar values first and 1–4,096 strict
+  UTF-8 bytes second, before retrieval;
+- for an authenticated and initially authorized escaped-U+0000 request,
+  preserve the allowed earlier authentication, canonical-target parsing,
+  exact-target membership/capability authorization, media, bounded-body,
+  strict-JSON, closed-schema, and exact-type gates, then return generic
+  `422 VALIDATION_ERROR` with private/no-store and perform no NFC/whitespace
+  normalization, keyword statements, embedding calls, Chroma/Provider calls,
+  or final authoritative transactions, producing no Evidence;
 - use exact P0-v1 counts: requested maximum `50`, dense over-fetch factor `4`,
   dense/Provider maximum `128`, keyword maximum `128`, unique-union maximum
   `192`, and validation batches of `64`, with the count relationships and

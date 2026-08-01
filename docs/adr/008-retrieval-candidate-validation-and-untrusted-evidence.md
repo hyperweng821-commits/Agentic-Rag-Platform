@@ -59,7 +59,7 @@ than assigned to an incapable test layer.
 
 | ID | Normative requirement |
 | --- | --- |
-| ADR-008-R01 | Each of the exactly two AF-3C public operations uses its one strict P0-v1 request shape, the shared bounded-body contract, and the fixed gate order; retrieval additionally uses the exact normalization/count contract. Every request authenticates a live, active principal from an existing, unexpired, unrevoked session, names exactly one target knowledge base, and authorizes from PostgreSQL; client document or chunk IDs never establish access. |
+| ADR-008-R01 | Each of the exactly two AF-3C public operations uses its one strict P0-v1 request shape, the shared bounded-body contract, and the fixed gate order; retrieval additionally uses the exact decoded-query domain-validation, normalization, and count contract, including U+0000 rejection before NFC. Every request authenticates a live, active principal from an existing, unexpired, unrevoked session, names exactly one target knowledge base, and authorizes from PostgreSQL; client document or chunk IDs never establish access. |
 | ADR-008-R02 | Initial authentication, exact-target authorization, and request validation complete before query embedding; no PostgreSQL transaction, connection, Session, or SessionTransaction is retained across embedding, Chroma, network, parser, or filesystem work, and embedding failure or cancellation cannot retain a database resource or begin final validation. |
 | ADR-008-R03 | In AF-3A, AF-3B, and AF-3C, the actual final request transaction MUST be PostgreSQL `REPEATABLE READ` and `READ ONLY`; its actual first final authorization query or an order-preserving same-transaction test hook proves both settings in that transaction, and its first authoritative statement fixes the snapshot and revalidates session, user, target, membership, and current read capabilities. |
 | ADR-008-R04 | Every validation batch and every authoritative Evidence field loads within the same fixed final snapshot, with no authorization-sensitive PostgreSQL reload after commit. |
@@ -74,7 +74,7 @@ than assigned to an incapable test layer.
 | ADR-008-R13 | Every candidate-local condition omits only that bounded record; an authorized request whose candidates are all locally omitted returns empty Evidence without disclosing reasons. |
 | ADR-008-R14 | Provider distance/score is non-authoritative; a conforming canonical wire distance must decode into the supported finite domain, while a present wrong-type distance/score or a typed value equivalent to `float("nan")`, `float("inf")`, or `float("-inf")` supplied only at the post-decoder typed adapter boundary omits that candidate without compacting its absolute source position; fusion uses the preserved source rank and ignores bounded provider disagreement. |
 | ADR-008-R15 | Duplicate IDs retain the earliest rank per source and produce at most one Evidence item per authoritative chunk. |
-| ADR-008-R16 | Each AF-3 POST body, normalized query scalar values and UTF-8 bytes, public requested results, configured Provider results, raw Provider positions, dense and keyword rank maps, candidate union, validation batches, and final public results use the exact finite P0-v1 domains and relationships. |
+| ADR-008-R16 | Each AF-3 POST body, decoded retrieval-query domain excluding U+0000, normalized query scalar values and UTF-8 bytes, public requested results, configured Provider results, raw Provider positions, dense and keyword rank maps, candidate union, validation batches, and final public results use the exact finite P0-v1 domains and relationships. |
 | ADR-008-R17 | P0-v1 keyword SQL is scoped before scoring and deterministically ranks PostgreSQL-authoritative `simple` text-search matches by score then native UUID; HTTP retrieval cannot call unscoped worker/internal paths or expose global counts. |
 | ADR-008-R18 | Candidate union ordering, partitioning, validation query count, record reconstruction, and failure behavior follow the deterministic batching contract. |
 | ADR-008-R19 | P0 fusion uses fixed `RRF_K = 60`, preserved one-based absolute source ranks, exact rational comparison, the specified tie order, display-only decimal serialization, and no raw-score fusion or reranker. |
@@ -114,7 +114,7 @@ The body contract is closed:
 
 | Field | Required | Exact JSON type | Default | P0-v1 rule |
 | --- | --- | --- | --- | --- |
-| `query` | Yes | string | None | Normalize and measure exactly as specified below. |
+| `query` | Yes | string | None | Validate its decoded domain, normalize, and measure exactly as specified below. |
 | `requested_count` | No | integer | `10` | Accept only `1` through `50`, inclusive. |
 
 No coercion is permitted. In particular, a JSON string or floating-point
@@ -149,9 +149,10 @@ The common public gate order is exact:
 4. Incrementally collect at most 65,536 application-body octets.
 5. Parse strict UTF-8 JSON with duplicate-key rejection.
 6. Validate the operation's closed request schema without coercion.
-7. Apply operation-specific normalization and semantic validation: retrieval
-   applies the query/count rules below; citation resolution validates the
-   canonical CitationReference grammar below.
+7. Apply operation-specific semantic validation and normalization: retrieval
+   applies the decoded-query domain, normalization, and count rules below;
+   citation resolution validates the canonical CitationReference grammar
+   below.
 8. Begin retrieval work or final authoritative citation-resolution work.
 
 Thus unauthenticated requests return generic `401` without target lookup,
@@ -161,24 +162,45 @@ processing; and unsupported media returns generic `422` before body
 collection. Every private response, including all failures at these gates,
 uses `Cache-Control: private, no-store`.
 
-The P0-v1 normalization pipeline is exact and ordered:
+PostgreSQL character/text values cannot represent code zero, while the keyword
+contract below requires `normalized_query` as a PostgreSQL text bound
+parameter. The decoded retrieval-query domain therefore excludes U+0000 before
+normalization or retrieval work rather than relying on a database failure.
 
-1. Strictly decode the JSON string into Unicode scalar values. A lone
-   surrogate or any value that cannot be encoded as strict UTF-8 is invalid.
-2. Apply Unicode Normalization Form C (`NFC`) once.
-3. Define whitespace as exactly U+0009 through U+000D, U+0020, U+0085,
+After closed-schema and exact-type validation, the P0-v1 decoded-query
+domain-validation and normalization pipeline is exact and ordered:
+
+1. Validate that the exact decoded JSON string consists of Unicode scalar
+   values and can be encoded as strict UTF-8. A lone surrogate or any value
+   that cannot be encoded as strict UTF-8 is invalid.
+2. Reject the query if any decoded scalar is U+0000. This is semantic
+   validation, not normalization, and it occurs before NFC.
+3. Apply Unicode Normalization Form C (`NFC`) once.
+4. Define whitespace as exactly U+0009 through U+000D, U+0020, U+0085,
    U+00A0, U+1680, U+2000 through U+200A, U+2028, U+2029, U+202F, U+205F,
    and U+3000.
-4. Remove every leading and trailing code point in that set.
-5. Replace each maximal nonempty interior run of those code points with one
+5. Remove every leading and trailing code point in that set.
+6. Replace each maximal nonempty interior run of those code points with one
    U+0020 SPACE.
-6. Perform no case folding, stemming, punctuation removal, locale mapping, or
-   other transformation.
+7. Perform no case folding, stemming, punctuation removal, locale mapping,
+   NFKC, NFKD, or other transformation.
+8. Validate that the normalized query contains 1 through 2,048 Unicode scalar
+   values, inclusive.
+9. Validate that its strict UTF-8 encoding contains 1 through 4,096 bytes,
+   inclusive.
+10. Begin retrieval work only after both ordered bounds succeed.
 
-The result is `normalized_query`. An empty result is invalid. Its character
-count is the number of Unicode scalar values, not UTF-16 code units,
-graphemes, or bytes. Its byte count is the length of its strict UTF-8
-encoding. Both inclusive P0-v1 limits apply independently:
+U+0000 is not removed, replaced, collapsed, treated as whitespace, changed to
+U+FFFD, converted to an empty query or a zero-keyword-candidate query, or sent
+to PostgreSQL so that a driver/database failure can be normalized into request
+validation. This specific PostgreSQL-text compatibility rule does not reject
+every Unicode `Cc` control.
+
+The result of NFC and whitespace processing is `normalized_query`. An empty
+result fails the ordered scalar minimum. Its character count is the number of
+Unicode scalar values, not UTF-16 code units, graphemes, or bytes. Its byte
+count is the length of its strict UTF-8 encoding. Both inclusive P0-v1 limits
+apply independently in the order above:
 
 | Request limit | Minimum | Maximum |
 | --- | ---: | ---: |
@@ -192,8 +214,26 @@ exceed it; 1,024 U+1F642 values occupy exactly 4,096 UTF-8 bytes and appending
 one ASCII `a` produces 4,097 bytes while remaining below the character
 maximum. Whitespace-only input is empty after normalization. Zero, a negative
 integer, `51`, a boolean, a float, and a numeric string are invalid
-`requested_count` values. All of these request-domain failures produce
-`422`, no Evidence, and no keyword, embedding, or Chroma call.
+`requested_count` values. A literal unescaped NUL byte inside a JSON string is
+rejected by strict JSON parsing. In contrast, the ASCII JSON escape
+`"\u0000"` is valid JSON and decodes to U+0000; U+0000 alone or embedded as
+`"a\u0000b"` is rejected by the semantic gate before NFC. The adjacent-control
+positive fixture `"a\u0001b"` is accepted and preserves U+0001, subject to the
+same later normalization and bounds, proving that this is not a blanket
+Unicode-`Cc` prohibition. All request-domain failures produce the existing
+generic `422 VALIDATION_ERROR`, no Evidence, and no keyword, embedding,
+Provider/Chroma, or final-transaction work.
+
+For an authenticated and initially authorized escaped-U+0000 request, current
+session/active-user authentication, canonical-target parsing, exact-target
+membership/capability authorization, supported-media validation, bounded-body
+collection, strict JSON parsing, closed-schema validation, and exact-type
+validation may already have completed. After Unicode-scalar and strict UTF-8
+validity succeed, U+0000 rejection performs zero NFC/whitespace-normalization
+work, zero keyword statements, zero embedding calls, zero Provider/Chroma
+calls, and zero final authoritative transactions, and yields zero Evidence.
+The public result is the generic `422 VALIDATION_ERROR` with
+`Cache-Control: private, no-store`.
 
 For retrieval, the operation-specific portion of the common order ends the
 initial database operation and returns its connection before body collection;
@@ -236,8 +276,9 @@ other external I/O.
 
 Query embedding has its own resource-lifecycle boundary; a later Chroma
 barrier is not evidence for it. Authentication, exact-target authorization,
-bounded body processing, retrieval schema validation, query normalization and
-count validation, and every database operation permitted before embedding
+bounded body processing, retrieval schema validation, decoded-query domain
+validation, query normalization and count validation, and every database
+operation permitted before embedding
 must have completed before the single bounded
 `EmbeddingModel.embed([normalized_query])` call begins. At an observable
 embedding-entry barrier, the request owns no checked-out PostgreSQL connection,
@@ -937,7 +978,8 @@ fatal source or union overflow permits partial Evidence or fallback.
 
 The exact versioned P0-v1 PostgreSQL keyword-ranking contract uses the
 `simple` text-search configuration. The normalized, bounded user query is
-passed as a bound parameter to:
+passed as a bound parameter only after the decoded-query U+0000 exclusion has
+succeeded, to:
 
 ```sql
 plainto_tsquery('simple', normalized_query)
@@ -945,7 +987,10 @@ plainto_tsquery('simple', normalized_query)
 
 Here `normalized_query` denotes the bound parameter, not interpolated SQL.
 User text is not interpreted as PostgreSQL web-search operators or raw
-`tsquery` syntax. The authoritative chunk vector is:
+`tsquery` syntax. It is a precondition of this call that `normalized_query`
+contains no U+0000; implementations must not deliberately send U+0000 to
+PostgreSQL and convert a driver or database failure into validation. The
+authoritative chunk vector is:
 
 ```sql
 to_tsvector('simple', document_chunks.normalized_text)
@@ -1230,6 +1275,9 @@ Public behavior is:
 - invalid authentication or inactive user: generic
   `401 AUTHENTICATION_REQUIRED`;
 - missing, hidden, unowned, or inaccessible target: generic `404 NOT_FOUND`;
+- an authenticated, initially authorized request with invalid media, body,
+  JSON, schema, type, query domain, query bounds, or count: generic
+  `422 VALIDATION_ERROR`;
 - an authorized request with zero surviving candidates: successful empty
   Evidence;
 - a current authoritative citation match: the exact citation-resolution

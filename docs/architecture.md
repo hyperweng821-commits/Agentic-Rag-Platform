@@ -287,7 +287,10 @@ tests; neither document supplies runtime retrieval behavior.
 flowchart TD
     Principal["Authenticated Principal (AF-2S1)"]
     Initial["Initial PostgreSQL target membership + read-capability check (planned)"]
-    Normalize["Bounded deterministic query normalization (planned)"]
+    Decode["Strict decoded query: exact string + scalar/UTF-8 validity (planned)"]
+    TextCompatible["Reject U+0000 for PostgreSQL text compatibility (planned)"]
+    Normalize["NFC + exact-whitespace normalization (planned)"]
+    QueryBounds["Normalized scalar + strict UTF-8 byte bounds (planned)"]
     Keyword["Scoped PostgreSQL keyword candidates; completed documents only (planned)"]
     Embed["Bounded query embedding through EmbeddingModel (planned consumer)"]
     Dense["Bounded Chroma dense query; target filter is only a hint (planned)"]
@@ -304,9 +307,12 @@ flowchart TD
     CitationReference["Stable CitationReference from authoritative target/chunk/hash (planned)"]
 
     Principal --> Initial
-    Initial -->|"transaction closes before slow provider work"| Normalize
-    Normalize --> Keyword
-    Normalize --> Embed
+    Initial -->|"transaction closes before slow provider work"| Decode
+    Decode --> TextCompatible
+    TextCompatible --> Normalize
+    Normalize --> QueryBounds
+    QueryBounds --> Keyword
+    QueryBounds --> Embed
     Embed -->|"no retained database transaction"| Dense
     Dense --> Untrusted
     Keyword --> Combine
@@ -352,11 +358,22 @@ citation work. This preserves generic `401`, hidden `404`, and authorized-
 caller `422`; unauthenticated/hidden requests do not process the body, and
 unsupported media fails before body collection.
 
-The exact query pipeline is NFC, trim/collapse of the explicit Unicode
-whitespace set in ADR-008 to single interior U+0020, and no other transform.
-The normalized query has 1–2,048 Unicode scalar values and 1–4,096 strict
-UTF-8 bytes. Requested results are 1–50. Dense over-fetch factor is `4`;
-dense/Provider maximum is `128`; keyword maximum is `128`; unique-union
+After closed-schema and exact-type validation, the exact decoded-query
+pipeline is strict Unicode-scalar and strict UTF-8 validity; reject any U+0000
+before NFC as validation, not normalization; apply NFC exactly once;
+trim/collapse the explicit ADR-008 Unicode whitespace set to single interior
+U+0020; validate normalized scalar bounds and then strict UTF-8 byte bounds;
+then begin keyword and embedding work.
+U+0000 is neither transformed nor sent to PostgreSQL. A literal unescaped NUL
+inside a JSON string fails strict JSON parsing, while the valid ASCII escape
+`"\u0000"` reaches the semantic gate. For an authenticated and initially
+authorized escaped-U+0000 request, the gate produces generic
+`422 VALIDATION_ERROR`, private/no-store, and no normalization work, keyword
+statements, embedding calls, Chroma/Provider calls, or final transactions, and
+it produces no Evidence. The normalized query has 1–2,048 Unicode scalar
+values and 1–4,096 strict UTF-8 bytes. Requested results are 1–50. Dense
+over-fetch factor is `4`; dense/Provider maximum is `128`; keyword maximum is
+`128`; unique-union
 maximum is `192`; and validation batch size is `64`. For public count `R`,
 configured Provider count is `min(128, checked_multiply(R, 4))`; ADR-008 fixes
 the raw-position, dense, keyword, union, validation-query, eligible, and final

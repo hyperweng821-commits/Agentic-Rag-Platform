@@ -212,11 +212,15 @@ vector query.
 **Included scope:** The single retrieval domain contract that AF-3C later maps
 to `POST /api/v1/knowledge-bases/{knowledge_base_id}/retrieval`: exact
 `query`/`requested_count` fields, strict types/default/extra-field policy,
-disclosure-preserving authentication/target/body-validation order, exact NFC
-and whitespace normalization with no case folding/NFKC/excluded-whitespace
-transformation, post-normalization scalar/UTF-8 limits, and fixed P0-v1 count
-domains; exactly one target knowledge base; current session/user and existing
-read-capability enforcement; membership- and document-state-scoped
+disclosure-preserving authentication/target/body-validation order, a strict
+decoded Unicode-scalar/UTF-8 query domain that semantically rejects any U+0000
+before NFC as validation, not normalization, because PostgreSQL text cannot
+represent code zero,
+exact NFC and whitespace normalization with no case folding/NFKC/NFKD/excluded-
+whitespace transformation, ordered post-normalization scalar then strict
+UTF-8 byte limits, and fixed P0-v1 count domains; exactly one target knowledge
+base; current session/user
+and existing read-capability enforcement; membership- and document-state-scoped
 PostgreSQL keyword candidates with the deterministic 128-row total-order
 cutoff; the first implementation of the shared final authoritative PostgreSQL
 candidate-validation and Evidence-loading transaction using
@@ -230,8 +234,19 @@ approvals.
 
 **Acceptance criteria:** The domain request has one non-coercing shape,
 independently executable minimum/equality/plus-one boundaries, and fixed
-`401`/hidden-`404`/`422` ordering. Keyword candidates are bounded and scoped in
-SQL from the first query; the exact score/native-UUID order precedes `LIMIT
+`401`/hidden-`404`/`422` ordering. A literal unescaped NUL fails strict JSON;
+after the allowed earlier authentication, canonical-target parsing, exact-
+target membership/capability authorization, media, bounded-body, strict-JSON,
+schema, exact-type, Unicode-scalar, and strict UTF-8 validity gates, the ASCII
+JSON escape `"\u0000"` is rejected by the semantic query-domain gate before
+NFC or retrieval with generic private/no-store `422 VALIDATION_ERROR`, zero
+keyword or final-transaction SQL, and no normalization, embedding,
+Chroma/Provider, or Evidence work. U+0000 is rejected rather than transformed
+or sent to
+PostgreSQL, while the adjacent U+0001 control is accepted and preserved so the
+rule does not become a blanket Unicode-`Cc` prohibition. Keyword candidates
+are bounded and scoped in SQL from the first query; the exact score/native-
+UUID order precedes `LIMIT
 128`, including tied rows across a 129-row cutoff fixture; global search and
 unrestricted worker repositories are absent from user-facing retrieval; the
 shared validator batch-checks current
