@@ -8,6 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
+from typing import Never, SupportsIndex
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
@@ -43,6 +44,30 @@ class CsrfError(AppException):
     code = "CSRF_VALIDATION_FAILED"
     message = "CSRF validation failed."
     status_code = status.HTTP_403_FORBIDDEN
+
+
+class SessionAuthenticationProof:
+    """Immutable internal proof that rejects generic serialization."""
+
+    __slots__ = ("principal", "session_token_sha256")
+    principal: Principal
+    session_token_sha256: str
+
+    def __init__(self, *, principal: Principal, session_token_sha256: str) -> None:
+        object.__setattr__(self, "principal", principal)
+        object.__setattr__(self, "session_token_sha256", session_token_sha256)
+
+    def __setattr__(self, name: str, value: object) -> None:
+        raise AttributeError("SessionAuthenticationProof is immutable.")
+
+    def __delattr__(self, name: str) -> None:
+        raise AttributeError("SessionAuthenticationProof is immutable.")
+
+    def __repr__(self) -> str:
+        return "SessionAuthenticationProof()"
+
+    def __reduce_ex__(self, protocol: SupportsIndex, /) -> Never:
+        raise TypeError("SessionAuthenticationProof cannot be pickled.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -160,12 +185,25 @@ class AuthenticationService:
 
     async def authenticate_session(self, session_token: str | None) -> Principal:
         """Resolve an active session to a model-independent principal."""
+        proof = await self.authenticate_session_with_proof(session_token)
+        return proof.principal
+
+    async def authenticate_session_with_proof(
+        self,
+        session_token: str | None,
+    ) -> SessionAuthenticationProof:
+        """Resolve an active session and retain only its internal token digest."""
         token_digest = self._session_digest_or_error(session_token)
         now = self._now()
         async with self._session.begin():
             user_session = await self._active_session(token_digest, now)
             await self._sessions.touch_for_authentication(user_session, seen_at=now)
-            return self._principal(user_session)
+            principal = self._principal(user_session)
+
+        return SessionAuthenticationProof(
+            principal=principal,
+            session_token_sha256=token_digest,
+        )
 
     async def validate_csrf(
         self,
