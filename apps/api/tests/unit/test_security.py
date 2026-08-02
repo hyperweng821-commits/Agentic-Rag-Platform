@@ -1,9 +1,11 @@
 """AF-2S1 password, opaque-session, CSRF, principal, and capability tests."""
 
 import asyncio
+import pickle
 import threading
 from collections.abc import Callable, Iterator
 from contextlib import AbstractAsyncContextManager
+from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
 from types import TracebackType
 from typing import cast
@@ -13,6 +15,7 @@ from uuid import UUID, uuid4
 import pytest
 from argon2 import PasswordHasher as RawArgonPasswordHasher
 from argon2.low_level import Type
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import KnowledgeBaseRole, User, UserSession
@@ -22,6 +25,7 @@ from app.security.authentication import (
     AuthenticationError,
     AuthenticationService,
     CsrfError,
+    SessionAuthenticationProof,
     hash_token,
 )
 from app.security.authorization import (
@@ -39,6 +43,7 @@ from app.security.principal import Principal, normalize_email
 
 NOW = datetime(2026, 7, 29, 12, 0, tzinfo=UTC)
 SESSION_TOKEN = "s" * 43
+SESSION_DIGEST_SHA256 = "d64b93c9f1b60eb338e5cb415d6a36bd920edd0e9b36f7ea5c730d0e10ff147f"
 CSRF_TOKEN = "c" * 43
 
 
@@ -258,6 +263,153 @@ def test_principal_is_a_model_independent_value_object() -> None:
     assert isinstance(principal.user_id, UUID)
     with pytest.raises(AttributeError):
         principal.email = "changed@example.com"  # type: ignore[misc]
+
+
+def test_session_authentication_proof_is_immutable_and_slotted() -> None:
+    principal = Principal(user_id=uuid4(), email="owner@example.com", session_id=uuid4())
+    proof = SessionAuthenticationProof(
+        principal=principal,
+        session_token_sha256=hash_token(SESSION_TOKEN),
+    )
+
+    assert SessionAuthenticationProof.__slots__ == (
+        "principal",
+        "session_token_sha256",
+    )
+    assert not hasattr(proof, "__dict__")
+    with pytest.raises(AttributeError, match="immutable"):
+        proof.principal = principal  # type: ignore[misc]
+    with pytest.raises(AttributeError, match="immutable"):
+        proof.session_token_sha256 = "a" * 64  # type: ignore[misc]
+    with pytest.raises(AttributeError, match="immutable"):
+        del proof.session_token_sha256
+
+
+def test_session_authentication_proof_repr_hides_principal_and_digest() -> None:
+    principal = Principal(user_id=uuid4(), email="private@example.com", session_id=uuid4())
+    token_digest = hash_token(SESSION_TOKEN)
+    proof = SessionAuthenticationProof(
+        principal=principal,
+        session_token_sha256=token_digest,
+    )
+
+    for rendered in (repr(proof), str(proof)):
+        assert "principal" not in rendered
+        assert "session_token_sha256" not in rendered
+        assert principal.email not in rendered
+        assert str(principal.session_id) not in rendered
+        assert SESSION_TOKEN not in rendered
+        assert token_digest not in rendered
+
+
+@pytest.mark.parametrize(
+    ("operation", "expected_message"),
+    [
+        pytest.param(
+            vars,
+            "vars() argument must have __dict__ attribute",
+            id="vars",
+        ),
+        pytest.param(
+            iter,
+            "'SessionAuthenticationProof' object is not iterable",
+            id="iter",
+        ),
+        pytest.param(
+            tuple,
+            "'SessionAuthenticationProof' object is not iterable",
+            id="tuple",
+        ),
+        pytest.param(
+            dict,
+            "'SessionAuthenticationProof' object is not iterable",
+            id="dict",
+        ),
+    ],
+)
+def test_session_authentication_proof_rejects_direct_generic_serialization(
+    operation: Callable[[SessionAuthenticationProof], object],
+    expected_message: str,
+) -> None:
+    principal = Principal(user_id=uuid4(), email="private@example.com", session_id=uuid4())
+    token_digest = hash_token(SESSION_TOKEN)
+    proof = SessionAuthenticationProof(
+        principal=principal,
+        session_token_sha256=token_digest,
+    )
+    sensitive_values = (
+        SESSION_TOKEN,
+        token_digest,
+        principal.email,
+        str(principal.session_id),
+        str(principal.user_id),
+    )
+    sentinel = object()
+    observed_messages: list[str] = []
+
+    for _ in range(2):
+        result = sentinel
+        with pytest.raises(TypeError) as exc_info:
+            result = operation(proof)
+
+        assert result is sentinel
+        assert type(exc_info.value) is TypeError
+        message = str(exc_info.value)
+        assert message == expected_message
+        for sensitive_value in sensitive_values:
+            assert sensitive_value not in message
+        observed_messages.append(message)
+
+    assert observed_messages == [expected_message, expected_message]
+
+
+def test_session_authentication_proof_rejects_dataclass_serialization() -> None:
+    token_digest = hash_token(SESSION_TOKEN)
+    proof = SessionAuthenticationProof(
+        principal=Principal(user_id=uuid4(), email="private@example.com", session_id=uuid4()),
+        session_token_sha256=token_digest,
+    )
+
+    with pytest.raises(TypeError) as exc_info:
+        asdict(proof)  # type: ignore[arg-type]
+
+    assert SESSION_TOKEN not in str(exc_info.value)
+    assert token_digest not in str(exc_info.value)
+
+
+def test_session_authentication_proof_rejects_fastapi_encoding() -> None:
+    token_digest = hash_token(SESSION_TOKEN)
+    proof = SessionAuthenticationProof(
+        principal=Principal(user_id=uuid4(), email="private@example.com", session_id=uuid4()),
+        session_token_sha256=token_digest,
+    )
+
+    with pytest.raises(ValueError) as exc_info:
+        jsonable_encoder(proof)
+
+    assert SESSION_TOKEN not in str(exc_info.value)
+    assert token_digest not in str(exc_info.value)
+
+
+def test_session_authentication_proof_rejects_pickle_serialization() -> None:
+    token_digest = hash_token(SESSION_TOKEN)
+    proof = SessionAuthenticationProof(
+        principal=Principal(user_id=uuid4(), email="private@example.com", session_id=uuid4()),
+        session_token_sha256=token_digest,
+    )
+
+    with pytest.raises(
+        TypeError,
+        match=r"^SessionAuthenticationProof cannot be pickled\.$",
+    ) as exc_info:
+        pickle.dumps(proof)
+
+    assert SESSION_TOKEN not in str(exc_info.value)
+    assert token_digest not in str(exc_info.value)
+
+
+def test_hash_token_matches_fixed_sha256_vector() -> None:
+    assert hash_token("abc") == ("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
 
 
 async def test_login_normalizes_email_and_persists_only_token_digests() -> None:
@@ -568,7 +720,7 @@ async def test_shared_password_limiter_bounds_concurrent_unknown_user_verificati
     assert all(isinstance(result, AuthenticationError) for result in results)
 
 
-async def test_active_session_constructs_principal_and_touches_last_seen() -> None:
+async def test_authenticate_session_remains_principal_compatible_and_touches_once() -> None:
     service, _, sessions = _service()
     user = _user()
     user_session = _user_session(user)
@@ -576,12 +728,34 @@ async def test_active_session_constructs_principal_and_touches_last_seen() -> No
 
     principal = await service.authenticate_session(SESSION_TOKEN)
 
+    assert type(principal) is Principal
     assert principal == Principal(user.id, user.email, user_session.id)
     sessions.get_active_for_authentication_by_token_sha256.assert_awaited_once_with(
         hash_token(SESSION_TOKEN),
         now=NOW,
     )
     sessions.touch_for_authentication.assert_awaited_once_with(user_session, seen_at=NOW)
+    assert sessions.touch_for_authentication.await_count == 1
+
+
+async def test_authenticate_session_with_proof_returns_same_principal_and_digest() -> None:
+    fake_session = FakeSession()
+    service, _, sessions = _service(fake_session=fake_session)
+    user = _user()
+    user_session = _user_session(user)
+    sessions.get_active_for_authentication_by_token_sha256.return_value = user_session
+
+    proof = await service.authenticate_session_with_proof(SESSION_TOKEN)
+
+    assert proof.principal == Principal(user.id, user.email, user_session.id)
+    assert proof.session_token_sha256 == SESSION_DIGEST_SHA256
+    assert fake_session.in_transaction() is False
+    sessions.get_active_for_authentication_by_token_sha256.assert_awaited_once_with(
+        hash_token(SESSION_TOKEN),
+        now=NOW,
+    )
+    sessions.touch_for_authentication.assert_awaited_once_with(user_session, seen_at=NOW)
+    assert sessions.touch_for_authentication.await_count == 1
 
 
 @pytest.mark.parametrize(
@@ -597,6 +771,16 @@ async def test_malformed_session_token_fails_without_database_lookup(
         await service.authenticate_session(session_token)
 
     sessions.get_active_for_authentication_by_token_sha256.assert_not_awaited()
+
+
+async def test_proof_authentication_rejects_malformed_token_without_database_lookup() -> None:
+    service, _, sessions = _service()
+
+    with pytest.raises(AuthenticationError):
+        await service.authenticate_session_with_proof("malformed token")
+
+    sessions.get_active_for_authentication_by_token_sha256.assert_not_awaited()
+    sessions.touch_for_authentication.assert_not_awaited()
 
 
 @pytest.mark.parametrize(
@@ -615,6 +799,16 @@ async def test_unusable_session_fails_closed(user_session: UserSession | None) -
 
     with pytest.raises(AuthenticationError):
         await service.authenticate_session(SESSION_TOKEN)
+
+    sessions.touch_for_authentication.assert_not_awaited()
+
+
+async def test_invalid_session_produces_no_authentication_proof() -> None:
+    service, _, sessions = _service()
+    sessions.get_active_for_authentication_by_token_sha256.return_value = None
+
+    with pytest.raises(AuthenticationError):
+        await service.authenticate_session_with_proof(SESSION_TOKEN)
 
     sessions.touch_for_authentication.assert_not_awaited()
 
