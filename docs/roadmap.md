@@ -173,20 +173,22 @@ implemented.
 ### AF-3 canonical project-control record
 
 The active documentation work is classified as Parent `AF-3-DOC-R1`, current
-remediation `AF-3-DOC-R1-R5`, **Canonical Project-Control Cycle Record
-Remediation**. The preceding
-`AF3_DOC_R1_R4_INDEPENDENT_APPROVAL_REVIEW` result is `BLOCK`. The R5
-Documentation Remediation Gate changes only this canonical record; once its
-exact manifest is frozen, its stop state and only permitted current gate are
-the Independent Read-Only Documentation Approval Review. The Commit Gate,
-AF-3A-03, AF-3B, and AF-3C remain `BLOCKED`. This record is updated only by the
-bounded gate that changes it, and the remediation cannot approve itself.
+remediation `AF-3-DOC-R1-R6`, **Merge-Review Phase-Fixture and
+Canonical-Identity Remediation**. The preceding
+`AF3_DOC_R1_INDEPENDENT_MERGE_REVIEW` result is `BLOCK` with exactly two
+findings. The R6 Documentation Remediation Gate fixes only those phase-fixture
+and canonical-identity findings plus this canonical record; once its exact
+manifest is frozen, its stop state and only permitted current gate are the
+Independent Read-Only Documentation Approval Review. The Commit Gate, Release
+Gate, Merge Gate, AF-3A-03, AF-3B, and AF-3C remain `BLOCKED`. This record is
+updated only by the bounded gate that changes it, and the remediation cannot
+approve itself.
 
 Canonical AF-3 phase and slice ownership is frozen as follows:
 
 | Work ID | Owner and scope | Entry/exit state |
 | --- | --- | --- |
-| AF-3-DOC-R1 | Design Architect/remediation writer owns the documentation contract only. Remediation cycles append `-R1`, `-R2`, and later monotonically increasing suffixes without changing this parent. | Must be independently approved, committed, reviewed, and merged before runtime work is authorized. Current cycle is `AF-3-DOC-R1-R5`; its frozen stop state is the Independent Read-Only Documentation Approval Review. |
+| AF-3-DOC-R1 | Design Architect/remediation writer owns the documentation contract only. Remediation cycles append `-R1`, `-R2`, and later monotonically increasing suffixes without changing this parent. | Must be independently approved, committed, reviewed, and merged before runtime work is authorized. Current cycle is `AF-3-DOC-R1-R6`; its frozen stop state is the Independent Read-Only Documentation Approval Review. |
 | AF-3A-01 | Pure retrieval-request validator. | `MERGED`; not an AF-3A close. |
 | AF-3A-02 | `SessionAuthenticationProof` and `authenticate_session_with_proof`. | `MERGED`; not an AF-3A close. |
 | AF-3A-03 | Proof-aware initial access plus scoped deterministic keyword SQL. | `BLOCKED` until AF-3-DOC-R1 is merged and a separate implementation-start approval is issued. |
@@ -206,9 +208,11 @@ owner/boundary/status/oracle remain canonical only in
 The underlying documentation candidate addresses four independently confirmed
 contract defects: incomplete all-sink applicability, AF-3C HTTP outcomes mixed
 into AF-3A acceptance, a citation-success HTTP boundary assigned to public
-Evidence, and a non-executable RET-PROV-043 level expansion. R5 changes no
-runtime or security contract; it only corrects the canonical cycle, preceding
-review result, and post-remediation stop gate after the R4 BLOCK. The control
+Evidence, and a non-executable RET-PROV-043 level expansion. R6 changes no
+runtime, test implementation, stable ID, ledger tuple, owner, boundary,
+status, oracle, or security requirement. It separates the phase-specific
+RET-PRIV-004 fixture prerequisites, restores one exact canonical identity, and
+records the post-merge-review remediation cycle and stop gate. The control
 framework also treats phase/slice mismatch, classifying a merged slice as a
 closed phase, repeating still-valid reviews/tests, using a stale or incorrectly
 scoped hash baseline, concurrent writers, cross-repository contamination,

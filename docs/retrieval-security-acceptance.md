@@ -3695,8 +3695,8 @@ route assertions belong only to the separate AF-3B or AF-3C rows.
 - **Expected internal validation result:** The
   `AF3A-CROSS-SCOPE-REVALIDATION` PostgreSQL oracle belongs exclusively to
   `AF3A_FINAL_VALIDATOR`: the shared fixed-snapshot validator rejects injected
-  B by exact target and access predicates. `RET-KEY-001::AF3A-SCOPED-
-  DETERMINISTIC-ORDER-CUTOFF` separately owns real SQL scope-before-score at
+  B by exact target and access predicates. `RET-KEY-001::AF3A-SCOPED-DETERMINISTIC-ORDER-CUTOFF`
+  separately owns real SQL scope-before-score at
   `AF3A_KEYWORD`.
   The AF-3B hybrid row proves only the hybrid regression through that final
   validator, and the AF-3C row proves only the authorized-empty public outcome.
@@ -4377,11 +4377,17 @@ candidate” wording below never implies Provider work in the AF-3A row.
   inputs and context reachable before their named failure; they do not claim
   that a final internal authoritative retrieval record loaded before the
   Provider or keyword stage.
-- **Authenticated principal and membership state:** A live active target
-  member has a current session. Authentication, canonical path parsing,
-  exact-target authorization, exact request-media validation, and strict body
-  validation succeed before each named fatal branch.
-- **Provider or Chroma input:** The eight non-HTTP rows below are separate
+- **Authenticated principal and membership state:** Every execution has a live
+  active target member and current session. AF-3A and AF-3B non-HTTP rows begin
+  at their owned service/database boundary after their applicable non-HTTP
+  proof, membership, and exact-target prerequisites; they do not traverse or
+  assert any HTTP route, path, media, body, response, header, or serialization
+  gate. Each corresponding AF-3C HTTP row separately traverses its public
+  route/path, authentication/authorization, exact request-media, and strict
+  body gates according to that public operation's precedence contract before
+  reaching the named downstream fatal branch.
+- **Provider or Chroma input:** The eight variants below expand to exactly ten
+  canonical non-HTTP rows at their capable levels and are separate
   constructible executions. Every AF-3A row uses only keyword or explicit
   bounded synthetic candidates, configures embedding/Chroma/Provider spies to
   prove zero calls, and has no dense or Provider-response sentinel. AF-3B
