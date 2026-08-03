@@ -2,47 +2,1330 @@
 
 ## Status and purpose
 
-This is the required future executable-test specification for ADR-008.
-AF-3 remains planned and unimplemented. Every case has implementation status
-`REQUIRED_NOT_YET_IMPLEMENTED`; no case is passing and no source-level
-retrieval behavior is claimed.
+This is the required executable-test specification for ADR-008. Current
+main has merged only the pure AF-3A retrieval-request validator and
+SessionAuthenticationProof. AF-3A is incomplete, AF-3B remains entry-gated,
+and AF-3C remains planned. No retrieval orchestration, keyword or dense
+retrieval, final validator/loader, fusion, internal authoritative retrieval
+record, public Evidence, Citation, or HTTP retrieval behavior is claimed.
 
-Coverage and distinct behavior determine the inventory. This revision contains
-exactly 113 cases: 109 AF-3 runtime cases and 4 future consuming-phase
-obligations. AF-3 cannot complete until every AF-3 case passes at every listed
-level. The separate future consuming-phase cases become executable obligations
-only when their named consumer is introduced and are not AF-3C runtime claims.
+The stable-ID inventory is the set of the 118 RET case headings below. It
+contains 114 AF-3 runtime IDs and four future consuming-phase IDs. The heading
+inventory, canonical ledger, and 27 ADR requirement mappings are parsed
+independently; every ledger case ID must resolve to one heading.
 
 | Category | Stable IDs | Count |
 | --- | --- | ---: |
 | Authentication and request scope | RET-AUTH-001–RET-AUTH-011 | 11 |
-| Final transaction and concurrency | RET-CONC-001–RET-CONC-012 | 12 |
-| Provider transport, decoding, and taxonomy | RET-PROV-001–RET-PROV-040 | 40 |
+| Final transaction and concurrency | RET-CONC-001–RET-CONC-014 | 14 |
+| Provider transport, decoding, and taxonomy | RET-PROV-001–RET-PROV-043 | 43 |
 | Request, result, union, and SQL bounds | RET-BND-001–RET-BND-015 | 15 |
 | Keyword SQL scope | RET-KEY-001–RET-KEY-004 | 4 |
 | RRF and result determinism | RET-RANK-001–RET-RANK-005 | 5 |
 | Evidence, eligibility, and citations | RET-EVID-001–RET-EVID-010 | 10 |
 | AF-3 untrusted-evidence boundary | RET-INJ-001–RET-INJ-006 | 6 |
 | Privacy, public errors, and cache behavior | RET-PRIV-001–RET-PRIV-006 | 6 |
-| **AF-3 runtime total** | All nine AF-3 runtime categories | **109** |
+| **AF-3 runtime total** | All nine runtime categories | **114** |
 | Future consuming-phase obligations | RET-FUT-001–RET-FUT-004 | 4 |
-| **Complete specification total** | AF-3 runtime plus future obligations | **113** |
+| **Complete inventory** | Runtime plus future | **118** |
 
-Test-level counts below count stable IDs assigned to each level; a stable ID
-can count at more than one level. Every parameterized variant stated within an
-ID is independently executable at every listed applicable level and is not a
-new stable ID.
+### Canonical acceptance identity model
 
-| Planned test level | Stable-ID count |
+The canonical identity is exactly (Case ID, Variant, Test level). The
+canonical ledger below is the sole ownership, execution-boundary, status, and
+oracle source of truth. Every row has one finite owner, one finite execution
+boundary, one finite status, and one case-local oracle. Case prose and family
+summaries describe fixtures but cannot add a level, transfer ownership, merge
+oracles, or override a row.
+
+The finite test-level vocabulary is unit, provider-adapter contract,
+PostgreSQL integration, deterministic concurrency, fault injection, HTTP
+integration, and future consuming-phase acceptance. The finite owner
+vocabulary is AF-3A, AF-3B, AF-3C, and FUTURE. The finite status vocabulary is
+MERGED_IMPLEMENTED_NOT_REVALIDATED_IN_THIS_DOC_GATE and
+REQUIRED_NOT_YET_IMPLEMENTED.
+
+| Execution boundary | Exact meaning |
+| --- | --- |
+| PURE_REQUEST_VALIDATOR | Pure request parsing, decoded-query validation, normalization, and scalar/count bounds; no database or external adapter. |
+| AF3A_INITIAL_ACCESS | Proof-aware live session, active user, exact target, membership, and capability access before retrieval work. |
+| AF3A_KEYWORD | Scoped deterministic PostgreSQL keyword operation, including release before external I/O. |
+| AF3A_FINAL_VALIDATOR | First provider-independent final RR/RO validator/loader using zero, keyword, or explicit bounded synthetic candidates. |
+| AF3A_CONCURRENCY | Provider-independent clock, barrier, fixed-snapshot, batch, commit, deletion, and concurrency behavior. |
+| AF3B_EMBEDDING | One bounded embedding operation and its response/failure contract. |
+| AF3B_CHROMA_ADAPTER | Read-only Chroma compatibility/query, bounded Provider response, taxonomy, and adapter lifetime. |
+| AF3B_HYBRID_FUSION | Bounded dense/keyword union and deterministic exact fusion. |
+| AF3B_HYBRID_REGRESSION | A distinct AF-3B hybrid regression through an AF-3A prerequisite; it never transfers the prerequisite row. |
+| AF3C_HTTP | Request wire/media/routes, public errors, cache behavior, HTTP integration, or public all-sink behavior. |
+| AF3C_PUBLIC_EVIDENCE | AF-3C-only public Evidence schema, mapping, serialization, or public Evidence privacy. |
+| AF3C_PUBLIC_CITATION | AF-3C-only public Citation/CitationReference resolution, mapping, and serialization. |
+| FUTURE_CONSUMER | A named later consumer outside AF-3. |
+
+DEFAULT appears only for a stable case that has one unsplit fixture at that
+test level and no mixed-phase dependency at that level. A non-DEFAULT Variant
+is an explicit parameter identity. The Variant column itself is the complete
+executable-label registry: a row binds that label to the named stable case body
+and exact boundary. A case-level Planned test level line is only a capability
+summary. A level omitted for a particular variant is not declared for that
+variant because its oracle cannot be executed meaningfully there; only ledger
+rows are required.
+
+Oracle references use the case-local form `O-<level>-<variant>`, where the
+level token is `U`, `PAC`, `PG`, `DC`, `FI`, `HTTP`, or `FUTURE`. The reference
+is normative rather than opaque: it resolves to exactly the named variant's
+fixture and the single observable condition assigned to the row's boundary at
+that level in the corresponding case definition. A unit oracle observes only
+the pure/service/adapter condition that requires no real database or HTTP
+stack; a provider-adapter oracle observes the exact external-adapter contract;
+a PostgreSQL oracle observes the stated real-database participation,
+non-participation, transaction, bind, snapshot, or release condition; a
+deterministic-concurrency oracle observes the named latch-driven state
+transition; a fault-injection oracle observes the one named injected branch;
+an HTTP oracle observes the exact public status/envelope/header/disclosure
+condition; and a future oracle observes only its named later consumer. The
+case's forbidden behavior is part of the pass/fail definition only where it
+is observable at that same boundary and level. No row imports an assertion
+from another boundary merely because the larger fixture traverses it.
+
+ADR-008-R24 is a cross-cutting part of each canonical runtime oracle, not a
+second tuple registry. The exact applicability projection is every ledger row
+whose Owner is AF-3A, AF-3B, or AF-3C; each such row runs the shared recursive
+scanner over the sinks and sentinel-bearing values observable at its own test
+level and execution boundary, for success or failure. RET-PRIV-003 and
+RET-PRIV-004 supply focused conformance and mutation controls but do not limit
+that projection. FUTURE rows acquire R24 only when their named consumer makes
+them mandatory.
+
+The final inventory contains 398 explicit (Case ID, Variant) labels, 44
+DEFAULT identities, 442 total parameter identities, and 1,064 canonical rows.
+
+| Planned test level | Canonical rows |
 | --- | ---: |
-| `unit` | 51 |
-| `provider-adapter contract` | 40 |
-| `PostgreSQL integration` | 103 |
-| `HTTP integration` | 109 |
-| `future consuming-phase acceptance` | 4 |
+| unit | 233 |
+| provider-adapter contract | 167 |
+| PostgreSQL integration | 328 |
+| deterministic concurrency | 9 |
+| fault injection | 17 |
+| HTTP integration | 306 |
+| future consuming-phase acceptance | 4 |
 
-All 113 stable IDs have status `REQUIRED_NOT_YET_IMPLEMENTED`; zero are
-implemented, passing, skipped, or waived.
+| Owner | Canonical rows |
+| --- | ---: |
+| AF-3A | 115 |
+| AF-3B | 580 |
+| AF-3C | 365 |
+| FUTURE | 4 |
+
+| Execution boundary | Canonical rows |
+| --- | ---: |
+| PURE_REQUEST_VALIDATOR | 27 |
+| AF3A_INITIAL_ACCESS | 12 |
+| AF3A_KEYWORD | 15 |
+| AF3A_FINAL_VALIDATOR | 46 |
+| AF3A_CONCURRENCY | 15 |
+| AF3B_EMBEDDING | 55 |
+| AF3B_CHROMA_ADAPTER | 445 |
+| AF3B_HYBRID_FUSION | 17 |
+| AF3B_HYBRID_REGRESSION | 63 |
+| AF3C_HTTP | 261 |
+| AF3C_PUBLIC_EVIDENCE | 29 |
+| AF3C_PUBLIC_CITATION | 75 |
+| FUTURE_CONSUMER | 4 |
+
+| Status | Canonical rows |
+| --- | ---: |
+| MERGED_IMPLEMENTED_NOT_REVALIDATED_IN_THIS_DOC_GATE | 25 |
+| REQUIRED_NOT_YET_IMPLEMENTED | 1039 |
+
+| Case family | Canonical rows |
+| --- | ---: |
+| RET-AUTH | 29 |
+| RET-CONC | 73 |
+| RET-PROV | 651 |
+| RET-BND | 131 |
+| RET-KEY | 16 |
+| RET-RANK | 12 |
+| RET-EVID | 86 |
+| RET-INJ | 30 |
+| RET-PRIV | 32 |
+| RET-FUT | 4 |
+
+There are 1,064 distinct case-local Oracle references and each is referenced
+by exactly one canonical row. The enumerated ledger also yields 333 distinct
+case-to-level pairs, 261 distinct case-to-owner pairs, and 275 distinct case-
+to-boundary pairs. Those relations are not separate prose waivers: their full
+membership is exactly the ledger projection. All 27 ADR mapping rows below
+resolve to that ledger.
+
+The 25 merged markers are limited to complete direct pure-parser unit
+oracles. Production evidence for every row is
+`apps/api/app/retrieval/domain.py`; exact test evidence is
+`apps/api/tests/unit/retrieval/test_domain.py` as mapped below. The marker
+records merged evidence only; this documentation gate did not rerun the tests.
+
+| Canonical implemented identity | Exact production behavior | Exact unit-test assertion |
+| --- | --- | --- |
+| `RET-BND-001::ADJACENT-U0001-PRESERVATION` | `parse_retrieval_request` rejects U+0000 only and preserves U+0001 through NFC/whitespace processing. | `test_adjacent_control_is_accepted_and_preserved` |
+| `RET-BND-001::CASE-SENSITIVE-PRESERVATION` | NFC/ADR-whitespace normalization performs no case fold. | `test_forbidden_transformations_are_not_applied[case]` |
+| `RET-BND-001::EACH-WHITESPACE-TRIM-AND-COLLAPSE` | `_normalize_adr_008_whitespace` handles exactly `_ADR_008_WHITESPACE`. | `test_every_adr_008_whitespace_code_point_is_trimmed_and_collapsed` executes the full finite set. |
+| `RET-BND-001::EMBEDDED-U0000-REJECTION` | `parse_retrieval_request` rejects any embedded U+0000 before NFC. | `test_null_code_point_is_rejected[embedded]` |
+| `RET-BND-001::EXCLUDED-U200B-PRESERVATION` | U+200B is absent from `_ADR_008_WHITESPACE` and remains unchanged. | `test_excluded_whitespace_like_code_point_is_preserved` |
+| `RET-BND-001::LONE-SURROGATE-REJECTION` | `_validate_query_scalar_domain` rejects the surrogate range before encoding/normalization. | `test_surrogates_are_rejected` executes high- and low-surrogate parameters. |
+| `RET-BND-001::MISSING-QUERY-REJECTION` | Closed mapping validation requires the exact `query` key. | `test_missing_query_is_rejected` |
+| `RET-BND-001::NFC-CANONICAL-EQUIVALENCE` | `unicodedata.normalize("NFC", query)` is applied exactly once before whitespace normalization. | `test_canonically_equivalent_queries_produce_equal_nfc_requests` |
+| `RET-BND-001::NORMALIZED-SCALAR-EXACT-1` | Post-normalization scalar domain includes 1. | `test_normalized_scalar_boundaries_are_accepted[1]` |
+| `RET-BND-001::NORMALIZED-SCALAR-EXACT-2048` | Post-normalization scalar domain includes 2,048. | `test_normalized_scalar_boundaries_are_accepted[2048]` |
+| `RET-BND-001::NORMALIZED-SCALAR-PLUS-ONE-2049` | Post-normalization scalar domain rejects 2,049. | `test_normalized_scalar_count_above_maximum_is_rejected` |
+| `RET-BND-001::NO-NFKC-COMPATIBILITY-FOLD` | Parser uses NFC, not NFKC/NFKD. | `test_forbidden_transformations_are_not_applied[compatibility-character]` |
+| `RET-BND-001::QUERY-EXACT-STRING-TYPE` | `type(query) is str` rejects every declared non-string/subclass fixture without coercion. | `test_query_requires_exact_string_type` executes the complete finite parameter list. |
+| `RET-BND-001::U0000-ALONE-REJECTION` | `parse_retrieval_request` rejects U+0000 alone before NFC. | `test_null_code_point_is_rejected[single]` |
+| `RET-BND-001::WHITESPACE-ONLY-REJECTION` | Exact whitespace normalization produces an empty value, then scalar minimum rejects it. | `test_whitespace_only_query_is_rejected_after_normalization` |
+| `RET-BND-002::UTF8-BYTES-EXACT-4096` | Strict UTF-8 count accepts equality 4,096. | `test_4096_utf8_bytes_are_accepted` |
+| `RET-BND-002::UTF8-BYTES-PLUS-ONE-4097` | Strict UTF-8 count rejects 4,097. | `test_4097_utf8_bytes_are_rejected` |
+| `RET-BND-003::PARSER-DEFAULT-10` | Omitted `requested_count` uses exact integer 10. | `test_requested_count_defaults_to_ten` |
+| `RET-BND-003::PARSER-MINIMUM-1` | Exact built-in integer 1 passes the inclusive domain. | `test_requested_count_accepts_inclusive_boundaries[1]` |
+| `RET-BND-003::PARSER-MAXIMUM-50` | Exact built-in integer 50 passes the inclusive domain. | `test_requested_count_accepts_inclusive_boundaries[50]` |
+| `RET-BND-003::PARSER-ZERO-REJECTED` | Exact built-in integer 0 fails the inclusive domain. | `test_requested_count_rejects_invalid_values[zero]` |
+| `RET-BND-003::PARSER-PLUS-ONE-51-REJECTED` | Exact built-in integer 51 fails the inclusive domain. | `test_requested_count_rejects_invalid_values[fifty-one]` |
+| `RET-BND-003::PARSER-BOOLEAN-TRUE-REJECTED` | Exact-type validation rejects boolean `true` before integer range logic. | `test_requested_count_rejects_invalid_values[boolean]` |
+| `RET-BND-003::PARSER-FLOAT-1-REJECTED` | Exact-type validation rejects float `1.0`. | `test_requested_count_rejects_invalid_values[float]` |
+| `RET-BND-003::PARSER-STRING-1-REJECTED` | Exact-type validation rejects string `"1"`. | `test_requested_count_rejects_invalid_values[string]` |
+
+`RET-BND-001::POST-NORMALIZATION-SCALAR-BOUNDARY` and
+`RET-BND-003::PARSER-NEGATIVE-ONE-REJECTED` remain
+`REQUIRED_NOT_YET_IMPLEMENTED`: source branches exist, but the exact declared
+fixtures have no direct merged unit assertion. No stable ID is globally
+implemented. Every downstream, repository, Provider, internal authoritative
+retrieval record, database, and HTTP tuple remains required and unimplemented.
+
+### Non-circular phase and fixture rules
+
+Every AF-3A row is provider-independent. It performs no embedding call, Chroma
+probe/query, Provider response handling, dense-candidate work, hybrid union,
+RRF/fusion, public Evidence/Citation work, or HTTP assertion. AF-3A final and
+concurrency rows use keyword candidates, zero candidates, or explicitly
+bounded synthetic candidate UUIDs/ranks. Synthetic candidates are never
+described as Chroma output. A deterministic provider-independent pause/barrier
+may model elapsed external time while every external-adapter call count remains
+zero.
+
+AF-3B rows may use embedding, Chroma, dense candidates, bounded hybrid union,
+fusion, and distinct regressions through AF-3A controls. Every such regression
+has an explicit AF3B-qualified variant identity and is not an AF-3A close
+prerequisite. AF-3A owns non-HTTP all-sink assertions for its database and
+internal authoritative retrieval record behavior. AF-3B owns non-HTTP
+embedding, Provider, and hybrid all-sink regressions. AF-3C alone owns request wire/media,
+public routes/errors/cache, public Evidence, public Citation, serialization,
+and public HTTP all-sink assertions. All AF-3C rows remain unimplemented.
+
+Within a case body, generic Provider or public-result wording applies only to a
+ledger row whose boundary permits it. It never changes an AF-3A row fixture.
+The following family allocations make the dependency splits explicit:
+
+| Family | Provider-independent AF-3A identity | AF-3B identity | AF-3C identity |
+| --- | --- | --- | --- |
+| RET-AUTH-010 | AF3A-INITIAL-ACCESS-ZERO-HIT; AF3A-FINAL-REAUTH-ZERO-CANDIDATES; AF3A-FINAL-SNAPSHOT-ZERO-CANDIDATES | AF3B-PRESENT-EMPTY-PROVIDER; AF3B-HYBRID-AUTHORIZED-EMPTY-REGRESSION | AF3C-AUTHORIZED-EMPTY-HTTP |
+| RET-CONC-002/003/005/007/008/009 | Each exact AF3A-KEYWORD label uses a keyword candidate and provider-independent barrier. | Each exact AF3B-HYBRID regression label uses Provider/dense timing. | Each exact AF3C-HTTP label owns public mapping. |
+| RET-CONC-004 | Separate AF3A keyword processing and failed labels. | Separate AF3B hybrid processing and failed regression labels. | Separate AF3C HTTP processing and failed labels. |
+| RET-CONC-006/010 | Exact AF3A-SYNTHETIC labels use bounded synthetic identities/ranks. | Exact AF3B-HYBRID regression labels use hybrid candidates. | Exact AF3C-HTTP labels own public mapping. |
+| RET-CONC-011 | Four AF3A rows independently cover batch-two statement failure, commit failure, connection failure, and statement timeout with keyword/synthetic candidates. | Four distinct AF3B-HYBRID regression rows rerun those failure points after hybrid work. | Four AF3C-HTTP rows own public errors. |
+| RET-CONC-012 | AF3A-ZERO-CANDIDATE-ACCESS-LOSS uses zero candidates. | AF3B-HYBRID-ZERO-CANDIDATE-ACCESS-LOSS-REGRESSION uses the present-empty dense path. | AF3C-HTTP-ZERO-CANDIDATE-ACCESS-LOSS owns public behavior. |
+| RET-CONC-013 | The three exact clock labels plus AF3A-PROVIDER-INDEPENDENT-ELAPSED-BARRIER-EXPIRY are AF-3A. | AF3B-SESSION-EXPIRES-DURING-PROVIDER-REGRESSION is the separate Provider-time regression. | AF3C-HTTP-FINAL-NOW-FRESH-AWARE, AF3C-HTTP-EXPIRES-GREATER-VALID, AF3C-HTTP-EXPIRES-EQUALITY-EXPIRED, and AF3C-HTTP-SESSION-EXPIRES-DURING-PROVIDER own their exact public outcomes. |
+| RET-CONC-014 | AF3A-PHYSICAL-DELETE-KEYWORD-BEFORE-FINAL-SNAPSHOT uses keyword input. | AF3B-PHYSICAL-DELETE-BEFORE-FINAL-SNAPSHOT-REGRESSION uses the stale Chroma ID. | AF3C-HTTP-PHYSICAL-DELETE-BEFORE-FINAL-SNAPSHOT owns authorized-empty public mapping. |
+| RET-BND-008 | AF3A-ZERO-SYNTHETIC-CANDIDATES proves final authorization with zero validation batches. | AF3B-PRESENT-EMPTY-DENSE-ZERO-UNION proves Provider parsing and hybrid zero union. | AF3C-HTTP-AUTHORIZED-EMPTY-ZERO-UNION |
+| RET-BND-009–015 | Each exact AF3A-SYNTHETIC row owns only unique-input/batch/query bounds. | Each exact AF3B-HYBRID regression row owns dense union/fusion regression. | Each exact AF3C-HTTP row owns public cutoff/serialization. |
+| RET-KEY-001–004 | Exact AF3A rows own scoped eligibility, simple bound plainto_tsquery, ts_rank_cd, score/UUID order, cutoff 128, revalidation, bounded counts, and scoped repository use. | Exact AF3B-HYBRID regression rows own only hybrid regressions. | Exact AF3C-HTTP rows own route/repository/public behavior. |
+| RET-EVID-001 | AF3A-AUTHORITATIVE-INTERNAL-RECORD-PROJECTION uses keyword/synthetic input and the PostgreSQL projection only. | AF3B-FUSED-INTERNAL-RECORD-EXTENSION adds hybrid-derived rank primitives. | AF3C-PUBLIC-EVIDENCE-SERIALIZATION alone exposes public Evidence. |
+| RET-EVID-002/010 | Exact AF3A rows own provider-independent eligibility/empty internal authoritative retrieval record sets. | Exact AF3B-HYBRID regression rows own hybrid regressions. | Exact AF3C-HTTP rows own public Evidence mapping. |
+| RET-INJ-001–006 | AF3A-KEYWORD-INTERNAL-RECORD uses keyword/synthetic candidates and classifies text only untrusted_document_content. | AF3B-HYBRID-INTERNAL-RECORD-REGRESSION owns hybrid-derived regressions. | AF3C-PUBLIC-EVIDENCE-HTTP owns public serialization. |
+| RET-PRIV-004 | KEYWORD-DATABASE-FATAL, FINAL-AUTHORIZATION-STATEMENT-FATAL, LATER-BATCH, and FINAL-COMMIT secrecy rows require no Provider. | EMBEDDING-FATAL, PROVIDER-FATAL, AF3B-HYBRID-FINAL-COMMIT-ALL-SINK-REGRESSION, and AF3B-HYBRID-LATER-BATCH-ALL-SINK-REGRESSION are distinct AF-3B failures. | Corresponding HTTP rows own generic public error/cache/privacy behavior; the two hybrid HTTP rows are explicitly AF3C-qualified. |
+
+RET-BND-010 and RET-BND-011 keep equality 64 and plus-one 65 as different
+stable cases and phase-qualified labels. RET-BND-015 separately proves the
+exact maximum 192 and three validation queries. RET-BND-002 now has separate
+UTF8-BYTES-EXACT-4096 and UTF8-BYTES-PLUS-ONE-4097 identities. Provider
+multi-fixture cases similarly use explicit labels instead of combined DEFAULT.
+
+### Canonical ownership ledger
+
+<!-- CANONICAL_LEDGER_BEGIN -->
+| Case ID | Variant | Test level | Execution boundary | Owner | Status | Oracle |
+| --- | --- | --- | --- | --- | --- | --- |
+| RET-AUTH-001 | AUTHENTICATION-FAILURE-CONTROL | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AUTHENTICATION-FAILURE-CONTROL |
+| RET-AUTH-001 | UNAUTHENTICATED-PRECEDENCE | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-UNAUTHENTICATED-PRECEDENCE |
+| RET-AUTH-002 | DEFAULT | PostgreSQL integration | AF3A_INITIAL_ACCESS | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-AUTH-002 | DEFAULT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-AUTH-003 | DEFAULT | PostgreSQL integration | AF3A_INITIAL_ACCESS | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-AUTH-003 | DEFAULT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-AUTH-004 | AF3A-ROLE-MATRIX | PostgreSQL integration | AF3A_INITIAL_ACCESS | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-ROLE-MATRIX |
+| RET-AUTH-004 | AF3B-HYBRID-ROLE-MATRIX-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-ROLE-MATRIX-REGRESSION |
+| RET-AUTH-004 | AF3C-HTTP-ROLE-MATRIX | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-ROLE-MATRIX |
+| RET-AUTH-005 | AF3A-NONMEMBER-INITIAL-ACCESS | PostgreSQL integration | AF3A_INITIAL_ACCESS | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-NONMEMBER-INITIAL-ACCESS |
+| RET-AUTH-005 | HIDDEN-TARGET-PRECEDENCE | PostgreSQL integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-HIDDEN-TARGET-PRECEDENCE |
+| RET-AUTH-005 | HIDDEN-TARGET-PRECEDENCE | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-HIDDEN-TARGET-PRECEDENCE |
+| RET-AUTH-006 | DEFAULT | PostgreSQL integration | AF3A_INITIAL_ACCESS | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-AUTH-006 | DEFAULT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-AUTH-007 | DEFAULT | PostgreSQL integration | AF3A_INITIAL_ACCESS | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-AUTH-007 | DEFAULT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-AUTH-008 | DEFAULT | PostgreSQL integration | AF3A_INITIAL_ACCESS | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-AUTH-008 | DEFAULT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-AUTH-009 | AF3A-KEYWORD-EXACT-TARGET | PostgreSQL integration | AF3A_KEYWORD | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-KEYWORD-EXACT-TARGET |
+| RET-AUTH-009 | AF3B-HYBRID-EXACT-TARGET-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-EXACT-TARGET-REGRESSION |
+| RET-AUTH-009 | AF3C-HTTP-EXACT-TARGET | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-EXACT-TARGET |
+| RET-AUTH-010 | AF3A-FINAL-REAUTH-ZERO-CANDIDATES | unit | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-U-AF3A-FINAL-REAUTH-ZERO-CANDIDATES |
+| RET-AUTH-010 | AF3A-FINAL-SNAPSHOT-ZERO-CANDIDATES | PostgreSQL integration | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-FINAL-SNAPSHOT-ZERO-CANDIDATES |
+| RET-AUTH-010 | AF3A-INITIAL-ACCESS-ZERO-HIT | PostgreSQL integration | AF3A_INITIAL_ACCESS | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-INITIAL-ACCESS-ZERO-HIT |
+| RET-AUTH-010 | AF3B-HYBRID-AUTHORIZED-EMPTY-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-AUTHORIZED-EMPTY-REGRESSION |
+| RET-AUTH-010 | AF3B-PRESENT-EMPTY-PROVIDER | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-AF3B-PRESENT-EMPTY-PROVIDER |
+| RET-AUTH-010 | AF3C-AUTHORIZED-EMPTY-HTTP | HTTP integration | AF3C_PUBLIC_EVIDENCE | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-AUTHORIZED-EMPTY-HTTP |
+| RET-AUTH-011 | DEFAULT | PostgreSQL integration | AF3A_INITIAL_ACCESS | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-AUTH-011 | DEFAULT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-BND-001 | ADJACENT-U0001-PRESERVATION | unit | PURE_REQUEST_VALIDATOR | AF-3A | MERGED_IMPLEMENTED_NOT_REVALIDATED_IN_THIS_DOC_GATE | O-U-ADJACENT-U0001-PRESERVATION |
+| RET-BND-001 | AF3A-EMBEDDED-U0000-GATE-ORDER | PostgreSQL integration | AF3A_INITIAL_ACCESS | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-EMBEDDED-U0000-GATE-ORDER |
+| RET-BND-001 | AF3A-INITIAL-ACCESS-INVALID-QUERY-GATE-ORDER | PostgreSQL integration | AF3A_INITIAL_ACCESS | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-INITIAL-ACCESS-INVALID-QUERY-GATE-ORDER |
+| RET-BND-001 | AF3A-KEYWORD-BIND-CASE-SENSITIVE | PostgreSQL integration | AF3A_KEYWORD | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-KEYWORD-BIND-CASE-SENSITIVE |
+| RET-BND-001 | AF3A-KEYWORD-BIND-EXCLUDED-U200B | PostgreSQL integration | AF3A_KEYWORD | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-KEYWORD-BIND-EXCLUDED-U200B |
+| RET-BND-001 | AF3A-KEYWORD-BIND-NFC-AND-WHITESPACE | PostgreSQL integration | AF3A_KEYWORD | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-KEYWORD-BIND-NFC-AND-WHITESPACE |
+| RET-BND-001 | AF3A-KEYWORD-BIND-NO-NFKC | PostgreSQL integration | AF3A_KEYWORD | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-KEYWORD-BIND-NO-NFKC |
+| RET-BND-001 | AF3A-KEYWORD-BIND-POST-NORMALIZATION-BOUNDARY | PostgreSQL integration | AF3A_KEYWORD | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-KEYWORD-BIND-POST-NORMALIZATION-BOUNDARY |
+| RET-BND-001 | AF3A-U0000-ALONE-GATE-ORDER | PostgreSQL integration | AF3A_INITIAL_ACCESS | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-U0000-ALONE-GATE-ORDER |
+| RET-BND-001 | AF3B-HYBRID-QUERY-NORMALIZATION-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-QUERY-NORMALIZATION-REGRESSION |
+| RET-BND-001 | AF3C-HTTP-CASE-SENSITIVE-PRESERVATION | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-CASE-SENSITIVE-PRESERVATION |
+| RET-BND-001 | AF3C-HTTP-EMBEDDED-U0000-REJECTION | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-EMBEDDED-U0000-REJECTION |
+| RET-BND-001 | AF3C-HTTP-EXCLUDED-U200B-PRESERVATION | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-EXCLUDED-U200B-PRESERVATION |
+| RET-BND-001 | AF3C-HTTP-INVALID-QUERY-VALIDATION | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-INVALID-QUERY-VALIDATION |
+| RET-BND-001 | AF3C-HTTP-NO-NFKC-COMPATIBILITY-FOLD | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-NO-NFKC-COMPATIBILITY-FOLD |
+| RET-BND-001 | AF3C-HTTP-POST-NORMALIZATION-SCALAR-BOUNDARY | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-POST-NORMALIZATION-SCALAR-BOUNDARY |
+| RET-BND-001 | AF3C-HTTP-U0000-ALONE-REJECTION | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-U0000-ALONE-REJECTION |
+| RET-BND-001 | AF3C-HTTP-VALID-NORMALIZED-QUERY | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-VALID-NORMALIZED-QUERY |
+| RET-BND-001 | CASE-SENSITIVE-PRESERVATION | unit | PURE_REQUEST_VALIDATOR | AF-3A | MERGED_IMPLEMENTED_NOT_REVALIDATED_IN_THIS_DOC_GATE | O-U-CASE-SENSITIVE-PRESERVATION |
+| RET-BND-001 | EACH-WHITESPACE-TRIM-AND-COLLAPSE | unit | PURE_REQUEST_VALIDATOR | AF-3A | MERGED_IMPLEMENTED_NOT_REVALIDATED_IN_THIS_DOC_GATE | O-U-EACH-WHITESPACE-TRIM-AND-COLLAPSE |
+| RET-BND-001 | EMBEDDED-U0000-REJECTION | unit | PURE_REQUEST_VALIDATOR | AF-3A | MERGED_IMPLEMENTED_NOT_REVALIDATED_IN_THIS_DOC_GATE | O-U-EMBEDDED-U0000-REJECTION |
+| RET-BND-001 | EXCLUDED-U200B-PRESERVATION | unit | PURE_REQUEST_VALIDATOR | AF-3A | MERGED_IMPLEMENTED_NOT_REVALIDATED_IN_THIS_DOC_GATE | O-U-EXCLUDED-U200B-PRESERVATION |
+| RET-BND-001 | LONE-SURROGATE-REJECTION | unit | PURE_REQUEST_VALIDATOR | AF-3A | MERGED_IMPLEMENTED_NOT_REVALIDATED_IN_THIS_DOC_GATE | O-U-LONE-SURROGATE-REJECTION |
+| RET-BND-001 | MISSING-QUERY-REJECTION | unit | PURE_REQUEST_VALIDATOR | AF-3A | MERGED_IMPLEMENTED_NOT_REVALIDATED_IN_THIS_DOC_GATE | O-U-MISSING-QUERY-REJECTION |
+| RET-BND-001 | NFC-CANONICAL-EQUIVALENCE | unit | PURE_REQUEST_VALIDATOR | AF-3A | MERGED_IMPLEMENTED_NOT_REVALIDATED_IN_THIS_DOC_GATE | O-U-NFC-CANONICAL-EQUIVALENCE |
+| RET-BND-001 | NORMALIZED-SCALAR-EXACT-1 | unit | PURE_REQUEST_VALIDATOR | AF-3A | MERGED_IMPLEMENTED_NOT_REVALIDATED_IN_THIS_DOC_GATE | O-U-NORMALIZED-SCALAR-EXACT-1 |
+| RET-BND-001 | NORMALIZED-SCALAR-EXACT-2048 | unit | PURE_REQUEST_VALIDATOR | AF-3A | MERGED_IMPLEMENTED_NOT_REVALIDATED_IN_THIS_DOC_GATE | O-U-NORMALIZED-SCALAR-EXACT-2048 |
+| RET-BND-001 | NORMALIZED-SCALAR-PLUS-ONE-2049 | unit | PURE_REQUEST_VALIDATOR | AF-3A | MERGED_IMPLEMENTED_NOT_REVALIDATED_IN_THIS_DOC_GATE | O-U-NORMALIZED-SCALAR-PLUS-ONE-2049 |
+| RET-BND-001 | NO-NFKC-COMPATIBILITY-FOLD | unit | PURE_REQUEST_VALIDATOR | AF-3A | MERGED_IMPLEMENTED_NOT_REVALIDATED_IN_THIS_DOC_GATE | O-U-NO-NFKC-COMPATIBILITY-FOLD |
+| RET-BND-001 | POST-NORMALIZATION-SCALAR-BOUNDARY | unit | PURE_REQUEST_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-U-POST-NORMALIZATION-SCALAR-BOUNDARY |
+| RET-BND-001 | QUERY-EXACT-STRING-TYPE | unit | PURE_REQUEST_VALIDATOR | AF-3A | MERGED_IMPLEMENTED_NOT_REVALIDATED_IN_THIS_DOC_GATE | O-U-QUERY-EXACT-STRING-TYPE |
+| RET-BND-001 | U0000-ALONE-REJECTION | unit | PURE_REQUEST_VALIDATOR | AF-3A | MERGED_IMPLEMENTED_NOT_REVALIDATED_IN_THIS_DOC_GATE | O-U-U0000-ALONE-REJECTION |
+| RET-BND-001 | WHITESPACE-ONLY-REJECTION | unit | PURE_REQUEST_VALIDATOR | AF-3A | MERGED_IMPLEMENTED_NOT_REVALIDATED_IN_THIS_DOC_GATE | O-U-WHITESPACE-ONLY-REJECTION |
+| RET-BND-002 | UTF8-BYTES-EXACT-4096 | unit | PURE_REQUEST_VALIDATOR | AF-3A | MERGED_IMPLEMENTED_NOT_REVALIDATED_IN_THIS_DOC_GATE | O-U-UTF8-BYTES-EXACT-4096 |
+| RET-BND-002 | UTF8-BYTES-EXACT-4096 | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-UTF8-BYTES-EXACT-4096 |
+| RET-BND-002 | UTF8-BYTES-PLUS-ONE-4097 | unit | PURE_REQUEST_VALIDATOR | AF-3A | MERGED_IMPLEMENTED_NOT_REVALIDATED_IN_THIS_DOC_GATE | O-U-UTF8-BYTES-PLUS-ONE-4097 |
+| RET-BND-002 | UTF8-BYTES-PLUS-ONE-4097 | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-UTF8-BYTES-PLUS-ONE-4097 |
+| RET-BND-003 | AUTHORIZED-BODY-VALIDATION-CONTROL | unit | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-U-AUTHORIZED-BODY-VALIDATION-CONTROL |
+| RET-BND-003 | AUTHORIZED-BODY-VALIDATION-CONTROL | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AUTHORIZED-BODY-VALIDATION-CONTROL |
+| RET-BND-003 | BODY-EXACT-65536 | unit | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-U-BODY-EXACT-65536 |
+| RET-BND-003 | BODY-EXACT-65536 | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-BODY-EXACT-65536 |
+| RET-BND-003 | BODY-PLUS-ONE-65537 | unit | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-U-BODY-PLUS-ONE-65537 |
+| RET-BND-003 | BODY-PLUS-ONE-65537 | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-BODY-PLUS-ONE-65537 |
+| RET-BND-003 | CANONICAL-PATH-CONTROL | unit | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-U-CANONICAL-PATH-CONTROL |
+| RET-BND-003 | CANONICAL-PATH-CONTROL | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CANONICAL-PATH-CONTROL |
+| RET-BND-003 | CHUNKED-BODY-PLUS-ONE-65537 | unit | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-U-CHUNKED-BODY-PLUS-ONE-65537 |
+| RET-BND-003 | CHUNKED-BODY-PLUS-ONE-65537 | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CHUNKED-BODY-PLUS-ONE-65537 |
+| RET-BND-003 | ESCAPED-U0000-DOMAIN-HANDOFF | unit | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-U-ESCAPED-U0000-DOMAIN-HANDOFF |
+| RET-BND-003 | ESCAPED-U0000-DOMAIN-HANDOFF | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-ESCAPED-U0000-DOMAIN-HANDOFF |
+| RET-BND-003 | LITERAL-NUL-JSON-PARSER-REJECTION | unit | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-U-LITERAL-NUL-JSON-PARSER-REJECTION |
+| RET-BND-003 | LITERAL-NUL-JSON-PARSER-REJECTION | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-LITERAL-NUL-JSON-PARSER-REJECTION |
+| RET-BND-003 | MEDIA-BEFORE-BODY-PRECEDENCE | unit | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-U-MEDIA-BEFORE-BODY-PRECEDENCE |
+| RET-BND-003 | MEDIA-BEFORE-BODY-PRECEDENCE | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-MEDIA-BEFORE-BODY-PRECEDENCE |
+| RET-BND-003 | NONCANONICAL-PATH | unit | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-U-NONCANONICAL-PATH |
+| RET-BND-003 | NONCANONICAL-PATH | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-NONCANONICAL-PATH |
+| RET-BND-003 | AF3A-INVALID-COUNT-STOPS-BEFORE-KEYWORD | PostgreSQL integration | AF3A_KEYWORD | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-INVALID-COUNT-STOPS-BEFORE-KEYWORD |
+| RET-BND-003 | AF3A-KEYWORD-CEILING-INDEPENDENT-OF-REQUESTED-COUNT | PostgreSQL integration | AF3A_KEYWORD | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-KEYWORD-CEILING-INDEPENDENT-OF-REQUESTED-COUNT |
+| RET-BND-003 | AF3B-CONFIGURED-PROVIDER-COUNT-FORMULA | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-AF3B-CONFIGURED-PROVIDER-COUNT-FORMULA |
+| RET-BND-003 | AF3B-CONFIGURED-PROVIDER-COUNT-FORMULA | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-AF3B-CONFIGURED-PROVIDER-COUNT-FORMULA |
+| RET-BND-003 | AF3B-DENSE-COUNT-BOUNDED-BY-POSITIONS | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-AF3B-DENSE-COUNT-BOUNDED-BY-POSITIONS |
+| RET-BND-003 | AF3B-DENSE-COUNT-BOUNDED-BY-POSITIONS | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-AF3B-DENSE-COUNT-BOUNDED-BY-POSITIONS |
+| RET-BND-003 | AF3C-HTTP-REQUESTED-COUNT-VALIDATION | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-REQUESTED-COUNT-VALIDATION |
+| RET-BND-003 | AF3C-PUBLIC-RESULT-CUTOFF | HTTP integration | AF3C_PUBLIC_EVIDENCE | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-PUBLIC-RESULT-CUTOFF |
+| RET-BND-003 | PARSER-BOOLEAN-TRUE-REJECTED | unit | PURE_REQUEST_VALIDATOR | AF-3A | MERGED_IMPLEMENTED_NOT_REVALIDATED_IN_THIS_DOC_GATE | O-U-PARSER-BOOLEAN-TRUE-REJECTED |
+| RET-BND-003 | PARSER-DEFAULT-10 | unit | PURE_REQUEST_VALIDATOR | AF-3A | MERGED_IMPLEMENTED_NOT_REVALIDATED_IN_THIS_DOC_GATE | O-U-PARSER-DEFAULT-10 |
+| RET-BND-003 | PARSER-FLOAT-1-REJECTED | unit | PURE_REQUEST_VALIDATOR | AF-3A | MERGED_IMPLEMENTED_NOT_REVALIDATED_IN_THIS_DOC_GATE | O-U-PARSER-FLOAT-1-REJECTED |
+| RET-BND-003 | PARSER-MAXIMUM-50 | unit | PURE_REQUEST_VALIDATOR | AF-3A | MERGED_IMPLEMENTED_NOT_REVALIDATED_IN_THIS_DOC_GATE | O-U-PARSER-MAXIMUM-50 |
+| RET-BND-003 | PARSER-MINIMUM-1 | unit | PURE_REQUEST_VALIDATOR | AF-3A | MERGED_IMPLEMENTED_NOT_REVALIDATED_IN_THIS_DOC_GATE | O-U-PARSER-MINIMUM-1 |
+| RET-BND-003 | PARSER-NEGATIVE-ONE-REJECTED | unit | PURE_REQUEST_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-U-PARSER-NEGATIVE-ONE-REJECTED |
+| RET-BND-003 | PARSER-PLUS-ONE-51-REJECTED | unit | PURE_REQUEST_VALIDATOR | AF-3A | MERGED_IMPLEMENTED_NOT_REVALIDATED_IN_THIS_DOC_GATE | O-U-PARSER-PLUS-ONE-51-REJECTED |
+| RET-BND-003 | PARSER-STRING-1-REJECTED | unit | PURE_REQUEST_VALIDATOR | AF-3A | MERGED_IMPLEMENTED_NOT_REVALIDATED_IN_THIS_DOC_GATE | O-U-PARSER-STRING-1-REJECTED |
+| RET-BND-003 | PARSER-ZERO-REJECTED | unit | PURE_REQUEST_VALIDATOR | AF-3A | MERGED_IMPLEMENTED_NOT_REVALIDATED_IN_THIS_DOC_GATE | O-U-PARSER-ZERO-REJECTED |
+| RET-BND-003 | SUPPORTED-MEDIA-CONTROL | unit | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-U-SUPPORTED-MEDIA-CONTROL |
+| RET-BND-003 | SUPPORTED-MEDIA-CONTROL | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-SUPPORTED-MEDIA-CONTROL |
+| RET-BND-003 | U0000-AUTHENTICATION-PRECEDENCE | unit | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-U-U0000-AUTHENTICATION-PRECEDENCE |
+| RET-BND-003 | U0000-AUTHENTICATION-PRECEDENCE | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-U0000-AUTHENTICATION-PRECEDENCE |
+| RET-BND-003 | U0000-HIDDEN-TARGET-PRECEDENCE | unit | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-U-U0000-HIDDEN-TARGET-PRECEDENCE |
+| RET-BND-003 | U0000-HIDDEN-TARGET-PRECEDENCE | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-U0000-HIDDEN-TARGET-PRECEDENCE |
+| RET-BND-003 | UNSUPPORTED-MEDIA | unit | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-U-UNSUPPORTED-MEDIA |
+| RET-BND-003 | UNSUPPORTED-MEDIA | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-UNSUPPORTED-MEDIA |
+| RET-BND-004 | DEFAULT | unit | AF3B_HYBRID_FUSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-DEFAULT |
+| RET-BND-004 | DEFAULT | provider-adapter contract | AF3B_HYBRID_FUSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-DEFAULT |
+| RET-BND-004 | DEFAULT | PostgreSQL integration | AF3B_HYBRID_FUSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-BND-004 | DEFAULT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-BND-005 | DEFAULT | unit | AF3B_HYBRID_FUSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-DEFAULT |
+| RET-BND-005 | DEFAULT | provider-adapter contract | AF3B_HYBRID_FUSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-DEFAULT |
+| RET-BND-005 | DEFAULT | PostgreSQL integration | AF3B_HYBRID_FUSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-BND-005 | DEFAULT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-BND-006 | AF3A-KEYWORD-LIMIT-EXACT-128 | PostgreSQL integration | AF3A_KEYWORD | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-KEYWORD-LIMIT-EXACT-128 |
+| RET-BND-006 | AF3B-HYBRID-KEYWORD-LIMIT-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-KEYWORD-LIMIT-REGRESSION |
+| RET-BND-006 | AF3C-HTTP-KEYWORD-LIMIT | HTTP integration | AF3C_PUBLIC_EVIDENCE | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-KEYWORD-LIMIT |
+| RET-BND-007 | DEFAULT | unit | AF3B_HYBRID_FUSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-DEFAULT |
+| RET-BND-007 | DEFAULT | PostgreSQL integration | AF3B_HYBRID_FUSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-BND-007 | DEFAULT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-BND-008 | AF3A-ZERO-SYNTHETIC-CANDIDATES | unit | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-U-AF3A-ZERO-SYNTHETIC-CANDIDATES |
+| RET-BND-008 | AF3A-ZERO-SYNTHETIC-CANDIDATES | PostgreSQL integration | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-ZERO-SYNTHETIC-CANDIDATES |
+| RET-BND-008 | AF3B-PRESENT-EMPTY-DENSE-ZERO-UNION | unit | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-AF3B-PRESENT-EMPTY-DENSE-ZERO-UNION |
+| RET-BND-008 | AF3B-PRESENT-EMPTY-DENSE-ZERO-UNION | provider-adapter contract | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-AF3B-PRESENT-EMPTY-DENSE-ZERO-UNION |
+| RET-BND-008 | AF3B-PRESENT-EMPTY-DENSE-ZERO-UNION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-PRESENT-EMPTY-DENSE-ZERO-UNION |
+| RET-BND-008 | AF3C-HTTP-AUTHORIZED-EMPTY-ZERO-UNION | HTTP integration | AF3C_PUBLIC_EVIDENCE | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-AUTHORIZED-EMPTY-ZERO-UNION |
+| RET-BND-009 | AF3A-SYNTHETIC-ONE-UNIQUE-CANDIDATE | unit | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-U-AF3A-SYNTHETIC-ONE-UNIQUE-CANDIDATE |
+| RET-BND-009 | AF3A-SYNTHETIC-ONE-UNIQUE-CANDIDATE | PostgreSQL integration | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-SYNTHETIC-ONE-UNIQUE-CANDIDATE |
+| RET-BND-009 | AF3B-HYBRID-ONE-UNIQUE-CANDIDATE-REGRESSION | unit | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-AF3B-HYBRID-ONE-UNIQUE-CANDIDATE-REGRESSION |
+| RET-BND-009 | AF3B-HYBRID-ONE-UNIQUE-CANDIDATE-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-ONE-UNIQUE-CANDIDATE-REGRESSION |
+| RET-BND-009 | AF3C-HTTP-ONE-UNIQUE-CANDIDATE | HTTP integration | AF3C_PUBLIC_EVIDENCE | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-ONE-UNIQUE-CANDIDATE |
+| RET-BND-010 | AF3A-SYNTHETIC-EXACT-BATCH-64 | unit | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-U-AF3A-SYNTHETIC-EXACT-BATCH-64 |
+| RET-BND-010 | AF3A-SYNTHETIC-EXACT-BATCH-64 | PostgreSQL integration | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-SYNTHETIC-EXACT-BATCH-64 |
+| RET-BND-010 | AF3B-HYBRID-EXACT-BATCH-64-REGRESSION | unit | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-AF3B-HYBRID-EXACT-BATCH-64-REGRESSION |
+| RET-BND-010 | AF3B-HYBRID-EXACT-BATCH-64-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-EXACT-BATCH-64-REGRESSION |
+| RET-BND-010 | AF3C-HTTP-EXACT-BATCH-64 | HTTP integration | AF3C_PUBLIC_EVIDENCE | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-EXACT-BATCH-64 |
+| RET-BND-011 | AF3A-SYNTHETIC-BATCH-PLUS-ONE-65 | unit | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-U-AF3A-SYNTHETIC-BATCH-PLUS-ONE-65 |
+| RET-BND-011 | AF3A-SYNTHETIC-BATCH-PLUS-ONE-65 | PostgreSQL integration | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-SYNTHETIC-BATCH-PLUS-ONE-65 |
+| RET-BND-011 | AF3B-HYBRID-BATCH-PLUS-ONE-65-REGRESSION | unit | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-AF3B-HYBRID-BATCH-PLUS-ONE-65-REGRESSION |
+| RET-BND-011 | AF3B-HYBRID-BATCH-PLUS-ONE-65-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-BATCH-PLUS-ONE-65-REGRESSION |
+| RET-BND-011 | AF3C-HTTP-BATCH-PLUS-ONE-65 | HTTP integration | AF3C_PUBLIC_EVIDENCE | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-BATCH-PLUS-ONE-65 |
+| RET-BND-012 | AF3A-SYNTHETIC-THREE-DETERMINISTIC-BATCHES | unit | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-U-AF3A-SYNTHETIC-THREE-DETERMINISTIC-BATCHES |
+| RET-BND-012 | AF3A-SYNTHETIC-THREE-DETERMINISTIC-BATCHES | PostgreSQL integration | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-SYNTHETIC-THREE-DETERMINISTIC-BATCHES |
+| RET-BND-012 | AF3B-HYBRID-THREE-DETERMINISTIC-BATCHES-REGRESSION | unit | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-AF3B-HYBRID-THREE-DETERMINISTIC-BATCHES-REGRESSION |
+| RET-BND-012 | AF3B-HYBRID-THREE-DETERMINISTIC-BATCHES-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-THREE-DETERMINISTIC-BATCHES-REGRESSION |
+| RET-BND-012 | AF3C-HTTP-THREE-DETERMINISTIC-BATCHES | HTTP integration | AF3C_PUBLIC_EVIDENCE | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-THREE-DETERMINISTIC-BATCHES |
+| RET-BND-013 | AF3A-SYNTHETIC-DUPLICATES-REDUCE-UNIQUE-INPUT | unit | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-U-AF3A-SYNTHETIC-DUPLICATES-REDUCE-UNIQUE-INPUT |
+| RET-BND-013 | AF3A-SYNTHETIC-DUPLICATES-REDUCE-UNIQUE-INPUT | PostgreSQL integration | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-SYNTHETIC-DUPLICATES-REDUCE-UNIQUE-INPUT |
+| RET-BND-013 | AF3B-HYBRID-DUPLICATES-REDUCE-UNIQUE-INPUT-REGRESSION | unit | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-AF3B-HYBRID-DUPLICATES-REDUCE-UNIQUE-INPUT-REGRESSION |
+| RET-BND-013 | AF3B-HYBRID-DUPLICATES-REDUCE-UNIQUE-INPUT-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-DUPLICATES-REDUCE-UNIQUE-INPUT-REGRESSION |
+| RET-BND-013 | AF3C-HTTP-DUPLICATES-REDUCE-UNIQUE-INPUT | HTTP integration | AF3C_PUBLIC_EVIDENCE | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-DUPLICATES-REDUCE-UNIQUE-INPUT |
+| RET-BND-014 | AF3A-SYNTHETIC-UNORDERED-POSTGRESQL-ROWS | PostgreSQL integration | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-SYNTHETIC-UNORDERED-POSTGRESQL-ROWS |
+| RET-BND-014 | AF3B-HYBRID-UNORDERED-POSTGRESQL-ROWS-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-UNORDERED-POSTGRESQL-ROWS-REGRESSION |
+| RET-BND-014 | AF3C-HTTP-UNORDERED-POSTGRESQL-ROWS | HTTP integration | AF3C_PUBLIC_EVIDENCE | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-UNORDERED-POSTGRESQL-ROWS |
+| RET-BND-015 | AF3A-SYNTHETIC-MAXIMUM-192-THREE-BATCHES | PostgreSQL integration | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-SYNTHETIC-MAXIMUM-192-THREE-BATCHES |
+| RET-BND-015 | AF3B-HYBRID-MAXIMUM-192-THREE-BATCHES-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-MAXIMUM-192-THREE-BATCHES-REGRESSION |
+| RET-BND-015 | AF3C-HTTP-MAXIMUM-192-THREE-BATCHES | HTTP integration | AF3C_PUBLIC_EVIDENCE | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-MAXIMUM-192-THREE-BATCHES |
+| RET-CONC-001 | CHROMA-LIFECYCLE-REVOCATION | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CHROMA-LIFECYCLE-REVOCATION |
+| RET-CONC-001 | CHROMA-LIFECYCLE-REVOCATION | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CHROMA-LIFECYCLE-REVOCATION |
+| RET-CONC-001 | EMBEDDING-LIFECYCLE-CANCELLATION | PostgreSQL integration | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-EMBEDDING-LIFECYCLE-CANCELLATION |
+| RET-CONC-001 | EMBEDDING-LIFECYCLE-CANCELLATION | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-EMBEDDING-LIFECYCLE-CANCELLATION |
+| RET-CONC-001 | EMBEDDING-LIFECYCLE-FAILURE | PostgreSQL integration | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-EMBEDDING-LIFECYCLE-FAILURE |
+| RET-CONC-001 | EMBEDDING-LIFECYCLE-FAILURE | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-EMBEDDING-LIFECYCLE-FAILURE |
+| RET-CONC-001 | EMBEDDING-LIFECYCLE-SUCCESS | PostgreSQL integration | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-EMBEDDING-LIFECYCLE-SUCCESS |
+| RET-CONC-001 | EMBEDDING-LIFECYCLE-SUCCESS | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-EMBEDDING-LIFECYCLE-SUCCESS |
+| RET-CONC-002 | AF3A-KEYWORD-SESSION-REVOKED-BEFORE-FINAL-SNAPSHOT | PostgreSQL integration | AF3A_CONCURRENCY | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-KEYWORD-SESSION-REVOKED-BEFORE-FINAL-SNAPSHOT |
+| RET-CONC-002 | AF3B-HYBRID-SESSION-REVOKED-BEFORE-FINAL-SNAPSHOT-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-SESSION-REVOKED-BEFORE-FINAL-SNAPSHOT-REGRESSION |
+| RET-CONC-002 | AF3C-HTTP-SESSION-REVOKED-BEFORE-FINAL-SNAPSHOT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-SESSION-REVOKED-BEFORE-FINAL-SNAPSHOT |
+| RET-CONC-003 | AF3A-KEYWORD-USER-INACTIVE-BEFORE-FINAL-SNAPSHOT | PostgreSQL integration | AF3A_CONCURRENCY | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-KEYWORD-USER-INACTIVE-BEFORE-FINAL-SNAPSHOT |
+| RET-CONC-003 | AF3B-HYBRID-USER-INACTIVE-BEFORE-FINAL-SNAPSHOT-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-USER-INACTIVE-BEFORE-FINAL-SNAPSHOT-REGRESSION |
+| RET-CONC-003 | AF3C-HTTP-USER-INACTIVE-BEFORE-FINAL-SNAPSHOT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-USER-INACTIVE-BEFORE-FINAL-SNAPSHOT |
+| RET-CONC-004 | AF3A-KEYWORD-DOCUMENT-FAILED-BEFORE-FINAL-SNAPSHOT | PostgreSQL integration | AF3A_CONCURRENCY | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-KEYWORD-DOCUMENT-FAILED-BEFORE-FINAL-SNAPSHOT |
+| RET-CONC-004 | AF3A-KEYWORD-DOCUMENT-PROCESSING-BEFORE-FINAL-SNAPSHOT | PostgreSQL integration | AF3A_CONCURRENCY | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-KEYWORD-DOCUMENT-PROCESSING-BEFORE-FINAL-SNAPSHOT |
+| RET-CONC-004 | AF3B-HYBRID-DOCUMENT-FAILED-BEFORE-FINAL-SNAPSHOT-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-DOCUMENT-FAILED-BEFORE-FINAL-SNAPSHOT-REGRESSION |
+| RET-CONC-004 | AF3B-HYBRID-DOCUMENT-PROCESSING-BEFORE-FINAL-SNAPSHOT-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-DOCUMENT-PROCESSING-BEFORE-FINAL-SNAPSHOT-REGRESSION |
+| RET-CONC-004 | AF3C-HTTP-DOCUMENT-FAILED-BEFORE-FINAL-SNAPSHOT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-DOCUMENT-FAILED-BEFORE-FINAL-SNAPSHOT |
+| RET-CONC-004 | AF3C-HTTP-DOCUMENT-PROCESSING-BEFORE-FINAL-SNAPSHOT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-DOCUMENT-PROCESSING-BEFORE-FINAL-SNAPSHOT |
+| RET-CONC-005 | AF3A-KEYWORD-CHUNK-REPLACED-BEFORE-FINAL-SNAPSHOT | PostgreSQL integration | AF3A_CONCURRENCY | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-KEYWORD-CHUNK-REPLACED-BEFORE-FINAL-SNAPSHOT |
+| RET-CONC-005 | AF3B-HYBRID-CHUNK-REPLACED-BEFORE-FINAL-SNAPSHOT-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-CHUNK-REPLACED-BEFORE-FINAL-SNAPSHOT-REGRESSION |
+| RET-CONC-005 | AF3C-HTTP-CHUNK-REPLACED-BEFORE-FINAL-SNAPSHOT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-CHUNK-REPLACED-BEFORE-FINAL-SNAPSHOT |
+| RET-CONC-006 | AF3A-SYNTHETIC-MEMBERSHIP-REMOVED-AFTER-SNAPSHOT | PostgreSQL integration | AF3A_CONCURRENCY | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-SYNTHETIC-MEMBERSHIP-REMOVED-AFTER-SNAPSHOT |
+| RET-CONC-006 | AF3B-HYBRID-MEMBERSHIP-REMOVED-AFTER-SNAPSHOT-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-MEMBERSHIP-REMOVED-AFTER-SNAPSHOT-REGRESSION |
+| RET-CONC-006 | AF3C-HTTP-MEMBERSHIP-REMOVED-AFTER-SNAPSHOT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-MEMBERSHIP-REMOVED-AFTER-SNAPSHOT |
+| RET-CONC-007 | AF3A-KEYWORD-DOCUMENT-CHANGED-AFTER-SNAPSHOT | PostgreSQL integration | AF3A_CONCURRENCY | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-KEYWORD-DOCUMENT-CHANGED-AFTER-SNAPSHOT |
+| RET-CONC-007 | AF3B-HYBRID-DOCUMENT-CHANGED-AFTER-SNAPSHOT-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-DOCUMENT-CHANGED-AFTER-SNAPSHOT-REGRESSION |
+| RET-CONC-007 | AF3C-HTTP-DOCUMENT-CHANGED-AFTER-SNAPSHOT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-DOCUMENT-CHANGED-AFTER-SNAPSHOT |
+| RET-CONC-008 | AF3A-KEYWORD-CHUNK-REPLACED-AFTER-SNAPSHOT | PostgreSQL integration | AF3A_CONCURRENCY | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-KEYWORD-CHUNK-REPLACED-AFTER-SNAPSHOT |
+| RET-CONC-008 | AF3B-HYBRID-CHUNK-REPLACED-AFTER-SNAPSHOT-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-CHUNK-REPLACED-AFTER-SNAPSHOT-REGRESSION |
+| RET-CONC-008 | AF3C-HTTP-CHUNK-REPLACED-AFTER-SNAPSHOT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-CHUNK-REPLACED-AFTER-SNAPSHOT |
+| RET-CONC-009 | AF3A-KEYWORD-REVOCATION-AFTER-FINAL-COMMIT | PostgreSQL integration | AF3A_CONCURRENCY | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-KEYWORD-REVOCATION-AFTER-FINAL-COMMIT |
+| RET-CONC-009 | AF3B-HYBRID-REVOCATION-AFTER-FINAL-COMMIT-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-REVOCATION-AFTER-FINAL-COMMIT-REGRESSION |
+| RET-CONC-009 | AF3C-HTTP-REVOCATION-AFTER-FINAL-COMMIT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-REVOCATION-AFTER-FINAL-COMMIT |
+| RET-CONC-010 | AF3A-SYNTHETIC-MULTIBATCH-FIXED-SNAPSHOT | PostgreSQL integration | AF3A_CONCURRENCY | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-SYNTHETIC-MULTIBATCH-FIXED-SNAPSHOT |
+| RET-CONC-010 | AF3B-HYBRID-MULTIBATCH-FIXED-SNAPSHOT-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-MULTIBATCH-FIXED-SNAPSHOT-REGRESSION |
+| RET-CONC-010 | AF3C-HTTP-MULTIBATCH-FIXED-SNAPSHOT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-MULTIBATCH-FIXED-SNAPSHOT |
+| RET-CONC-011 | AF3A-BATCH-TWO-STATEMENT-FAILURE | PostgreSQL integration | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-BATCH-TWO-STATEMENT-FAILURE |
+| RET-CONC-011 | AF3A-BATCH-TWO-STATEMENT-TIMEOUT | PostgreSQL integration | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-BATCH-TWO-STATEMENT-TIMEOUT |
+| RET-CONC-011 | AF3A-FINAL-COMMIT-FAILURE | PostgreSQL integration | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-FINAL-COMMIT-FAILURE |
+| RET-CONC-011 | AF3A-FINAL-CONNECTION-FAILURE | PostgreSQL integration | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-FINAL-CONNECTION-FAILURE |
+| RET-CONC-011 | AF3B-HYBRID-BATCH-TWO-STATEMENT-FAILURE-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-BATCH-TWO-STATEMENT-FAILURE-REGRESSION |
+| RET-CONC-011 | AF3B-HYBRID-BATCH-TWO-STATEMENT-TIMEOUT-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-BATCH-TWO-STATEMENT-TIMEOUT-REGRESSION |
+| RET-CONC-011 | AF3B-HYBRID-FINAL-COMMIT-FAILURE-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-FINAL-COMMIT-FAILURE-REGRESSION |
+| RET-CONC-011 | AF3B-HYBRID-FINAL-CONNECTION-FAILURE-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-FINAL-CONNECTION-FAILURE-REGRESSION |
+| RET-CONC-011 | AF3C-HTTP-BATCH-TWO-STATEMENT-FAILURE | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-BATCH-TWO-STATEMENT-FAILURE |
+| RET-CONC-011 | AF3C-HTTP-BATCH-TWO-STATEMENT-TIMEOUT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-BATCH-TWO-STATEMENT-TIMEOUT |
+| RET-CONC-011 | AF3C-HTTP-FINAL-COMMIT-FAILURE | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-FINAL-COMMIT-FAILURE |
+| RET-CONC-011 | AF3C-HTTP-FINAL-CONNECTION-FAILURE | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-FINAL-CONNECTION-FAILURE |
+| RET-CONC-012 | AF3A-ZERO-CANDIDATE-ACCESS-LOSS | PostgreSQL integration | AF3A_CONCURRENCY | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-ZERO-CANDIDATE-ACCESS-LOSS |
+| RET-CONC-012 | AF3B-HYBRID-ZERO-CANDIDATE-ACCESS-LOSS-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-ZERO-CANDIDATE-ACCESS-LOSS-REGRESSION |
+| RET-CONC-012 | AF3C-HTTP-ZERO-CANDIDATE-ACCESS-LOSS | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-ZERO-CANDIDATE-ACCESS-LOSS |
+| RET-CONC-013 | AF3A-PROVIDER-INDEPENDENT-ELAPSED-BARRIER-EXPIRY | PostgreSQL integration | AF3A_CONCURRENCY | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-PROVIDER-INDEPENDENT-ELAPSED-BARRIER-EXPIRY |
+| RET-CONC-013 | AF3A-PROVIDER-INDEPENDENT-ELAPSED-BARRIER-EXPIRY | deterministic concurrency | AF3A_CONCURRENCY | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-DC-AF3A-PROVIDER-INDEPENDENT-ELAPSED-BARRIER-EXPIRY |
+| RET-CONC-013 | EXPIRES-EQUALITY-EXPIRED | unit | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-U-EXPIRES-EQUALITY-EXPIRED |
+| RET-CONC-013 | EXPIRES-EQUALITY-EXPIRED | PostgreSQL integration | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-EXPIRES-EQUALITY-EXPIRED |
+| RET-CONC-013 | AF3C-HTTP-EXPIRES-EQUALITY-EXPIRED | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-EXPIRES-EQUALITY-EXPIRED |
+| RET-CONC-013 | EXPIRES-GREATER-VALID | unit | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-U-EXPIRES-GREATER-VALID |
+| RET-CONC-013 | EXPIRES-GREATER-VALID | PostgreSQL integration | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-EXPIRES-GREATER-VALID |
+| RET-CONC-013 | AF3C-HTTP-EXPIRES-GREATER-VALID | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-EXPIRES-GREATER-VALID |
+| RET-CONC-013 | FINAL-NOW-FRESH-AWARE | unit | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-U-FINAL-NOW-FRESH-AWARE |
+| RET-CONC-013 | FINAL-NOW-FRESH-AWARE | PostgreSQL integration | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-FINAL-NOW-FRESH-AWARE |
+| RET-CONC-013 | AF3C-HTTP-FINAL-NOW-FRESH-AWARE | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-FINAL-NOW-FRESH-AWARE |
+| RET-CONC-013 | AF3B-SESSION-EXPIRES-DURING-PROVIDER-REGRESSION | unit | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-AF3B-SESSION-EXPIRES-DURING-PROVIDER-REGRESSION |
+| RET-CONC-013 | AF3B-SESSION-EXPIRES-DURING-PROVIDER-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-SESSION-EXPIRES-DURING-PROVIDER-REGRESSION |
+| RET-CONC-013 | AF3B-SESSION-EXPIRES-DURING-PROVIDER-REGRESSION | deterministic concurrency | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-DC-AF3B-SESSION-EXPIRES-DURING-PROVIDER-REGRESSION |
+| RET-CONC-013 | AF3C-HTTP-SESSION-EXPIRES-DURING-PROVIDER | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-SESSION-EXPIRES-DURING-PROVIDER |
+| RET-CONC-014 | AF3A-PHYSICAL-DELETE-KEYWORD-BEFORE-FINAL-SNAPSHOT | PostgreSQL integration | AF3A_CONCURRENCY | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-PHYSICAL-DELETE-KEYWORD-BEFORE-FINAL-SNAPSHOT |
+| RET-CONC-014 | AF3A-PHYSICAL-DELETE-KEYWORD-BEFORE-FINAL-SNAPSHOT | deterministic concurrency | AF3A_CONCURRENCY | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-DC-AF3A-PHYSICAL-DELETE-KEYWORD-BEFORE-FINAL-SNAPSHOT |
+| RET-CONC-014 | AF3B-PHYSICAL-DELETE-BEFORE-FINAL-SNAPSHOT-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-PHYSICAL-DELETE-BEFORE-FINAL-SNAPSHOT-REGRESSION |
+| RET-CONC-014 | AF3B-PHYSICAL-DELETE-BEFORE-FINAL-SNAPSHOT-REGRESSION | deterministic concurrency | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-DC-AF3B-PHYSICAL-DELETE-BEFORE-FINAL-SNAPSHOT-REGRESSION |
+| RET-CONC-014 | AF3C-HTTP-PHYSICAL-DELETE-BEFORE-FINAL-SNAPSHOT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-PHYSICAL-DELETE-BEFORE-FINAL-SNAPSHOT |
+| RET-EVID-001 | AF3A-AUTHORITATIVE-INTERNAL-RECORD-PROJECTION | unit | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-U-AF3A-AUTHORITATIVE-INTERNAL-RECORD-PROJECTION |
+| RET-EVID-001 | AF3A-AUTHORITATIVE-INTERNAL-RECORD-PROJECTION | PostgreSQL integration | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-AUTHORITATIVE-INTERNAL-RECORD-PROJECTION |
+| RET-EVID-001 | AF3B-FUSED-INTERNAL-RECORD-EXTENSION | unit | AF3B_HYBRID_FUSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-AF3B-FUSED-INTERNAL-RECORD-EXTENSION |
+| RET-EVID-001 | AF3B-FUSED-INTERNAL-RECORD-EXTENSION | PostgreSQL integration | AF3B_HYBRID_FUSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-FUSED-INTERNAL-RECORD-EXTENSION |
+| RET-EVID-001 | AF3C-PUBLIC-EVIDENCE-SERIALIZATION | unit | AF3C_PUBLIC_EVIDENCE | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-U-AF3C-PUBLIC-EVIDENCE-SERIALIZATION |
+| RET-EVID-001 | AF3C-PUBLIC-EVIDENCE-SERIALIZATION | HTTP integration | AF3C_PUBLIC_EVIDENCE | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-PUBLIC-EVIDENCE-SERIALIZATION |
+| RET-EVID-002 | AF3A-NULL-HASH-OMISSION | PostgreSQL integration | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-NULL-HASH-OMISSION |
+| RET-EVID-002 | AF3B-HYBRID-NULL-HASH-OMISSION-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-NULL-HASH-OMISSION-REGRESSION |
+| RET-EVID-002 | AF3C-HTTP-NULL-HASH-OMISSION | HTTP integration | AF3C_PUBLIC_EVIDENCE | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-NULL-HASH-OMISSION |
+| RET-EVID-003 | CITATION-AUTH-EXPIRED | PostgreSQL integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CITATION-AUTH-EXPIRED |
+| RET-EVID-003 | CITATION-AUTH-EXPIRED | HTTP integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CITATION-AUTH-EXPIRED |
+| RET-EVID-003 | CITATION-AUTH-INACTIVE-USER | PostgreSQL integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CITATION-AUTH-INACTIVE-USER |
+| RET-EVID-003 | CITATION-AUTH-INACTIVE-USER | HTTP integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CITATION-AUTH-INACTIVE-USER |
+| RET-EVID-003 | CITATION-AUTH-REVOKED | PostgreSQL integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CITATION-AUTH-REVOKED |
+| RET-EVID-003 | CITATION-AUTH-REVOKED | HTTP integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CITATION-AUTH-REVOKED |
+| RET-EVID-003 | CITATION-BODY-EXACT-65536 | PostgreSQL integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CITATION-BODY-EXACT-65536 |
+| RET-EVID-003 | CITATION-BODY-EXACT-65536 | HTTP integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CITATION-BODY-EXACT-65536 |
+| RET-EVID-003 | CITATION-BODY-PLUS-ONE-65537 | PostgreSQL integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CITATION-BODY-PLUS-ONE-65537 |
+| RET-EVID-003 | CITATION-BODY-PLUS-ONE-65537 | HTTP integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CITATION-BODY-PLUS-ONE-65537 |
+| RET-EVID-003 | CITATION-CHUNKED-BODY-PLUS-ONE-65537 | PostgreSQL integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CITATION-CHUNKED-BODY-PLUS-ONE-65537 |
+| RET-EVID-003 | CITATION-CHUNKED-BODY-PLUS-ONE-65537 | HTTP integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CITATION-CHUNKED-BODY-PLUS-ONE-65537 |
+| RET-EVID-003 | CITATION-DATABASE-FAILURE | PostgreSQL integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CITATION-DATABASE-FAILURE |
+| RET-EVID-003 | CITATION-DATABASE-FAILURE | HTTP integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CITATION-DATABASE-FAILURE |
+| RET-EVID-003 | CITATION-NONCANONICAL-PATH-UNHYPHENATED | PostgreSQL integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CITATION-NONCANONICAL-PATH-UNHYPHENATED |
+| RET-EVID-003 | CITATION-NONCANONICAL-PATH-UNHYPHENATED | HTTP integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CITATION-NONCANONICAL-PATH-UNHYPHENATED |
+| RET-EVID-003 | CITATION-NONCANONICAL-PATH-UPPERCASE | PostgreSQL integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CITATION-NONCANONICAL-PATH-UPPERCASE |
+| RET-EVID-003 | CITATION-NONCANONICAL-PATH-UPPERCASE | HTTP integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CITATION-NONCANONICAL-PATH-UPPERCASE |
+| RET-EVID-003 | CITATION-REFERENCE-MALFORMED-PREFIX | PostgreSQL integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CITATION-REFERENCE-MALFORMED-PREFIX |
+| RET-EVID-003 | CITATION-REFERENCE-MALFORMED-PREFIX | HTTP integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CITATION-REFERENCE-MALFORMED-PREFIX |
+| RET-EVID-003 | CITATION-REFERENCE-SHORT-HASH | PostgreSQL integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CITATION-REFERENCE-SHORT-HASH |
+| RET-EVID-003 | CITATION-REFERENCE-SHORT-HASH | HTTP integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CITATION-REFERENCE-SHORT-HASH |
+| RET-EVID-003 | CITATION-REFERENCE-UNHYPHENATED-UUID | PostgreSQL integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CITATION-REFERENCE-UNHYPHENATED-UUID |
+| RET-EVID-003 | CITATION-REFERENCE-UNHYPHENATED-UUID | HTTP integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CITATION-REFERENCE-UNHYPHENATED-UUID |
+| RET-EVID-003 | CITATION-REFERENCE-UPPERCASE-HASH | PostgreSQL integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CITATION-REFERENCE-UPPERCASE-HASH |
+| RET-EVID-003 | CITATION-REFERENCE-UPPERCASE-HASH | HTTP integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CITATION-REFERENCE-UPPERCASE-HASH |
+| RET-EVID-003 | CITATION-REFERENCE-UPPERCASE-UUID | PostgreSQL integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CITATION-REFERENCE-UPPERCASE-UUID |
+| RET-EVID-003 | CITATION-REFERENCE-UPPERCASE-UUID | HTTP integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CITATION-REFERENCE-UPPERCASE-UUID |
+| RET-EVID-003 | CITATION-SCHEMA-ARRAY-VALUE | PostgreSQL integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CITATION-SCHEMA-ARRAY-VALUE |
+| RET-EVID-003 | CITATION-SCHEMA-ARRAY-VALUE | HTTP integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CITATION-SCHEMA-ARRAY-VALUE |
+| RET-EVID-003 | CITATION-SCHEMA-BOOLEAN-VALUE | PostgreSQL integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CITATION-SCHEMA-BOOLEAN-VALUE |
+| RET-EVID-003 | CITATION-SCHEMA-BOOLEAN-VALUE | HTTP integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CITATION-SCHEMA-BOOLEAN-VALUE |
+| RET-EVID-003 | CITATION-SCHEMA-DUPLICATE-FIELD | PostgreSQL integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CITATION-SCHEMA-DUPLICATE-FIELD |
+| RET-EVID-003 | CITATION-SCHEMA-DUPLICATE-FIELD | HTTP integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CITATION-SCHEMA-DUPLICATE-FIELD |
+| RET-EVID-003 | CITATION-SCHEMA-EXTRA-FIELD | PostgreSQL integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CITATION-SCHEMA-EXTRA-FIELD |
+| RET-EVID-003 | CITATION-SCHEMA-EXTRA-FIELD | HTTP integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CITATION-SCHEMA-EXTRA-FIELD |
+| RET-EVID-003 | CITATION-SCHEMA-MISSING-FIELD | PostgreSQL integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CITATION-SCHEMA-MISSING-FIELD |
+| RET-EVID-003 | CITATION-SCHEMA-MISSING-FIELD | HTTP integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CITATION-SCHEMA-MISSING-FIELD |
+| RET-EVID-003 | CITATION-SCHEMA-NONOBJECT-BODY | PostgreSQL integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CITATION-SCHEMA-NONOBJECT-BODY |
+| RET-EVID-003 | CITATION-SCHEMA-NONOBJECT-BODY | HTTP integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CITATION-SCHEMA-NONOBJECT-BODY |
+| RET-EVID-003 | CITATION-SCHEMA-NULL-VALUE | PostgreSQL integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CITATION-SCHEMA-NULL-VALUE |
+| RET-EVID-003 | CITATION-SCHEMA-NULL-VALUE | HTTP integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CITATION-SCHEMA-NULL-VALUE |
+| RET-EVID-003 | CITATION-SCHEMA-NUMBER-VALUE | PostgreSQL integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CITATION-SCHEMA-NUMBER-VALUE |
+| RET-EVID-003 | CITATION-SCHEMA-NUMBER-VALUE | HTTP integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CITATION-SCHEMA-NUMBER-VALUE |
+| RET-EVID-003 | CITATION-SCHEMA-OBJECT-VALUE | PostgreSQL integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CITATION-SCHEMA-OBJECT-VALUE |
+| RET-EVID-003 | CITATION-SCHEMA-OBJECT-VALUE | HTTP integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CITATION-SCHEMA-OBJECT-VALUE |
+| RET-EVID-003 | CITATION-SUPPORTED-MEDIA-CONTROL | PostgreSQL integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CITATION-SUPPORTED-MEDIA-CONTROL |
+| RET-EVID-003 | CITATION-SUPPORTED-MEDIA-CONTROL | HTTP integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CITATION-SUPPORTED-MEDIA-CONTROL |
+| RET-EVID-003 | CITATION-UNAUTHENTICATED-PRECEDENCE | PostgreSQL integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CITATION-UNAUTHENTICATED-PRECEDENCE |
+| RET-EVID-003 | CITATION-UNAUTHENTICATED-PRECEDENCE | HTTP integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CITATION-UNAUTHENTICATED-PRECEDENCE |
+| RET-EVID-003 | CITATION-UNSUPPORTED-MEDIA | PostgreSQL integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CITATION-UNSUPPORTED-MEDIA |
+| RET-EVID-003 | CITATION-UNSUPPORTED-MEDIA | HTTP integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CITATION-UNSUPPORTED-MEDIA |
+| RET-EVID-004 | DEFAULT | PostgreSQL integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-EVID-004 | DEFAULT | HTTP integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-EVID-005 | DEFAULT | PostgreSQL integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-EVID-005 | DEFAULT | HTTP integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-EVID-006 | CITATION-DOCUMENT-DELETED | PostgreSQL integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CITATION-DOCUMENT-DELETED |
+| RET-EVID-006 | CITATION-DOCUMENT-DELETED | HTTP integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CITATION-DOCUMENT-DELETED |
+| RET-EVID-006 | CITATION-DOCUMENT-INELIGIBLE | PostgreSQL integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CITATION-DOCUMENT-INELIGIBLE |
+| RET-EVID-006 | CITATION-DOCUMENT-INELIGIBLE | HTTP integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CITATION-DOCUMENT-INELIGIBLE |
+| RET-EVID-007 | DEFAULT | PostgreSQL integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-EVID-007 | DEFAULT | HTTP integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-EVID-008 | CITATION-HIDDEN-TARGET-PRECEDENCE | PostgreSQL integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CITATION-HIDDEN-TARGET-PRECEDENCE |
+| RET-EVID-008 | CITATION-HIDDEN-TARGET-PRECEDENCE | HTTP integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CITATION-HIDDEN-TARGET-PRECEDENCE |
+| RET-EVID-008 | CITATION-POSSESSION-NONMEMBER | PostgreSQL integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CITATION-POSSESSION-NONMEMBER |
+| RET-EVID-008 | CITATION-POSSESSION-NONMEMBER | HTTP integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CITATION-POSSESSION-NONMEMBER |
+| RET-EVID-008 | CITATION-REFERENCE-TARGET-MISMATCH | PostgreSQL integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CITATION-REFERENCE-TARGET-MISMATCH |
+| RET-EVID-008 | CITATION-REFERENCE-TARGET-MISMATCH | HTTP integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CITATION-REFERENCE-TARGET-MISMATCH |
+| RET-EVID-009 | AUTHORITATIVE-NULL-HASH | unit | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-U-AUTHORITATIVE-NULL-HASH |
+| RET-EVID-009 | AUTHORITATIVE-NULL-HASH | PostgreSQL integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AUTHORITATIVE-NULL-HASH |
+| RET-EVID-009 | AUTHORITATIVE-NULL-HASH | HTTP integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AUTHORITATIVE-NULL-HASH |
+| RET-EVID-009 | REFERENCE-MISSING-HASH-COMPONENT | unit | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-U-REFERENCE-MISSING-HASH-COMPONENT |
+| RET-EVID-009 | REFERENCE-MISSING-HASH-COMPONENT | PostgreSQL integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-REFERENCE-MISSING-HASH-COMPONENT |
+| RET-EVID-009 | REFERENCE-MISSING-HASH-COMPONENT | HTTP integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-REFERENCE-MISSING-HASH-COMPONENT |
+| RET-EVID-010 | AF3A-ALL-INELIGIBLE-AUTHORIZED-EMPTY | PostgreSQL integration | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-ALL-INELIGIBLE-AUTHORIZED-EMPTY |
+| RET-EVID-010 | AF3B-HYBRID-ALL-INELIGIBLE-AUTHORIZED-EMPTY-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-ALL-INELIGIBLE-AUTHORIZED-EMPTY-REGRESSION |
+| RET-EVID-010 | AF3C-HTTP-ALL-INELIGIBLE-AUTHORIZED-EMPTY | HTTP integration | AF3C_PUBLIC_EVIDENCE | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-ALL-INELIGIBLE-AUTHORIZED-EMPTY |
+| RET-FUT-001 | DEFAULT | future consuming-phase acceptance | FUTURE_CONSUMER | FUTURE | REQUIRED_NOT_YET_IMPLEMENTED | O-FUTURE-DEFAULT |
+| RET-FUT-002 | DEFAULT | future consuming-phase acceptance | FUTURE_CONSUMER | FUTURE | REQUIRED_NOT_YET_IMPLEMENTED | O-FUTURE-DEFAULT |
+| RET-FUT-003 | DEFAULT | future consuming-phase acceptance | FUTURE_CONSUMER | FUTURE | REQUIRED_NOT_YET_IMPLEMENTED | O-FUTURE-DEFAULT |
+| RET-FUT-004 | DEFAULT | future consuming-phase acceptance | FUTURE_CONSUMER | FUTURE | REQUIRED_NOT_YET_IMPLEMENTED | O-FUTURE-DEFAULT |
+| RET-INJ-001 | AF3A-KEYWORD-INTERNAL-RECORD | unit | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-U-AF3A-KEYWORD-INTERNAL-RECORD |
+| RET-INJ-001 | AF3A-KEYWORD-INTERNAL-RECORD | PostgreSQL integration | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-KEYWORD-INTERNAL-RECORD |
+| RET-INJ-001 | AF3B-HYBRID-INTERNAL-RECORD-REGRESSION | unit | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-AF3B-HYBRID-INTERNAL-RECORD-REGRESSION |
+| RET-INJ-001 | AF3B-HYBRID-INTERNAL-RECORD-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-INTERNAL-RECORD-REGRESSION |
+| RET-INJ-001 | AF3C-PUBLIC-EVIDENCE-HTTP | HTTP integration | AF3C_PUBLIC_EVIDENCE | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-PUBLIC-EVIDENCE-HTTP |
+| RET-INJ-002 | AF3A-KEYWORD-INTERNAL-RECORD | unit | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-U-AF3A-KEYWORD-INTERNAL-RECORD |
+| RET-INJ-002 | AF3A-KEYWORD-INTERNAL-RECORD | PostgreSQL integration | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-KEYWORD-INTERNAL-RECORD |
+| RET-INJ-002 | AF3B-HYBRID-INTERNAL-RECORD-REGRESSION | unit | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-AF3B-HYBRID-INTERNAL-RECORD-REGRESSION |
+| RET-INJ-002 | AF3B-HYBRID-INTERNAL-RECORD-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-INTERNAL-RECORD-REGRESSION |
+| RET-INJ-002 | AF3C-PUBLIC-EVIDENCE-HTTP | HTTP integration | AF3C_PUBLIC_EVIDENCE | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-PUBLIC-EVIDENCE-HTTP |
+| RET-INJ-003 | AF3A-KEYWORD-INTERNAL-RECORD | unit | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-U-AF3A-KEYWORD-INTERNAL-RECORD |
+| RET-INJ-003 | AF3A-KEYWORD-INTERNAL-RECORD | PostgreSQL integration | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-KEYWORD-INTERNAL-RECORD |
+| RET-INJ-003 | AF3B-HYBRID-INTERNAL-RECORD-REGRESSION | unit | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-AF3B-HYBRID-INTERNAL-RECORD-REGRESSION |
+| RET-INJ-003 | AF3B-HYBRID-INTERNAL-RECORD-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-INTERNAL-RECORD-REGRESSION |
+| RET-INJ-003 | AF3C-PUBLIC-EVIDENCE-HTTP | HTTP integration | AF3C_PUBLIC_EVIDENCE | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-PUBLIC-EVIDENCE-HTTP |
+| RET-INJ-004 | AF3A-KEYWORD-INTERNAL-RECORD | unit | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-U-AF3A-KEYWORD-INTERNAL-RECORD |
+| RET-INJ-004 | AF3A-KEYWORD-INTERNAL-RECORD | PostgreSQL integration | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-KEYWORD-INTERNAL-RECORD |
+| RET-INJ-004 | AF3B-HYBRID-INTERNAL-RECORD-REGRESSION | unit | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-AF3B-HYBRID-INTERNAL-RECORD-REGRESSION |
+| RET-INJ-004 | AF3B-HYBRID-INTERNAL-RECORD-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-INTERNAL-RECORD-REGRESSION |
+| RET-INJ-004 | AF3C-PUBLIC-EVIDENCE-HTTP | HTTP integration | AF3C_PUBLIC_EVIDENCE | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-PUBLIC-EVIDENCE-HTTP |
+| RET-INJ-005 | AF3A-KEYWORD-INTERNAL-RECORD | unit | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-U-AF3A-KEYWORD-INTERNAL-RECORD |
+| RET-INJ-005 | AF3A-KEYWORD-INTERNAL-RECORD | PostgreSQL integration | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-KEYWORD-INTERNAL-RECORD |
+| RET-INJ-005 | AF3B-HYBRID-INTERNAL-RECORD-REGRESSION | unit | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-AF3B-HYBRID-INTERNAL-RECORD-REGRESSION |
+| RET-INJ-005 | AF3B-HYBRID-INTERNAL-RECORD-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-INTERNAL-RECORD-REGRESSION |
+| RET-INJ-005 | AF3C-PUBLIC-EVIDENCE-HTTP | HTTP integration | AF3C_PUBLIC_EVIDENCE | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-PUBLIC-EVIDENCE-HTTP |
+| RET-INJ-006 | AF3A-KEYWORD-INTERNAL-RECORD | unit | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-U-AF3A-KEYWORD-INTERNAL-RECORD |
+| RET-INJ-006 | AF3A-KEYWORD-INTERNAL-RECORD | PostgreSQL integration | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-KEYWORD-INTERNAL-RECORD |
+| RET-INJ-006 | AF3B-HYBRID-INTERNAL-RECORD-REGRESSION | unit | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-AF3B-HYBRID-INTERNAL-RECORD-REGRESSION |
+| RET-INJ-006 | AF3B-HYBRID-INTERNAL-RECORD-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-INTERNAL-RECORD-REGRESSION |
+| RET-INJ-006 | AF3C-PUBLIC-EVIDENCE-HTTP | HTTP integration | AF3C_PUBLIC_EVIDENCE | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-PUBLIC-EVIDENCE-HTTP |
+| RET-KEY-001 | AF3A-SCOPED-DETERMINISTIC-ORDER-CUTOFF | unit | AF3A_KEYWORD | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-U-AF3A-SCOPED-DETERMINISTIC-ORDER-CUTOFF |
+| RET-KEY-001 | AF3A-SCOPED-DETERMINISTIC-ORDER-CUTOFF | PostgreSQL integration | AF3A_KEYWORD | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-SCOPED-DETERMINISTIC-ORDER-CUTOFF |
+| RET-KEY-001 | AF3B-HYBRID-SCOPED-DETERMINISTIC-ORDER-CUTOFF-REGRESSION | unit | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-AF3B-HYBRID-SCOPED-DETERMINISTIC-ORDER-CUTOFF-REGRESSION |
+| RET-KEY-001 | AF3B-HYBRID-SCOPED-DETERMINISTIC-ORDER-CUTOFF-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-SCOPED-DETERMINISTIC-ORDER-CUTOFF-REGRESSION |
+| RET-KEY-001 | AF3C-HTTP-SCOPED-DETERMINISTIC-ORDER-CUTOFF | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-SCOPED-DETERMINISTIC-ORDER-CUTOFF |
+| RET-KEY-002 | AF3A-CROSS-SCOPE-REVALIDATION | PostgreSQL integration | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-CROSS-SCOPE-REVALIDATION |
+| RET-KEY-002 | AF3B-HYBRID-CROSS-SCOPE-REVALIDATION-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-CROSS-SCOPE-REVALIDATION-REGRESSION |
+| RET-KEY-002 | AF3C-HTTP-CROSS-SCOPE-REVALIDATION | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-CROSS-SCOPE-REVALIDATION |
+| RET-KEY-003 | AF3A-NO-GLOBAL-RESULT-COUNT | PostgreSQL integration | AF3A_KEYWORD | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-NO-GLOBAL-RESULT-COUNT |
+| RET-KEY-003 | AF3B-HYBRID-NO-GLOBAL-RESULT-COUNT-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-NO-GLOBAL-RESULT-COUNT-REGRESSION |
+| RET-KEY-003 | AF3C-HTTP-NO-GLOBAL-RESULT-COUNT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-NO-GLOBAL-RESULT-COUNT |
+| RET-KEY-004 | AF3A-SCOPED-REPOSITORY-ONLY | unit | AF3A_KEYWORD | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-U-AF3A-SCOPED-REPOSITORY-ONLY |
+| RET-KEY-004 | AF3A-SCOPED-REPOSITORY-ONLY | PostgreSQL integration | AF3A_KEYWORD | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3A-SCOPED-REPOSITORY-ONLY |
+| RET-KEY-004 | AF3B-HYBRID-SCOPED-REPOSITORY-ONLY-REGRESSION | unit | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-AF3B-HYBRID-SCOPED-REPOSITORY-ONLY-REGRESSION |
+| RET-KEY-004 | AF3B-HYBRID-SCOPED-REPOSITORY-ONLY-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-SCOPED-REPOSITORY-ONLY-REGRESSION |
+| RET-KEY-004 | AF3C-HTTP-SCOPED-REPOSITORY-ONLY | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-SCOPED-REPOSITORY-ONLY |
+| RET-PRIV-001 | DEFAULT | PostgreSQL integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-PRIV-001 | DEFAULT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-PRIV-002 | DEFAULT | PostgreSQL integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-PRIV-002 | DEFAULT | HTTP integration | AF3C_PUBLIC_EVIDENCE | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-PRIV-003 | CITATION-RESOLUTION-SUCCESS-ALL-SINK-SECRECY | PostgreSQL integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CITATION-RESOLUTION-SUCCESS-ALL-SINK-SECRECY |
+| RET-PRIV-003 | CITATION-RESOLUTION-SUCCESS-ALL-SINK-SECRECY | HTTP integration | AF3C_PUBLIC_CITATION | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CITATION-RESOLUTION-SUCCESS-ALL-SINK-SECRECY |
+| RET-PRIV-003 | RETRIEVAL-EMPTY-SUCCESS-ALL-SINK-SECRECY | PostgreSQL integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-RETRIEVAL-EMPTY-SUCCESS-ALL-SINK-SECRECY |
+| RET-PRIV-003 | RETRIEVAL-EMPTY-SUCCESS-ALL-SINK-SECRECY | HTTP integration | AF3C_PUBLIC_EVIDENCE | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-RETRIEVAL-EMPTY-SUCCESS-ALL-SINK-SECRECY |
+| RET-PRIV-003 | RETRIEVAL-EVIDENCE-SUCCESS-ALL-SINK-SECRECY | PostgreSQL integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-RETRIEVAL-EVIDENCE-SUCCESS-ALL-SINK-SECRECY |
+| RET-PRIV-003 | RETRIEVAL-EVIDENCE-SUCCESS-ALL-SINK-SECRECY | HTTP integration | AF3C_PUBLIC_EVIDENCE | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-RETRIEVAL-EVIDENCE-SUCCESS-ALL-SINK-SECRECY |
+| RET-PRIV-004 | AF3B-HYBRID-FINAL-COMMIT-ALL-SINK-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-FINAL-COMMIT-ALL-SINK-REGRESSION |
+| RET-PRIV-004 | AF3B-HYBRID-LATER-BATCH-ALL-SINK-REGRESSION | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-LATER-BATCH-ALL-SINK-REGRESSION |
+| RET-PRIV-004 | AF3C-HTTP-HYBRID-FINAL-COMMIT-FAILURE | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-HYBRID-FINAL-COMMIT-FAILURE |
+| RET-PRIV-004 | AF3C-HTTP-HYBRID-LATER-BATCH-FAILURE | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-HYBRID-LATER-BATCH-FAILURE |
+| RET-PRIV-004 | EMBEDDING-FATAL-ALL-SINK-SECRECY | provider-adapter contract | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-EMBEDDING-FATAL-ALL-SINK-SECRECY |
+| RET-PRIV-004 | EMBEDDING-FATAL-ALL-SINK-SECRECY | PostgreSQL integration | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-EMBEDDING-FATAL-ALL-SINK-SECRECY |
+| RET-PRIV-004 | EMBEDDING-FATAL-ALL-SINK-SECRECY | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-EMBEDDING-FATAL-ALL-SINK-SECRECY |
+| RET-PRIV-004 | FINAL-AUTHORIZATION-STATEMENT-FATAL-ALL-SINK-SECRECY | PostgreSQL integration | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-FINAL-AUTHORIZATION-STATEMENT-FATAL-ALL-SINK-SECRECY |
+| RET-PRIV-004 | FINAL-AUTHORIZATION-STATEMENT-FATAL-ALL-SINK-SECRECY | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-FINAL-AUTHORIZATION-STATEMENT-FATAL-ALL-SINK-SECRECY |
+| RET-PRIV-004 | FINAL-COMMIT-ALL-SINK-SECRECY | PostgreSQL integration | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-FINAL-COMMIT-ALL-SINK-SECRECY |
+| RET-PRIV-004 | FINAL-COMMIT-ALL-SINK-SECRECY | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-FINAL-COMMIT-ALL-SINK-SECRECY |
+| RET-PRIV-004 | KEYWORD-DATABASE-FATAL-ALL-SINK-SECRECY | PostgreSQL integration | AF3A_KEYWORD | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-KEYWORD-DATABASE-FATAL-ALL-SINK-SECRECY |
+| RET-PRIV-004 | KEYWORD-DATABASE-FATAL-ALL-SINK-SECRECY | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-KEYWORD-DATABASE-FATAL-ALL-SINK-SECRECY |
+| RET-PRIV-004 | LATER-BATCH-ALL-SINK-SECRECY | PostgreSQL integration | AF3A_FINAL_VALIDATOR | AF-3A | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-LATER-BATCH-ALL-SINK-SECRECY |
+| RET-PRIV-004 | LATER-BATCH-ALL-SINK-SECRECY | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-LATER-BATCH-ALL-SINK-SECRECY |
+| RET-PRIV-004 | PROVIDER-FATAL-ALL-SINK-SECRECY | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-PROVIDER-FATAL-ALL-SINK-SECRECY |
+| RET-PRIV-004 | PROVIDER-FATAL-ALL-SINK-SECRECY | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-PROVIDER-FATAL-ALL-SINK-SECRECY |
+| RET-PRIV-004 | PROVIDER-FATAL-ALL-SINK-SECRECY | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-PROVIDER-FATAL-ALL-SINK-SECRECY |
+| RET-PRIV-005 | PUBLIC-RESPONSE-CACHE-MATRIX | PostgreSQL integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-PUBLIC-RESPONSE-CACHE-MATRIX |
+| RET-PRIV-005 | PUBLIC-RESPONSE-CACHE-MATRIX | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-PUBLIC-RESPONSE-CACHE-MATRIX |
+| RET-PRIV-006 | AF3B-HYBRID-TELEMETRY-BOUNDS | PostgreSQL integration | AF3B_HYBRID_REGRESSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-AF3B-HYBRID-TELEMETRY-BOUNDS |
+| RET-PRIV-006 | AF3C-HTTP-TELEMETRY-BOUNDS | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-AF3C-HTTP-TELEMETRY-BOUNDS |
+| RET-PROV-001 | CONTENT-ENCODING-ABSENT | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-CONTENT-ENCODING-ABSENT |
+| RET-PROV-001 | CONTENT-ENCODING-ABSENT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-CONTENT-ENCODING-ABSENT |
+| RET-PROV-001 | CONTENT-ENCODING-ABSENT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CONTENT-ENCODING-ABSENT |
+| RET-PROV-001 | CONTENT-ENCODING-ABSENT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CONTENT-ENCODING-ABSENT |
+| RET-PROV-001 | CONTENT-ENCODING-GZIP | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-CONTENT-ENCODING-GZIP |
+| RET-PROV-001 | CONTENT-ENCODING-GZIP | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-CONTENT-ENCODING-GZIP |
+| RET-PROV-001 | CONTENT-ENCODING-GZIP | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CONTENT-ENCODING-GZIP |
+| RET-PROV-001 | CONTENT-ENCODING-GZIP | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CONTENT-ENCODING-GZIP |
+| RET-PROV-001 | CONTENT-ENCODING-IDENTITY | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-CONTENT-ENCODING-IDENTITY |
+| RET-PROV-001 | CONTENT-ENCODING-IDENTITY | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-CONTENT-ENCODING-IDENTITY |
+| RET-PROV-001 | CONTENT-ENCODING-IDENTITY | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CONTENT-ENCODING-IDENTITY |
+| RET-PROV-001 | CONTENT-ENCODING-IDENTITY | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CONTENT-ENCODING-IDENTITY |
+| RET-PROV-001 | CONTENT-TYPE-EXPLICIT-UTF8 | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-CONTENT-TYPE-EXPLICIT-UTF8 |
+| RET-PROV-001 | CONTENT-TYPE-EXPLICIT-UTF8 | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-CONTENT-TYPE-EXPLICIT-UTF8 |
+| RET-PROV-001 | CONTENT-TYPE-EXPLICIT-UTF8 | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CONTENT-TYPE-EXPLICIT-UTF8 |
+| RET-PROV-001 | CONTENT-TYPE-EXPLICIT-UTF8 | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CONTENT-TYPE-EXPLICIT-UTF8 |
+| RET-PROV-001 | CONTENT-TYPE-NO-PARAMETER | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-CONTENT-TYPE-NO-PARAMETER |
+| RET-PROV-001 | CONTENT-TYPE-NO-PARAMETER | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-CONTENT-TYPE-NO-PARAMETER |
+| RET-PROV-001 | CONTENT-TYPE-NO-PARAMETER | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CONTENT-TYPE-NO-PARAMETER |
+| RET-PROV-001 | CONTENT-TYPE-NO-PARAMETER | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CONTENT-TYPE-NO-PARAMETER |
+| RET-PROV-001 | DOCUMENT-NULL-ELEMENT | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-DOCUMENT-NULL-ELEMENT |
+| RET-PROV-001 | DOCUMENT-NULL-ELEMENT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-DOCUMENT-NULL-ELEMENT |
+| RET-PROV-001 | DOCUMENT-NULL-ELEMENT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DOCUMENT-NULL-ELEMENT |
+| RET-PROV-001 | DOCUMENT-NULL-ELEMENT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DOCUMENT-NULL-ELEMENT |
+| RET-PROV-001 | DOCUMENT-STRING-EXACT-4096 | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-DOCUMENT-STRING-EXACT-4096 |
+| RET-PROV-001 | DOCUMENT-STRING-EXACT-4096 | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-DOCUMENT-STRING-EXACT-4096 |
+| RET-PROV-001 | DOCUMENT-STRING-EXACT-4096 | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DOCUMENT-STRING-EXACT-4096 |
+| RET-PROV-001 | DOCUMENT-STRING-EXACT-4096 | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DOCUMENT-STRING-EXACT-4096 |
+| RET-PROV-001 | DOCUMENTS-NULL-CONTAINER | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-DOCUMENTS-NULL-CONTAINER |
+| RET-PROV-001 | DOCUMENTS-NULL-CONTAINER | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-DOCUMENTS-NULL-CONTAINER |
+| RET-PROV-001 | DOCUMENTS-NULL-CONTAINER | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DOCUMENTS-NULL-CONTAINER |
+| RET-PROV-001 | DOCUMENTS-NULL-CONTAINER | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DOCUMENTS-NULL-CONTAINER |
+| RET-PROV-001 | METADATA-BOOLEAN-FALSE | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-METADATA-BOOLEAN-FALSE |
+| RET-PROV-001 | METADATA-BOOLEAN-FALSE | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-METADATA-BOOLEAN-FALSE |
+| RET-PROV-001 | METADATA-BOOLEAN-FALSE | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-METADATA-BOOLEAN-FALSE |
+| RET-PROV-001 | METADATA-BOOLEAN-FALSE | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-METADATA-BOOLEAN-FALSE |
+| RET-PROV-001 | METADATA-BOOLEAN-TRUE | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-METADATA-BOOLEAN-TRUE |
+| RET-PROV-001 | METADATA-BOOLEAN-TRUE | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-METADATA-BOOLEAN-TRUE |
+| RET-PROV-001 | METADATA-BOOLEAN-TRUE | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-METADATA-BOOLEAN-TRUE |
+| RET-PROV-001 | METADATA-BOOLEAN-TRUE | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-METADATA-BOOLEAN-TRUE |
+| RET-PROV-001 | METADATA-EMPTY-OBJECT | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-METADATA-EMPTY-OBJECT |
+| RET-PROV-001 | METADATA-EMPTY-OBJECT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-METADATA-EMPTY-OBJECT |
+| RET-PROV-001 | METADATA-EMPTY-OBJECT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-METADATA-EMPTY-OBJECT |
+| RET-PROV-001 | METADATA-EMPTY-OBJECT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-METADATA-EMPTY-OBJECT |
+| RET-PROV-001 | METADATA-ENTRIES-EXACT-32 | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-METADATA-ENTRIES-EXACT-32 |
+| RET-PROV-001 | METADATA-ENTRIES-EXACT-32 | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-METADATA-ENTRIES-EXACT-32 |
+| RET-PROV-001 | METADATA-ENTRIES-EXACT-32 | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-METADATA-ENTRIES-EXACT-32 |
+| RET-PROV-001 | METADATA-ENTRIES-EXACT-32 | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-METADATA-ENTRIES-EXACT-32 |
+| RET-PROV-001 | METADATA-FINITE-NEGATIVE-NUMBER | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-METADATA-FINITE-NEGATIVE-NUMBER |
+| RET-PROV-001 | METADATA-FINITE-NEGATIVE-NUMBER | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-METADATA-FINITE-NEGATIVE-NUMBER |
+| RET-PROV-001 | METADATA-FINITE-NEGATIVE-NUMBER | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-METADATA-FINITE-NEGATIVE-NUMBER |
+| RET-PROV-001 | METADATA-FINITE-NEGATIVE-NUMBER | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-METADATA-FINITE-NEGATIVE-NUMBER |
+| RET-PROV-001 | METADATA-FINITE-POSITIVE-NUMBER | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-METADATA-FINITE-POSITIVE-NUMBER |
+| RET-PROV-001 | METADATA-FINITE-POSITIVE-NUMBER | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-METADATA-FINITE-POSITIVE-NUMBER |
+| RET-PROV-001 | METADATA-FINITE-POSITIVE-NUMBER | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-METADATA-FINITE-POSITIVE-NUMBER |
+| RET-PROV-001 | METADATA-FINITE-POSITIVE-NUMBER | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-METADATA-FINITE-POSITIVE-NUMBER |
+| RET-PROV-001 | METADATA-FINITE-ZERO-NUMBER | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-METADATA-FINITE-ZERO-NUMBER |
+| RET-PROV-001 | METADATA-FINITE-ZERO-NUMBER | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-METADATA-FINITE-ZERO-NUMBER |
+| RET-PROV-001 | METADATA-FINITE-ZERO-NUMBER | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-METADATA-FINITE-ZERO-NUMBER |
+| RET-PROV-001 | METADATA-FINITE-ZERO-NUMBER | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-METADATA-FINITE-ZERO-NUMBER |
+| RET-PROV-001 | METADATA-KEY-EXACT-128 | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-METADATA-KEY-EXACT-128 |
+| RET-PROV-001 | METADATA-KEY-EXACT-128 | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-METADATA-KEY-EXACT-128 |
+| RET-PROV-001 | METADATA-KEY-EXACT-128 | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-METADATA-KEY-EXACT-128 |
+| RET-PROV-001 | METADATA-KEY-EXACT-128 | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-METADATA-KEY-EXACT-128 |
+| RET-PROV-001 | METADATA-NULL-ELEMENT | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-METADATA-NULL-ELEMENT |
+| RET-PROV-001 | METADATA-NULL-ELEMENT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-METADATA-NULL-ELEMENT |
+| RET-PROV-001 | METADATA-NULL-ELEMENT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-METADATA-NULL-ELEMENT |
+| RET-PROV-001 | METADATA-NULL-ELEMENT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-METADATA-NULL-ELEMENT |
+| RET-PROV-001 | METADATA-STRING-EXACT-1024 | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-METADATA-STRING-EXACT-1024 |
+| RET-PROV-001 | METADATA-STRING-EXACT-1024 | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-METADATA-STRING-EXACT-1024 |
+| RET-PROV-001 | METADATA-STRING-EXACT-1024 | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-METADATA-STRING-EXACT-1024 |
+| RET-PROV-001 | METADATA-STRING-EXACT-1024 | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-METADATA-STRING-EXACT-1024 |
+| RET-PROV-001 | METADATA-STRING-VALUE | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-METADATA-STRING-VALUE |
+| RET-PROV-001 | METADATA-STRING-VALUE | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-METADATA-STRING-VALUE |
+| RET-PROV-001 | METADATA-STRING-VALUE | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-METADATA-STRING-VALUE |
+| RET-PROV-001 | METADATA-STRING-VALUE | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-METADATA-STRING-VALUE |
+| RET-PROV-001 | METADATAS-NULL-CONTAINER | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-METADATAS-NULL-CONTAINER |
+| RET-PROV-001 | METADATAS-NULL-CONTAINER | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-METADATAS-NULL-CONTAINER |
+| RET-PROV-001 | METADATAS-NULL-CONTAINER | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-METADATAS-NULL-CONTAINER |
+| RET-PROV-001 | METADATAS-NULL-CONTAINER | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-METADATAS-NULL-CONTAINER |
+| RET-PROV-002 | CONTENT-LENGTH-EXACT-1048576 | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-CONTENT-LENGTH-EXACT-1048576 |
+| RET-PROV-002 | CONTENT-LENGTH-EXACT-1048576 | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CONTENT-LENGTH-EXACT-1048576 |
+| RET-PROV-002 | CONTENT-LENGTH-EXACT-1048576 | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CONTENT-LENGTH-EXACT-1048576 |
+| RET-PROV-002 | STREAMED-NO-LENGTH-EXACT-1048576 | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-STREAMED-NO-LENGTH-EXACT-1048576 |
+| RET-PROV-002 | STREAMED-NO-LENGTH-EXACT-1048576 | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-STREAMED-NO-LENGTH-EXACT-1048576 |
+| RET-PROV-002 | STREAMED-NO-LENGTH-EXACT-1048576 | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-STREAMED-NO-LENGTH-EXACT-1048576 |
+| RET-PROV-003 | DEFAULT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-DEFAULT |
+| RET-PROV-003 | DEFAULT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-PROV-003 | DEFAULT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-PROV-004 | DEFAULT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-DEFAULT |
+| RET-PROV-004 | DEFAULT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-PROV-004 | DEFAULT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-PROV-005 | DEFAULT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-DEFAULT |
+| RET-PROV-005 | DEFAULT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-PROV-005 | DEFAULT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-PROV-006 | DEFAULT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-DEFAULT |
+| RET-PROV-006 | DEFAULT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-PROV-006 | DEFAULT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-PROV-007 | DEFAULT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-DEFAULT |
+| RET-PROV-007 | DEFAULT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-PROV-007 | DEFAULT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-PROV-008 | DEFAULT | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-DEFAULT |
+| RET-PROV-008 | DEFAULT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-DEFAULT |
+| RET-PROV-008 | DEFAULT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-PROV-008 | DEFAULT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-PROV-009 | DEFAULT | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-DEFAULT |
+| RET-PROV-009 | DEFAULT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-DEFAULT |
+| RET-PROV-009 | DEFAULT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-PROV-009 | DEFAULT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-PROV-010 | DEFAULT | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-DEFAULT |
+| RET-PROV-010 | DEFAULT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-DEFAULT |
+| RET-PROV-010 | DEFAULT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-PROV-010 | DEFAULT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-PROV-011 | DEFAULT | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-DEFAULT |
+| RET-PROV-011 | DEFAULT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-DEFAULT |
+| RET-PROV-011 | DEFAULT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-PROV-011 | DEFAULT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-PROV-012 | DEFAULT | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-DEFAULT |
+| RET-PROV-012 | DEFAULT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-DEFAULT |
+| RET-PROV-012 | DEFAULT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-PROV-012 | DEFAULT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-PROV-013 | DEFAULT | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-DEFAULT |
+| RET-PROV-013 | DEFAULT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-DEFAULT |
+| RET-PROV-013 | DEFAULT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-PROV-013 | DEFAULT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-PROV-014 | DEPTH-16-GUARD-PASS | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-DEPTH-16-GUARD-PASS |
+| RET-PROV-014 | DEPTH-16-GUARD-PASS | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-DEPTH-16-GUARD-PASS |
+| RET-PROV-014 | DEPTH-16-GUARD-PASS | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEPTH-16-GUARD-PASS |
+| RET-PROV-014 | DEPTH-16-GUARD-PASS | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEPTH-16-GUARD-PASS |
+| RET-PROV-014 | DEPTH-17-GUARD-FAIL | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-DEPTH-17-GUARD-FAIL |
+| RET-PROV-014 | DEPTH-17-GUARD-FAIL | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-DEPTH-17-GUARD-FAIL |
+| RET-PROV-014 | DEPTH-17-GUARD-FAIL | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEPTH-17-GUARD-FAIL |
+| RET-PROV-014 | DEPTH-17-GUARD-FAIL | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEPTH-17-GUARD-FAIL |
+| RET-PROV-015 | WIRE-1E400 | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-WIRE-1E400 |
+| RET-PROV-015 | WIRE-1E400 | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-WIRE-1E400 |
+| RET-PROV-015 | WIRE-1E400 | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-WIRE-1E400 |
+| RET-PROV-015 | WIRE-1E400 | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-WIRE-1E400 |
+| RET-PROV-015 | WIRE-NAN | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-WIRE-NAN |
+| RET-PROV-015 | WIRE-NAN | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-WIRE-NAN |
+| RET-PROV-015 | WIRE-NAN | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-WIRE-NAN |
+| RET-PROV-015 | WIRE-NAN | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-WIRE-NAN |
+| RET-PROV-015 | WIRE-NEGATIVE-INFINITY | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-WIRE-NEGATIVE-INFINITY |
+| RET-PROV-015 | WIRE-NEGATIVE-INFINITY | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-WIRE-NEGATIVE-INFINITY |
+| RET-PROV-015 | WIRE-NEGATIVE-INFINITY | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-WIRE-NEGATIVE-INFINITY |
+| RET-PROV-015 | WIRE-NEGATIVE-INFINITY | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-WIRE-NEGATIVE-INFINITY |
+| RET-PROV-015 | WIRE-POSITIVE-INFINITY | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-WIRE-POSITIVE-INFINITY |
+| RET-PROV-015 | WIRE-POSITIVE-INFINITY | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-WIRE-POSITIVE-INFINITY |
+| RET-PROV-015 | WIRE-POSITIVE-INFINITY | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-WIRE-POSITIVE-INFINITY |
+| RET-PROV-015 | WIRE-POSITIVE-INFINITY | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-WIRE-POSITIVE-INFINITY |
+| RET-PROV-016 | ARRAY-TOP-LEVEL | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-ARRAY-TOP-LEVEL |
+| RET-PROV-016 | ARRAY-TOP-LEVEL | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-ARRAY-TOP-LEVEL |
+| RET-PROV-016 | ARRAY-TOP-LEVEL | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-ARRAY-TOP-LEVEL |
+| RET-PROV-016 | ARRAY-TOP-LEVEL | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-ARRAY-TOP-LEVEL |
+| RET-PROV-016 | CONTENT-ENCODING-STACKED | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-CONTENT-ENCODING-STACKED |
+| RET-PROV-016 | CONTENT-ENCODING-STACKED | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-CONTENT-ENCODING-STACKED |
+| RET-PROV-016 | CONTENT-ENCODING-STACKED | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CONTENT-ENCODING-STACKED |
+| RET-PROV-016 | CONTENT-ENCODING-STACKED | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CONTENT-ENCODING-STACKED |
+| RET-PROV-016 | CONTENT-ENCODING-UNSUPPORTED | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-CONTENT-ENCODING-UNSUPPORTED |
+| RET-PROV-016 | CONTENT-ENCODING-UNSUPPORTED | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-CONTENT-ENCODING-UNSUPPORTED |
+| RET-PROV-016 | CONTENT-ENCODING-UNSUPPORTED | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CONTENT-ENCODING-UNSUPPORTED |
+| RET-PROV-016 | CONTENT-ENCODING-UNSUPPORTED | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CONTENT-ENCODING-UNSUPPORTED |
+| RET-PROV-016 | CONTENT-TYPE-EXTRA-PARAMETER | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-CONTENT-TYPE-EXTRA-PARAMETER |
+| RET-PROV-016 | CONTENT-TYPE-EXTRA-PARAMETER | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-CONTENT-TYPE-EXTRA-PARAMETER |
+| RET-PROV-016 | CONTENT-TYPE-EXTRA-PARAMETER | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CONTENT-TYPE-EXTRA-PARAMETER |
+| RET-PROV-016 | CONTENT-TYPE-EXTRA-PARAMETER | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CONTENT-TYPE-EXTRA-PARAMETER |
+| RET-PROV-016 | CONTENT-TYPE-FORBIDDEN-CHARSET | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-CONTENT-TYPE-FORBIDDEN-CHARSET |
+| RET-PROV-016 | CONTENT-TYPE-FORBIDDEN-CHARSET | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-CONTENT-TYPE-FORBIDDEN-CHARSET |
+| RET-PROV-016 | CONTENT-TYPE-FORBIDDEN-CHARSET | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CONTENT-TYPE-FORBIDDEN-CHARSET |
+| RET-PROV-016 | CONTENT-TYPE-FORBIDDEN-CHARSET | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CONTENT-TYPE-FORBIDDEN-CHARSET |
+| RET-PROV-016 | CONTENT-TYPE-MISSING | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-CONTENT-TYPE-MISSING |
+| RET-PROV-016 | CONTENT-TYPE-MISSING | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-CONTENT-TYPE-MISSING |
+| RET-PROV-016 | CONTENT-TYPE-MISSING | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CONTENT-TYPE-MISSING |
+| RET-PROV-016 | CONTENT-TYPE-MISSING | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CONTENT-TYPE-MISSING |
+| RET-PROV-016 | CONTENT-TYPE-NONJSON | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-CONTENT-TYPE-NONJSON |
+| RET-PROV-016 | CONTENT-TYPE-NONJSON | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-CONTENT-TYPE-NONJSON |
+| RET-PROV-016 | CONTENT-TYPE-NONJSON | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CONTENT-TYPE-NONJSON |
+| RET-PROV-016 | CONTENT-TYPE-NONJSON | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CONTENT-TYPE-NONJSON |
+| RET-PROV-016 | DOCUMENT-ARRAY-ELEMENT | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-DOCUMENT-ARRAY-ELEMENT |
+| RET-PROV-016 | DOCUMENT-ARRAY-ELEMENT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-DOCUMENT-ARRAY-ELEMENT |
+| RET-PROV-016 | DOCUMENT-ARRAY-ELEMENT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DOCUMENT-ARRAY-ELEMENT |
+| RET-PROV-016 | DOCUMENT-ARRAY-ELEMENT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DOCUMENT-ARRAY-ELEMENT |
+| RET-PROV-016 | DOCUMENT-BOOLEAN-ELEMENT | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-DOCUMENT-BOOLEAN-ELEMENT |
+| RET-PROV-016 | DOCUMENT-BOOLEAN-ELEMENT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-DOCUMENT-BOOLEAN-ELEMENT |
+| RET-PROV-016 | DOCUMENT-BOOLEAN-ELEMENT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DOCUMENT-BOOLEAN-ELEMENT |
+| RET-PROV-016 | DOCUMENT-BOOLEAN-ELEMENT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DOCUMENT-BOOLEAN-ELEMENT |
+| RET-PROV-016 | DOCUMENT-NUMBER-ELEMENT | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-DOCUMENT-NUMBER-ELEMENT |
+| RET-PROV-016 | DOCUMENT-NUMBER-ELEMENT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-DOCUMENT-NUMBER-ELEMENT |
+| RET-PROV-016 | DOCUMENT-NUMBER-ELEMENT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DOCUMENT-NUMBER-ELEMENT |
+| RET-PROV-016 | DOCUMENT-NUMBER-ELEMENT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DOCUMENT-NUMBER-ELEMENT |
+| RET-PROV-016 | DOCUMENT-OBJECT-ELEMENT | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-DOCUMENT-OBJECT-ELEMENT |
+| RET-PROV-016 | DOCUMENT-OBJECT-ELEMENT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-DOCUMENT-OBJECT-ELEMENT |
+| RET-PROV-016 | DOCUMENT-OBJECT-ELEMENT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DOCUMENT-OBJECT-ELEMENT |
+| RET-PROV-016 | DOCUMENT-OBJECT-ELEMENT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DOCUMENT-OBJECT-ELEMENT |
+| RET-PROV-016 | DOCUMENTS-INNER-LENGTH | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-DOCUMENTS-INNER-LENGTH |
+| RET-PROV-016 | DOCUMENTS-INNER-LENGTH | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-DOCUMENTS-INNER-LENGTH |
+| RET-PROV-016 | DOCUMENTS-INNER-LENGTH | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DOCUMENTS-INNER-LENGTH |
+| RET-PROV-016 | DOCUMENTS-INNER-LENGTH | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DOCUMENTS-INNER-LENGTH |
+| RET-PROV-016 | DOCUMENTS-OUTER-CARDINALITY | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-DOCUMENTS-OUTER-CARDINALITY |
+| RET-PROV-016 | DOCUMENTS-OUTER-CARDINALITY | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-DOCUMENTS-OUTER-CARDINALITY |
+| RET-PROV-016 | DOCUMENTS-OUTER-CARDINALITY | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DOCUMENTS-OUTER-CARDINALITY |
+| RET-PROV-016 | DOCUMENTS-OUTER-CARDINALITY | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DOCUMENTS-OUTER-CARDINALITY |
+| RET-PROV-016 | DUPLICATE-TOP-LEVEL-KEY | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-DUPLICATE-TOP-LEVEL-KEY |
+| RET-PROV-016 | DUPLICATE-TOP-LEVEL-KEY | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-DUPLICATE-TOP-LEVEL-KEY |
+| RET-PROV-016 | DUPLICATE-TOP-LEVEL-KEY | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DUPLICATE-TOP-LEVEL-KEY |
+| RET-PROV-016 | DUPLICATE-TOP-LEVEL-KEY | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DUPLICATE-TOP-LEVEL-KEY |
+| RET-PROV-016 | INVALID-UTF8 | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-INVALID-UTF8 |
+| RET-PROV-016 | INVALID-UTF8 | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-INVALID-UTF8 |
+| RET-PROV-016 | INVALID-UTF8 | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-INVALID-UTF8 |
+| RET-PROV-016 | INVALID-UTF8 | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-INVALID-UTF8 |
+| RET-PROV-016 | METADATA-ARRAY-ELEMENT | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-METADATA-ARRAY-ELEMENT |
+| RET-PROV-016 | METADATA-ARRAY-ELEMENT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-METADATA-ARRAY-ELEMENT |
+| RET-PROV-016 | METADATA-ARRAY-ELEMENT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-METADATA-ARRAY-ELEMENT |
+| RET-PROV-016 | METADATA-ARRAY-ELEMENT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-METADATA-ARRAY-ELEMENT |
+| RET-PROV-016 | METADATA-BOOLEAN-ELEMENT | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-METADATA-BOOLEAN-ELEMENT |
+| RET-PROV-016 | METADATA-BOOLEAN-ELEMENT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-METADATA-BOOLEAN-ELEMENT |
+| RET-PROV-016 | METADATA-BOOLEAN-ELEMENT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-METADATA-BOOLEAN-ELEMENT |
+| RET-PROV-016 | METADATA-BOOLEAN-ELEMENT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-METADATA-BOOLEAN-ELEMENT |
+| RET-PROV-016 | METADATA-NESTED-ARRAY | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-METADATA-NESTED-ARRAY |
+| RET-PROV-016 | METADATA-NESTED-ARRAY | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-METADATA-NESTED-ARRAY |
+| RET-PROV-016 | METADATA-NESTED-ARRAY | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-METADATA-NESTED-ARRAY |
+| RET-PROV-016 | METADATA-NESTED-ARRAY | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-METADATA-NESTED-ARRAY |
+| RET-PROV-016 | METADATA-NESTED-OBJECT | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-METADATA-NESTED-OBJECT |
+| RET-PROV-016 | METADATA-NESTED-OBJECT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-METADATA-NESTED-OBJECT |
+| RET-PROV-016 | METADATA-NESTED-OBJECT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-METADATA-NESTED-OBJECT |
+| RET-PROV-016 | METADATA-NESTED-OBJECT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-METADATA-NESTED-OBJECT |
+| RET-PROV-016 | METADATA-NONFINITE-LITERAL | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-METADATA-NONFINITE-LITERAL |
+| RET-PROV-016 | METADATA-NONFINITE-LITERAL | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-METADATA-NONFINITE-LITERAL |
+| RET-PROV-016 | METADATA-NONFINITE-LITERAL | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-METADATA-NONFINITE-LITERAL |
+| RET-PROV-016 | METADATA-NONFINITE-LITERAL | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-METADATA-NONFINITE-LITERAL |
+| RET-PROV-016 | METADATA-NULL-VALUE | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-METADATA-NULL-VALUE |
+| RET-PROV-016 | METADATA-NULL-VALUE | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-METADATA-NULL-VALUE |
+| RET-PROV-016 | METADATA-NULL-VALUE | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-METADATA-NULL-VALUE |
+| RET-PROV-016 | METADATA-NULL-VALUE | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-METADATA-NULL-VALUE |
+| RET-PROV-016 | METADATA-NUMBER-ELEMENT | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-METADATA-NUMBER-ELEMENT |
+| RET-PROV-016 | METADATA-NUMBER-ELEMENT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-METADATA-NUMBER-ELEMENT |
+| RET-PROV-016 | METADATA-NUMBER-ELEMENT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-METADATA-NUMBER-ELEMENT |
+| RET-PROV-016 | METADATA-NUMBER-ELEMENT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-METADATA-NUMBER-ELEMENT |
+| RET-PROV-016 | METADATA-STRING-ELEMENT | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-METADATA-STRING-ELEMENT |
+| RET-PROV-016 | METADATA-STRING-ELEMENT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-METADATA-STRING-ELEMENT |
+| RET-PROV-016 | METADATA-STRING-ELEMENT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-METADATA-STRING-ELEMENT |
+| RET-PROV-016 | METADATA-STRING-ELEMENT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-METADATA-STRING-ELEMENT |
+| RET-PROV-016 | METADATA-UNSUPPORTED-RANGE-NUMBER | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-METADATA-UNSUPPORTED-RANGE-NUMBER |
+| RET-PROV-016 | METADATA-UNSUPPORTED-RANGE-NUMBER | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-METADATA-UNSUPPORTED-RANGE-NUMBER |
+| RET-PROV-016 | METADATA-UNSUPPORTED-RANGE-NUMBER | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-METADATA-UNSUPPORTED-RANGE-NUMBER |
+| RET-PROV-016 | METADATA-UNSUPPORTED-RANGE-NUMBER | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-METADATA-UNSUPPORTED-RANGE-NUMBER |
+| RET-PROV-016 | METADATAS-INNER-LENGTH | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-METADATAS-INNER-LENGTH |
+| RET-PROV-016 | METADATAS-INNER-LENGTH | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-METADATAS-INNER-LENGTH |
+| RET-PROV-016 | METADATAS-INNER-LENGTH | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-METADATAS-INNER-LENGTH |
+| RET-PROV-016 | METADATAS-INNER-LENGTH | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-METADATAS-INNER-LENGTH |
+| RET-PROV-016 | METADATAS-OUTER-CARDINALITY | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-METADATAS-OUTER-CARDINALITY |
+| RET-PROV-016 | METADATAS-OUTER-CARDINALITY | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-METADATAS-OUTER-CARDINALITY |
+| RET-PROV-016 | METADATAS-OUTER-CARDINALITY | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-METADATAS-OUTER-CARDINALITY |
+| RET-PROV-016 | METADATAS-OUTER-CARDINALITY | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-METADATAS-OUTER-CARDINALITY |
+| RET-PROV-016 | NONCANONICAL-INCLUDE | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-NONCANONICAL-INCLUDE |
+| RET-PROV-016 | NONCANONICAL-INCLUDE | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-NONCANONICAL-INCLUDE |
+| RET-PROV-016 | NONCANONICAL-INCLUDE | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-NONCANONICAL-INCLUDE |
+| RET-PROV-016 | NONCANONICAL-INCLUDE | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-NONCANONICAL-INCLUDE |
+| RET-PROV-016 | NONNULL-DATA | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-NONNULL-DATA |
+| RET-PROV-016 | NONNULL-DATA | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-NONNULL-DATA |
+| RET-PROV-016 | NONNULL-DATA | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-NONNULL-DATA |
+| RET-PROV-016 | NONNULL-DATA | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-NONNULL-DATA |
+| RET-PROV-016 | NONNULL-EMBEDDINGS | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-NONNULL-EMBEDDINGS |
+| RET-PROV-016 | NONNULL-EMBEDDINGS | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-NONNULL-EMBEDDINGS |
+| RET-PROV-016 | NONNULL-EMBEDDINGS | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-NONNULL-EMBEDDINGS |
+| RET-PROV-016 | NONNULL-EMBEDDINGS | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-NONNULL-EMBEDDINGS |
+| RET-PROV-016 | NONNULL-URIS | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-NONNULL-URIS |
+| RET-PROV-016 | NONNULL-URIS | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-NONNULL-URIS |
+| RET-PROV-016 | NONNULL-URIS | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-NONNULL-URIS |
+| RET-PROV-016 | NONNULL-URIS | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-NONNULL-URIS |
+| RET-PROV-016 | NULL-DISTANCES | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-NULL-DISTANCES |
+| RET-PROV-016 | NULL-DISTANCES | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-NULL-DISTANCES |
+| RET-PROV-016 | NULL-DISTANCES | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-NULL-DISTANCES |
+| RET-PROV-016 | NULL-DISTANCES | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-NULL-DISTANCES |
+| RET-PROV-016 | NULL-IDS | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-NULL-IDS |
+| RET-PROV-016 | NULL-IDS | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-NULL-IDS |
+| RET-PROV-016 | NULL-IDS | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-NULL-IDS |
+| RET-PROV-016 | NULL-IDS | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-NULL-IDS |
+| RET-PROV-016 | NULL-INCLUDE | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-NULL-INCLUDE |
+| RET-PROV-016 | NULL-INCLUDE | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-NULL-INCLUDE |
+| RET-PROV-016 | NULL-INCLUDE | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-NULL-INCLUDE |
+| RET-PROV-016 | NULL-INCLUDE | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-NULL-INCLUDE |
+| RET-PROV-016 | SCALAR-TOP-LEVEL | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-SCALAR-TOP-LEVEL |
+| RET-PROV-016 | SCALAR-TOP-LEVEL | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-SCALAR-TOP-LEVEL |
+| RET-PROV-016 | SCALAR-TOP-LEVEL | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-SCALAR-TOP-LEVEL |
+| RET-PROV-016 | SCALAR-TOP-LEVEL | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-SCALAR-TOP-LEVEL |
+| RET-PROV-016 | UNKNOWN-TOP-LEVEL-KEY | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-UNKNOWN-TOP-LEVEL-KEY |
+| RET-PROV-016 | UNKNOWN-TOP-LEVEL-KEY | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-UNKNOWN-TOP-LEVEL-KEY |
+| RET-PROV-016 | UNKNOWN-TOP-LEVEL-KEY | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-UNKNOWN-TOP-LEVEL-KEY |
+| RET-PROV-016 | UNKNOWN-TOP-LEVEL-KEY | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-UNKNOWN-TOP-LEVEL-KEY |
+| RET-PROV-016 | UTF8-BOM | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-UTF8-BOM |
+| RET-PROV-016 | UTF8-BOM | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-UTF8-BOM |
+| RET-PROV-016 | UTF8-BOM | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-UTF8-BOM |
+| RET-PROV-016 | UTF8-BOM | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-UTF8-BOM |
+| RET-PROV-017 | MISSING-DATA | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-MISSING-DATA |
+| RET-PROV-017 | MISSING-DATA | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-MISSING-DATA |
+| RET-PROV-017 | MISSING-DATA | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-MISSING-DATA |
+| RET-PROV-017 | MISSING-DATA | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-MISSING-DATA |
+| RET-PROV-017 | MISSING-DISTANCES | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-MISSING-DISTANCES |
+| RET-PROV-017 | MISSING-DISTANCES | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-MISSING-DISTANCES |
+| RET-PROV-017 | MISSING-DISTANCES | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-MISSING-DISTANCES |
+| RET-PROV-017 | MISSING-DISTANCES | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-MISSING-DISTANCES |
+| RET-PROV-017 | MISSING-DOCUMENTS | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-MISSING-DOCUMENTS |
+| RET-PROV-017 | MISSING-DOCUMENTS | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-MISSING-DOCUMENTS |
+| RET-PROV-017 | MISSING-DOCUMENTS | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-MISSING-DOCUMENTS |
+| RET-PROV-017 | MISSING-DOCUMENTS | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-MISSING-DOCUMENTS |
+| RET-PROV-017 | MISSING-EMBEDDINGS | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-MISSING-EMBEDDINGS |
+| RET-PROV-017 | MISSING-EMBEDDINGS | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-MISSING-EMBEDDINGS |
+| RET-PROV-017 | MISSING-EMBEDDINGS | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-MISSING-EMBEDDINGS |
+| RET-PROV-017 | MISSING-EMBEDDINGS | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-MISSING-EMBEDDINGS |
+| RET-PROV-017 | MISSING-IDS | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-MISSING-IDS |
+| RET-PROV-017 | MISSING-IDS | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-MISSING-IDS |
+| RET-PROV-017 | MISSING-IDS | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-MISSING-IDS |
+| RET-PROV-017 | MISSING-IDS | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-MISSING-IDS |
+| RET-PROV-017 | MISSING-INCLUDE | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-MISSING-INCLUDE |
+| RET-PROV-017 | MISSING-INCLUDE | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-MISSING-INCLUDE |
+| RET-PROV-017 | MISSING-INCLUDE | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-MISSING-INCLUDE |
+| RET-PROV-017 | MISSING-INCLUDE | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-MISSING-INCLUDE |
+| RET-PROV-017 | MISSING-METADATAS | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-MISSING-METADATAS |
+| RET-PROV-017 | MISSING-METADATAS | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-MISSING-METADATAS |
+| RET-PROV-017 | MISSING-METADATAS | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-MISSING-METADATAS |
+| RET-PROV-017 | MISSING-METADATAS | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-MISSING-METADATAS |
+| RET-PROV-017 | MISSING-URIS | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-MISSING-URIS |
+| RET-PROV-017 | MISSING-URIS | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-MISSING-URIS |
+| RET-PROV-017 | MISSING-URIS | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-MISSING-URIS |
+| RET-PROV-017 | MISSING-URIS | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-MISSING-URIS |
+| RET-PROV-018 | DISTANCES-OUTER-CARDINALITY-TWO | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-DISTANCES-OUTER-CARDINALITY-TWO |
+| RET-PROV-018 | DISTANCES-OUTER-CARDINALITY-TWO | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-DISTANCES-OUTER-CARDINALITY-TWO |
+| RET-PROV-018 | DISTANCES-OUTER-CARDINALITY-TWO | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DISTANCES-OUTER-CARDINALITY-TWO |
+| RET-PROV-018 | DISTANCES-OUTER-CARDINALITY-TWO | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DISTANCES-OUTER-CARDINALITY-TWO |
+| RET-PROV-018 | IDS-DISTANCES-INNER-LENGTH-MISMATCH | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-IDS-DISTANCES-INNER-LENGTH-MISMATCH |
+| RET-PROV-018 | IDS-DISTANCES-INNER-LENGTH-MISMATCH | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-IDS-DISTANCES-INNER-LENGTH-MISMATCH |
+| RET-PROV-018 | IDS-DISTANCES-INNER-LENGTH-MISMATCH | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-IDS-DISTANCES-INNER-LENGTH-MISMATCH |
+| RET-PROV-018 | IDS-DISTANCES-INNER-LENGTH-MISMATCH | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-IDS-DISTANCES-INNER-LENGTH-MISMATCH |
+| RET-PROV-018 | IDS-OUTER-CARDINALITY-ZERO | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-IDS-OUTER-CARDINALITY-ZERO |
+| RET-PROV-018 | IDS-OUTER-CARDINALITY-ZERO | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-IDS-OUTER-CARDINALITY-ZERO |
+| RET-PROV-018 | IDS-OUTER-CARDINALITY-ZERO | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-IDS-OUTER-CARDINALITY-ZERO |
+| RET-PROV-018 | IDS-OUTER-CARDINALITY-ZERO | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-IDS-OUTER-CARDINALITY-ZERO |
+| RET-PROV-019 | R10-C40-P40-ACCEPT | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-R10-C40-P40-ACCEPT |
+| RET-PROV-019 | R10-C40-P40-ACCEPT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-R10-C40-P40-ACCEPT |
+| RET-PROV-019 | R10-C40-P40-ACCEPT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-R10-C40-P40-ACCEPT |
+| RET-PROV-019 | R10-C40-P40-ACCEPT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-R10-C40-P40-ACCEPT |
+| RET-PROV-019 | R10-C40-P41-FATAL | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-R10-C40-P41-FATAL |
+| RET-PROV-019 | R10-C40-P41-FATAL | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-R10-C40-P41-FATAL |
+| RET-PROV-019 | R10-C40-P41-FATAL | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-R10-C40-P41-FATAL |
+| RET-PROV-019 | R10-C40-P41-FATAL | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-R10-C40-P41-FATAL |
+| RET-PROV-019 | R50-C128-P128-ACCEPT | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-R50-C128-P128-ACCEPT |
+| RET-PROV-019 | R50-C128-P128-ACCEPT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-R50-C128-P128-ACCEPT |
+| RET-PROV-019 | R50-C128-P128-ACCEPT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-R50-C128-P128-ACCEPT |
+| RET-PROV-019 | R50-C128-P128-ACCEPT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-R50-C128-P128-ACCEPT |
+| RET-PROV-019 | R50-C128-P129-FATAL | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-R50-C128-P129-FATAL |
+| RET-PROV-019 | R50-C128-P129-FATAL | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-R50-C128-P129-FATAL |
+| RET-PROV-019 | R50-C128-P129-FATAL | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-R50-C128-P129-FATAL |
+| RET-PROV-019 | R50-C128-P129-FATAL | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-R50-C128-P129-FATAL |
+| RET-PROV-020 | CONTENT-TYPE-EXPLICIT-UTF8 | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-CONTENT-TYPE-EXPLICIT-UTF8 |
+| RET-PROV-020 | CONTENT-TYPE-EXPLICIT-UTF8 | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-CONTENT-TYPE-EXPLICIT-UTF8 |
+| RET-PROV-020 | CONTENT-TYPE-EXPLICIT-UTF8 | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CONTENT-TYPE-EXPLICIT-UTF8 |
+| RET-PROV-020 | CONTENT-TYPE-EXPLICIT-UTF8 | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CONTENT-TYPE-EXPLICIT-UTF8 |
+| RET-PROV-020 | CONTENT-TYPE-EXTRA-PARAMETER | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-CONTENT-TYPE-EXTRA-PARAMETER |
+| RET-PROV-020 | CONTENT-TYPE-EXTRA-PARAMETER | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-CONTENT-TYPE-EXTRA-PARAMETER |
+| RET-PROV-020 | CONTENT-TYPE-EXTRA-PARAMETER | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CONTENT-TYPE-EXTRA-PARAMETER |
+| RET-PROV-020 | CONTENT-TYPE-EXTRA-PARAMETER | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CONTENT-TYPE-EXTRA-PARAMETER |
+| RET-PROV-020 | CONTENT-TYPE-MISSING | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-CONTENT-TYPE-MISSING |
+| RET-PROV-020 | CONTENT-TYPE-MISSING | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-CONTENT-TYPE-MISSING |
+| RET-PROV-020 | CONTENT-TYPE-MISSING | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CONTENT-TYPE-MISSING |
+| RET-PROV-020 | CONTENT-TYPE-MISSING | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CONTENT-TYPE-MISSING |
+| RET-PROV-020 | CONTENT-TYPE-NONJSON | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-CONTENT-TYPE-NONJSON |
+| RET-PROV-020 | CONTENT-TYPE-NONJSON | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-CONTENT-TYPE-NONJSON |
+| RET-PROV-020 | CONTENT-TYPE-NONJSON | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CONTENT-TYPE-NONJSON |
+| RET-PROV-020 | CONTENT-TYPE-NONJSON | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CONTENT-TYPE-NONJSON |
+| RET-PROV-020 | EXACT-VERSION-CONTROL | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-EXACT-VERSION-CONTROL |
+| RET-PROV-020 | EXACT-VERSION-CONTROL | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-EXACT-VERSION-CONTROL |
+| RET-PROV-020 | EXACT-VERSION-CONTROL | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-EXACT-VERSION-CONTROL |
+| RET-PROV-020 | EXACT-VERSION-CONTROL | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-EXACT-VERSION-CONTROL |
+| RET-PROV-020 | FORBIDDEN-CHARSET | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-FORBIDDEN-CHARSET |
+| RET-PROV-020 | FORBIDDEN-CHARSET | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-FORBIDDEN-CHARSET |
+| RET-PROV-020 | FORBIDDEN-CHARSET | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-FORBIDDEN-CHARSET |
+| RET-PROV-020 | FORBIDDEN-CHARSET | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-FORBIDDEN-CHARSET |
+| RET-PROV-020 | FORBIDDEN-ENCODING | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-FORBIDDEN-ENCODING |
+| RET-PROV-020 | FORBIDDEN-ENCODING | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-FORBIDDEN-ENCODING |
+| RET-PROV-020 | FORBIDDEN-ENCODING | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-FORBIDDEN-ENCODING |
+| RET-PROV-020 | FORBIDDEN-ENCODING | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-FORBIDDEN-ENCODING |
+| RET-PROV-020 | GZIP-DECODED-EXACT-2097152 | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-GZIP-DECODED-EXACT-2097152 |
+| RET-PROV-020 | GZIP-DECODED-EXACT-2097152 | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-GZIP-DECODED-EXACT-2097152 |
+| RET-PROV-020 | GZIP-DECODED-EXACT-2097152 | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-GZIP-DECODED-EXACT-2097152 |
+| RET-PROV-020 | GZIP-DECODED-EXACT-2097152 | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-GZIP-DECODED-EXACT-2097152 |
+| RET-PROV-020 | GZIP-DECODED-PLUS-ONE | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-GZIP-DECODED-PLUS-ONE |
+| RET-PROV-020 | GZIP-DECODED-PLUS-ONE | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-GZIP-DECODED-PLUS-ONE |
+| RET-PROV-020 | GZIP-DECODED-PLUS-ONE | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-GZIP-DECODED-PLUS-ONE |
+| RET-PROV-020 | GZIP-DECODED-PLUS-ONE | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-GZIP-DECODED-PLUS-ONE |
+| RET-PROV-020 | IDENTITY-ENCODING | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-IDENTITY-ENCODING |
+| RET-PROV-020 | IDENTITY-ENCODING | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-IDENTITY-ENCODING |
+| RET-PROV-020 | IDENTITY-ENCODING | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-IDENTITY-ENCODING |
+| RET-PROV-020 | IDENTITY-ENCODING | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-IDENTITY-ENCODING |
+| RET-PROV-020 | JSON-ARRAY | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-JSON-ARRAY |
+| RET-PROV-020 | JSON-ARRAY | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-JSON-ARRAY |
+| RET-PROV-020 | JSON-ARRAY | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-JSON-ARRAY |
+| RET-PROV-020 | JSON-ARRAY | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-JSON-ARRAY |
+| RET-PROV-020 | JSON-BOOLEAN | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-JSON-BOOLEAN |
+| RET-PROV-020 | JSON-BOOLEAN | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-JSON-BOOLEAN |
+| RET-PROV-020 | JSON-BOOLEAN | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-JSON-BOOLEAN |
+| RET-PROV-020 | JSON-BOOLEAN | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-JSON-BOOLEAN |
+| RET-PROV-020 | JSON-NULL | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-JSON-NULL |
+| RET-PROV-020 | JSON-NULL | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-JSON-NULL |
+| RET-PROV-020 | JSON-NULL | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-JSON-NULL |
+| RET-PROV-020 | JSON-NULL | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-JSON-NULL |
+| RET-PROV-020 | JSON-NUMBER | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-JSON-NUMBER |
+| RET-PROV-020 | JSON-NUMBER | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-JSON-NUMBER |
+| RET-PROV-020 | JSON-NUMBER | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-JSON-NUMBER |
+| RET-PROV-020 | JSON-NUMBER | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-JSON-NUMBER |
+| RET-PROV-020 | JSON-OBJECT | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-JSON-OBJECT |
+| RET-PROV-020 | JSON-OBJECT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-JSON-OBJECT |
+| RET-PROV-020 | JSON-OBJECT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-JSON-OBJECT |
+| RET-PROV-020 | JSON-OBJECT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-JSON-OBJECT |
+| RET-PROV-020 | MALFORMED-JSON | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-MALFORMED-JSON |
+| RET-PROV-020 | MALFORMED-JSON | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-MALFORMED-JSON |
+| RET-PROV-020 | MALFORMED-JSON | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-MALFORMED-JSON |
+| RET-PROV-020 | MALFORMED-JSON | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-MALFORMED-JSON |
+| RET-PROV-020 | STACKED-ENCODING | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-STACKED-ENCODING |
+| RET-PROV-020 | STACKED-ENCODING | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-STACKED-ENCODING |
+| RET-PROV-020 | STACKED-ENCODING | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-STACKED-ENCODING |
+| RET-PROV-020 | STACKED-ENCODING | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-STACKED-ENCODING |
+| RET-PROV-020 | VERSION-MISMATCH | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-VERSION-MISMATCH |
+| RET-PROV-020 | VERSION-MISMATCH | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-VERSION-MISMATCH |
+| RET-PROV-020 | VERSION-MISMATCH | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-VERSION-MISMATCH |
+| RET-PROV-020 | VERSION-MISMATCH | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-VERSION-MISMATCH |
+| RET-PROV-020 | WIRE-EXACT-1048576 | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-WIRE-EXACT-1048576 |
+| RET-PROV-020 | WIRE-EXACT-1048576 | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-WIRE-EXACT-1048576 |
+| RET-PROV-020 | WIRE-EXACT-1048576 | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-WIRE-EXACT-1048576 |
+| RET-PROV-020 | WIRE-EXACT-1048576 | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-WIRE-EXACT-1048576 |
+| RET-PROV-020 | WIRE-PLUS-ONE-1048577 | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-WIRE-PLUS-ONE-1048577 |
+| RET-PROV-020 | WIRE-PLUS-ONE-1048577 | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-WIRE-PLUS-ONE-1048577 |
+| RET-PROV-020 | WIRE-PLUS-ONE-1048577 | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-WIRE-PLUS-ONE-1048577 |
+| RET-PROV-020 | WIRE-PLUS-ONE-1048577 | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-WIRE-PLUS-ONE-1048577 |
+| RET-PROV-020 | WIRE-STREAMED-EXACT | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-WIRE-STREAMED-EXACT |
+| RET-PROV-020 | WIRE-STREAMED-EXACT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-WIRE-STREAMED-EXACT |
+| RET-PROV-020 | WIRE-STREAMED-EXACT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-WIRE-STREAMED-EXACT |
+| RET-PROV-020 | WIRE-STREAMED-EXACT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-WIRE-STREAMED-EXACT |
+| RET-PROV-020 | WIRE-STREAMED-PLUS-ONE | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-WIRE-STREAMED-PLUS-ONE |
+| RET-PROV-020 | WIRE-STREAMED-PLUS-ONE | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-WIRE-STREAMED-PLUS-ONE |
+| RET-PROV-020 | WIRE-STREAMED-PLUS-ONE | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-WIRE-STREAMED-PLUS-ONE |
+| RET-PROV-020 | WIRE-STREAMED-PLUS-ONE | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-WIRE-STREAMED-PLUS-ONE |
+| RET-PROV-021 | OUTER-RESULT-GROUPS-TWO | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-OUTER-RESULT-GROUPS-TWO |
+| RET-PROV-021 | OUTER-RESULT-GROUPS-TWO | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-OUTER-RESULT-GROUPS-TWO |
+| RET-PROV-021 | OUTER-RESULT-GROUPS-TWO | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-OUTER-RESULT-GROUPS-TWO |
+| RET-PROV-021 | OUTER-RESULT-GROUPS-TWO | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-OUTER-RESULT-GROUPS-TWO |
+| RET-PROV-021 | UNORDERED-CANDIDATE-OBJECT | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-UNORDERED-CANDIDATE-OBJECT |
+| RET-PROV-021 | UNORDERED-CANDIDATE-OBJECT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-UNORDERED-CANDIDATE-OBJECT |
+| RET-PROV-021 | UNORDERED-CANDIDATE-OBJECT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-UNORDERED-CANDIDATE-OBJECT |
+| RET-PROV-021 | UNORDERED-CANDIDATE-OBJECT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-UNORDERED-CANDIDATE-OBJECT |
+| RET-PROV-022 | CONNECTION-ESTABLISHMENT-FAILURE | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-CONNECTION-ESTABLISHMENT-FAILURE |
+| RET-PROV-022 | CONNECTION-ESTABLISHMENT-FAILURE | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CONNECTION-ESTABLISHMENT-FAILURE |
+| RET-PROV-022 | CONNECTION-ESTABLISHMENT-FAILURE | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CONNECTION-ESTABLISHMENT-FAILURE |
+| RET-PROV-022 | READ-TIMEOUT-FAILURE | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-READ-TIMEOUT-FAILURE |
+| RET-PROV-022 | READ-TIMEOUT-FAILURE | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-READ-TIMEOUT-FAILURE |
+| RET-PROV-022 | READ-TIMEOUT-FAILURE | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-READ-TIMEOUT-FAILURE |
+| RET-PROV-023 | DEFAULT | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-DEFAULT |
+| RET-PROV-023 | DEFAULT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-DEFAULT |
+| RET-PROV-023 | DEFAULT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-PROV-023 | DEFAULT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-PROV-024 | DEFAULT | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-DEFAULT |
+| RET-PROV-024 | DEFAULT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-DEFAULT |
+| RET-PROV-024 | DEFAULT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-PROV-024 | DEFAULT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-PROV-025 | DEFAULT | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-DEFAULT |
+| RET-PROV-025 | DEFAULT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-DEFAULT |
+| RET-PROV-025 | DEFAULT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-PROV-025 | DEFAULT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-PROV-026 | TYPED-NEGATIVE-INFINITY | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-TYPED-NEGATIVE-INFINITY |
+| RET-PROV-026 | TYPED-NEGATIVE-INFINITY | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-TYPED-NEGATIVE-INFINITY |
+| RET-PROV-026 | TYPED-NEGATIVE-INFINITY | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-TYPED-NEGATIVE-INFINITY |
+| RET-PROV-026 | TYPED-NEGATIVE-INFINITY | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-TYPED-NEGATIVE-INFINITY |
+| RET-PROV-026 | TYPED-POSITIVE-INFINITY | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-TYPED-POSITIVE-INFINITY |
+| RET-PROV-026 | TYPED-POSITIVE-INFINITY | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-TYPED-POSITIVE-INFINITY |
+| RET-PROV-026 | TYPED-POSITIVE-INFINITY | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-TYPED-POSITIVE-INFINITY |
+| RET-PROV-026 | TYPED-POSITIVE-INFINITY | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-TYPED-POSITIVE-INFINITY |
+| RET-PROV-027 | SCORE-ARRAY | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-SCORE-ARRAY |
+| RET-PROV-027 | SCORE-ARRAY | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-SCORE-ARRAY |
+| RET-PROV-027 | SCORE-ARRAY | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-SCORE-ARRAY |
+| RET-PROV-027 | SCORE-ARRAY | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-SCORE-ARRAY |
+| RET-PROV-027 | SCORE-BOOLEAN | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-SCORE-BOOLEAN |
+| RET-PROV-027 | SCORE-BOOLEAN | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-SCORE-BOOLEAN |
+| RET-PROV-027 | SCORE-BOOLEAN | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-SCORE-BOOLEAN |
+| RET-PROV-027 | SCORE-BOOLEAN | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-SCORE-BOOLEAN |
+| RET-PROV-027 | SCORE-NULL | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-SCORE-NULL |
+| RET-PROV-027 | SCORE-NULL | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-SCORE-NULL |
+| RET-PROV-027 | SCORE-NULL | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-SCORE-NULL |
+| RET-PROV-027 | SCORE-NULL | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-SCORE-NULL |
+| RET-PROV-027 | SCORE-OBJECT | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-SCORE-OBJECT |
+| RET-PROV-027 | SCORE-OBJECT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-SCORE-OBJECT |
+| RET-PROV-027 | SCORE-OBJECT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-SCORE-OBJECT |
+| RET-PROV-027 | SCORE-OBJECT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-SCORE-OBJECT |
+| RET-PROV-027 | SCORE-STRING | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-SCORE-STRING |
+| RET-PROV-027 | SCORE-STRING | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-SCORE-STRING |
+| RET-PROV-027 | SCORE-STRING | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-SCORE-STRING |
+| RET-PROV-027 | SCORE-STRING | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-SCORE-STRING |
+| RET-PROV-028 | DEFAULT | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-DEFAULT |
+| RET-PROV-028 | DEFAULT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-DEFAULT |
+| RET-PROV-028 | DEFAULT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-PROV-028 | DEFAULT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-PROV-029 | DEFAULT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-DEFAULT |
+| RET-PROV-029 | DEFAULT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-PROV-029 | DEFAULT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-PROV-030 | DEFAULT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-DEFAULT |
+| RET-PROV-030 | DEFAULT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-PROV-030 | DEFAULT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-PROV-031 | DEFAULT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-DEFAULT |
+| RET-PROV-031 | DEFAULT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-PROV-031 | DEFAULT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-PROV-032 | INVALID-UUID-SYNTAX | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-INVALID-UUID-SYNTAX |
+| RET-PROV-032 | INVALID-UUID-SYNTAX | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-INVALID-UUID-SYNTAX |
+| RET-PROV-032 | INVALID-UUID-SYNTAX | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-INVALID-UUID-SYNTAX |
+| RET-PROV-032 | INVALID-UUID-SYNTAX | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-INVALID-UUID-SYNTAX |
+| RET-PROV-032 | MISSING-CHUNK-PREFIX | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-MISSING-CHUNK-PREFIX |
+| RET-PROV-032 | MISSING-CHUNK-PREFIX | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-MISSING-CHUNK-PREFIX |
+| RET-PROV-032 | MISSING-CHUNK-PREFIX | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-MISSING-CHUNK-PREFIX |
+| RET-PROV-032 | MISSING-CHUNK-PREFIX | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-MISSING-CHUNK-PREFIX |
+| RET-PROV-032 | NONCANONICAL-UUID-SPELLING | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-NONCANONICAL-UUID-SPELLING |
+| RET-PROV-032 | NONCANONICAL-UUID-SPELLING | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-NONCANONICAL-UUID-SPELLING |
+| RET-PROV-032 | NONCANONICAL-UUID-SPELLING | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-NONCANONICAL-UUID-SPELLING |
+| RET-PROV-032 | NONCANONICAL-UUID-SPELLING | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-NONCANONICAL-UUID-SPELLING |
+| RET-PROV-033 | DEFAULT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-PROV-033 | DEFAULT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-PROV-034 | DEFAULT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-PROV-034 | DEFAULT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-PROV-035 | DEFAULT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-PROV-035 | DEFAULT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-PROV-036 | DEFAULT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-PROV-036 | DEFAULT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-PROV-037 | DOCUMENT-STATUS-INELIGIBLE | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DOCUMENT-STATUS-INELIGIBLE |
+| RET-PROV-037 | DOCUMENT-STATUS-INELIGIBLE | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DOCUMENT-STATUS-INELIGIBLE |
+| RET-PROV-038 | MISSING-CANDIDATE-ID | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-MISSING-CANDIDATE-ID |
+| RET-PROV-038 | MISSING-CANDIDATE-ID | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-MISSING-CANDIDATE-ID |
+| RET-PROV-038 | MISSING-CANDIDATE-ID | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-MISSING-CANDIDATE-ID |
+| RET-PROV-038 | MISSING-CANDIDATE-ID | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-MISSING-CANDIDATE-ID |
+| RET-PROV-038 | WRONG-TYPE-CANDIDATE-ID | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-WRONG-TYPE-CANDIDATE-ID |
+| RET-PROV-038 | WRONG-TYPE-CANDIDATE-ID | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-WRONG-TYPE-CANDIDATE-ID |
+| RET-PROV-038 | WRONG-TYPE-CANDIDATE-ID | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-WRONG-TYPE-CANDIDATE-ID |
+| RET-PROV-038 | WRONG-TYPE-CANDIDATE-ID | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-WRONG-TYPE-CANDIDATE-ID |
+| RET-PROV-039 | DEFAULT | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-DEFAULT |
+| RET-PROV-039 | DEFAULT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-DEFAULT |
+| RET-PROV-039 | DEFAULT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-PROV-039 | DEFAULT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-PROV-040 | DEFAULT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-DEFAULT |
+| RET-PROV-040 | DEFAULT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-PROV-040 | DEFAULT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-PROV-041 | DECODED-EXACT-2097152 | unit | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-DECODED-EXACT-2097152 |
+| RET-PROV-041 | DECODED-EXACT-2097152 | provider-adapter contract | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-DECODED-EXACT-2097152 |
+| RET-PROV-041 | DECODED-EXACT-2097152 | PostgreSQL integration | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DECODED-EXACT-2097152 |
+| RET-PROV-041 | DECODED-EXACT-2097152 | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DECODED-EXACT-2097152 |
+| RET-PROV-041 | DECODED-PLUS-ONE-2097153 | unit | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-DECODED-PLUS-ONE-2097153 |
+| RET-PROV-041 | DECODED-PLUS-ONE-2097153 | provider-adapter contract | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-DECODED-PLUS-ONE-2097153 |
+| RET-PROV-041 | DECODED-PLUS-ONE-2097153 | PostgreSQL integration | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DECODED-PLUS-ONE-2097153 |
+| RET-PROV-041 | DECODED-PLUS-ONE-2097153 | fault injection | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-FI-DECODED-PLUS-ONE-2097153 |
+| RET-PROV-041 | DECODED-PLUS-ONE-2097153 | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DECODED-PLUS-ONE-2097153 |
+| RET-PROV-041 | NAN | unit | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-NAN |
+| RET-PROV-041 | NAN | provider-adapter contract | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-NAN |
+| RET-PROV-041 | NAN | PostgreSQL integration | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-NAN |
+| RET-PROV-041 | NAN | fault injection | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-FI-NAN |
+| RET-PROV-041 | NAN | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-NAN |
+| RET-PROV-041 | NEGATIVE-INFINITY | unit | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-NEGATIVE-INFINITY |
+| RET-PROV-041 | NEGATIVE-INFINITY | provider-adapter contract | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-NEGATIVE-INFINITY |
+| RET-PROV-041 | NEGATIVE-INFINITY | PostgreSQL integration | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-NEGATIVE-INFINITY |
+| RET-PROV-041 | NEGATIVE-INFINITY | fault injection | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-FI-NEGATIVE-INFINITY |
+| RET-PROV-041 | NEGATIVE-INFINITY | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-NEGATIVE-INFINITY |
+| RET-PROV-041 | NO-AUTOMATIC-RETRY | unit | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-NO-AUTOMATIC-RETRY |
+| RET-PROV-041 | NO-AUTOMATIC-RETRY | provider-adapter contract | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-NO-AUTOMATIC-RETRY |
+| RET-PROV-041 | NO-AUTOMATIC-RETRY | PostgreSQL integration | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-NO-AUTOMATIC-RETRY |
+| RET-PROV-041 | NO-AUTOMATIC-RETRY | fault injection | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-FI-NO-AUTOMATIC-RETRY |
+| RET-PROV-041 | NO-AUTOMATIC-RETRY | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-NO-AUTOMATIC-RETRY |
+| RET-PROV-041 | NORMALIZATION-CONVERSION-OVERFLOW | unit | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-NORMALIZATION-CONVERSION-OVERFLOW |
+| RET-PROV-041 | NORMALIZATION-CONVERSION-OVERFLOW | provider-adapter contract | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-NORMALIZATION-CONVERSION-OVERFLOW |
+| RET-PROV-041 | NORMALIZATION-CONVERSION-OVERFLOW | PostgreSQL integration | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-NORMALIZATION-CONVERSION-OVERFLOW |
+| RET-PROV-041 | NORMALIZATION-CONVERSION-OVERFLOW | fault injection | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-FI-NORMALIZATION-CONVERSION-OVERFLOW |
+| RET-PROV-041 | NORMALIZATION-CONVERSION-OVERFLOW | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-NORMALIZATION-CONVERSION-OVERFLOW |
+| RET-PROV-041 | POSITIVE-INFINITY | unit | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-POSITIVE-INFINITY |
+| RET-PROV-041 | POSITIVE-INFINITY | provider-adapter contract | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-POSITIVE-INFINITY |
+| RET-PROV-041 | POSITIVE-INFINITY | PostgreSQL integration | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-POSITIVE-INFINITY |
+| RET-PROV-041 | POSITIVE-INFINITY | fault injection | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-FI-POSITIVE-INFINITY |
+| RET-PROV-041 | POSITIVE-INFINITY | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-POSITIVE-INFINITY |
+| RET-PROV-041 | TOTAL-DEADLINE | unit | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-TOTAL-DEADLINE |
+| RET-PROV-041 | TOTAL-DEADLINE | provider-adapter contract | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-TOTAL-DEADLINE |
+| RET-PROV-041 | TOTAL-DEADLINE | PostgreSQL integration | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-TOTAL-DEADLINE |
+| RET-PROV-041 | TOTAL-DEADLINE | fault injection | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-FI-TOTAL-DEADLINE |
+| RET-PROV-041 | TOTAL-DEADLINE | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-TOTAL-DEADLINE |
+| RET-PROV-041 | WIRE-EXACT-2097152 | unit | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-WIRE-EXACT-2097152 |
+| RET-PROV-041 | WIRE-EXACT-2097152 | provider-adapter contract | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-WIRE-EXACT-2097152 |
+| RET-PROV-041 | WIRE-EXACT-2097152 | PostgreSQL integration | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-WIRE-EXACT-2097152 |
+| RET-PROV-041 | WIRE-EXACT-2097152 | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-WIRE-EXACT-2097152 |
+| RET-PROV-041 | WIRE-PLUS-ONE-2097153 | unit | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-WIRE-PLUS-ONE-2097153 |
+| RET-PROV-041 | WIRE-PLUS-ONE-2097153 | provider-adapter contract | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-WIRE-PLUS-ONE-2097153 |
+| RET-PROV-041 | WIRE-PLUS-ONE-2097153 | PostgreSQL integration | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-WIRE-PLUS-ONE-2097153 |
+| RET-PROV-041 | WIRE-PLUS-ONE-2097153 | fault injection | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-FI-WIRE-PLUS-ONE-2097153 |
+| RET-PROV-041 | WIRE-PLUS-ONE-2097153 | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-WIRE-PLUS-ONE-2097153 |
+| RET-PROV-041 | WRONG-DIMENSION | unit | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-WRONG-DIMENSION |
+| RET-PROV-041 | WRONG-DIMENSION | provider-adapter contract | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-WRONG-DIMENSION |
+| RET-PROV-041 | WRONG-DIMENSION | PostgreSQL integration | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-WRONG-DIMENSION |
+| RET-PROV-041 | WRONG-DIMENSION | fault injection | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-FI-WRONG-DIMENSION |
+| RET-PROV-041 | WRONG-DIMENSION | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-WRONG-DIMENSION |
+| RET-PROV-041 | WRONG-VALUE-TYPE | unit | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-WRONG-VALUE-TYPE |
+| RET-PROV-041 | WRONG-VALUE-TYPE | provider-adapter contract | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-WRONG-VALUE-TYPE |
+| RET-PROV-041 | WRONG-VALUE-TYPE | PostgreSQL integration | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-WRONG-VALUE-TYPE |
+| RET-PROV-041 | WRONG-VALUE-TYPE | fault injection | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-FI-WRONG-VALUE-TYPE |
+| RET-PROV-041 | WRONG-VALUE-TYPE | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-WRONG-VALUE-TYPE |
+| RET-PROV-041 | WRONG-VECTOR-COUNT | unit | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-WRONG-VECTOR-COUNT |
+| RET-PROV-041 | WRONG-VECTOR-COUNT | provider-adapter contract | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-WRONG-VECTOR-COUNT |
+| RET-PROV-041 | WRONG-VECTOR-COUNT | PostgreSQL integration | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-WRONG-VECTOR-COUNT |
+| RET-PROV-041 | WRONG-VECTOR-COUNT | fault injection | AF3B_EMBEDDING | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-FI-WRONG-VECTOR-COUNT |
+| RET-PROV-041 | WRONG-VECTOR-COUNT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-WRONG-VECTOR-COUNT |
+| RET-PROV-042 | CANCELLATION-WAITERS-AND-STATE-CLEARING | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-CANCELLATION-WAITERS-AND-STATE-CLEARING |
+| RET-PROV-042 | CANCELLATION-WAITERS-AND-STATE-CLEARING | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-CANCELLATION-WAITERS-AND-STATE-CLEARING |
+| RET-PROV-042 | CANCELLATION-WAITERS-AND-STATE-CLEARING | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CANCELLATION-WAITERS-AND-STATE-CLEARING |
+| RET-PROV-042 | CANCELLATION-WAITERS-AND-STATE-CLEARING | deterministic concurrency | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-DC-CANCELLATION-WAITERS-AND-STATE-CLEARING |
+| RET-PROV-042 | CANCELLATION-WAITERS-AND-STATE-CLEARING | fault injection | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-FI-CANCELLATION-WAITERS-AND-STATE-CLEARING |
+| RET-PROV-042 | CANCELLATION-WAITERS-AND-STATE-CLEARING | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CANCELLATION-WAITERS-AND-STATE-CLEARING |
+| RET-PROV-042 | CONCURRENT-FIRST-USE-SINGLE-FLIGHT | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-CONCURRENT-FIRST-USE-SINGLE-FLIGHT |
+| RET-PROV-042 | CONCURRENT-FIRST-USE-SINGLE-FLIGHT | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-CONCURRENT-FIRST-USE-SINGLE-FLIGHT |
+| RET-PROV-042 | CONCURRENT-FIRST-USE-SINGLE-FLIGHT | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-CONCURRENT-FIRST-USE-SINGLE-FLIGHT |
+| RET-PROV-042 | CONCURRENT-FIRST-USE-SINGLE-FLIGHT | deterministic concurrency | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-DC-CONCURRENT-FIRST-USE-SINGLE-FLIGHT |
+| RET-PROV-042 | CONCURRENT-FIRST-USE-SINGLE-FLIGHT | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-CONCURRENT-FIRST-USE-SINGLE-FLIGHT |
+| RET-PROV-042 | FAILURE-WAITERS-AND-STATE-CLEARING | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-FAILURE-WAITERS-AND-STATE-CLEARING |
+| RET-PROV-042 | FAILURE-WAITERS-AND-STATE-CLEARING | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-FAILURE-WAITERS-AND-STATE-CLEARING |
+| RET-PROV-042 | FAILURE-WAITERS-AND-STATE-CLEARING | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-FAILURE-WAITERS-AND-STATE-CLEARING |
+| RET-PROV-042 | FAILURE-WAITERS-AND-STATE-CLEARING | deterministic concurrency | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-DC-FAILURE-WAITERS-AND-STATE-CLEARING |
+| RET-PROV-042 | FAILURE-WAITERS-AND-STATE-CLEARING | fault injection | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-FI-FAILURE-WAITERS-AND-STATE-CLEARING |
+| RET-PROV-042 | FAILURE-WAITERS-AND-STATE-CLEARING | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-FAILURE-WAITERS-AND-STATE-CLEARING |
+| RET-PROV-042 | NO-SAME-REQUEST-PROBE-RETRY | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-NO-SAME-REQUEST-PROBE-RETRY |
+| RET-PROV-042 | NO-SAME-REQUEST-PROBE-RETRY | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-NO-SAME-REQUEST-PROBE-RETRY |
+| RET-PROV-042 | NO-SAME-REQUEST-PROBE-RETRY | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-NO-SAME-REQUEST-PROBE-RETRY |
+| RET-PROV-042 | NO-SAME-REQUEST-PROBE-RETRY | deterministic concurrency | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-DC-NO-SAME-REQUEST-PROBE-RETRY |
+| RET-PROV-042 | NO-SAME-REQUEST-PROBE-RETRY | fault injection | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-FI-NO-SAME-REQUEST-PROBE-RETRY |
+| RET-PROV-042 | NO-SAME-REQUEST-PROBE-RETRY | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-NO-SAME-REQUEST-PROBE-RETRY |
+| RET-PROV-042 | SUCCESS-CACHED-UNTIL-CLOSE | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-SUCCESS-CACHED-UNTIL-CLOSE |
+| RET-PROV-042 | SUCCESS-CACHED-UNTIL-CLOSE | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-SUCCESS-CACHED-UNTIL-CLOSE |
+| RET-PROV-042 | SUCCESS-CACHED-UNTIL-CLOSE | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-SUCCESS-CACHED-UNTIL-CLOSE |
+| RET-PROV-042 | SUCCESS-CACHED-UNTIL-CLOSE | deterministic concurrency | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-DC-SUCCESS-CACHED-UNTIL-CLOSE |
+| RET-PROV-042 | SUCCESS-CACHED-UNTIL-CLOSE | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-SUCCESS-CACHED-UNTIL-CLOSE |
+| RET-PROV-043 | NO-COLLECTION-WRITE-INITIALIZATION | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-NO-COLLECTION-WRITE-INITIALIZATION |
+| RET-PROV-043 | NO-COLLECTION-WRITE-INITIALIZATION | fault injection | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-FI-NO-COLLECTION-WRITE-INITIALIZATION |
+| RET-PROV-043 | NO-COLLECTION-WRITE-INITIALIZATION | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-NO-COLLECTION-WRITE-INITIALIZATION |
+| RET-PROV-043 | ONE-ATTEMPT-NO-FALLBACK | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-ONE-ATTEMPT-NO-FALLBACK |
+| RET-PROV-043 | ONE-ATTEMPT-NO-FALLBACK | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-ONE-ATTEMPT-NO-FALLBACK |
+| RET-PROV-043 | ONE-ATTEMPT-NO-FALLBACK | PostgreSQL integration | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-ONE-ATTEMPT-NO-FALLBACK |
+| RET-PROV-043 | ONE-ATTEMPT-NO-FALLBACK | fault injection | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-FI-ONE-ATTEMPT-NO-FALLBACK |
+| RET-PROV-043 | ONE-ATTEMPT-NO-FALLBACK | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-ONE-ATTEMPT-NO-FALLBACK |
+| RET-PROV-043 | PROBE-AND-QUERY-TOTAL-DEADLINES | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-PROBE-AND-QUERY-TOTAL-DEADLINES |
+| RET-PROV-043 | PROBE-AND-QUERY-TOTAL-DEADLINES | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-PROBE-AND-QUERY-TOTAL-DEADLINES |
+| RET-PROV-043 | PROBE-AND-QUERY-TOTAL-DEADLINES | fault injection | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-FI-PROBE-AND-QUERY-TOTAL-DEADLINES |
+| RET-PROV-043 | PROBE-AND-QUERY-TOTAL-DEADLINES | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-PROBE-AND-QUERY-TOTAL-DEADLINES |
+| RET-PROV-043 | TRUSTED-CONFIGURED-COLLECTION-UUID | unit | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-TRUSTED-CONFIGURED-COLLECTION-UUID |
+| RET-PROV-043 | TRUSTED-CONFIGURED-COLLECTION-UUID | provider-adapter contract | AF3B_CHROMA_ADAPTER | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PAC-TRUSTED-CONFIGURED-COLLECTION-UUID |
+| RET-PROV-043 | TRUSTED-CONFIGURED-COLLECTION-UUID | HTTP integration | AF3C_HTTP | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-TRUSTED-CONFIGURED-COLLECTION-UUID |
+| RET-RANK-001 | SOURCE-RANK-FORMULA-MATRIX | unit | AF3B_HYBRID_FUSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-SOURCE-RANK-FORMULA-MATRIX |
+| RET-RANK-001 | SOURCE-RANK-FORMULA-MATRIX | HTTP integration | AF3C_PUBLIC_EVIDENCE | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-SOURCE-RANK-FORMULA-MATRIX |
+| RET-RANK-002 | RAW-SCORE-INVARIANCE | unit | AF3B_HYBRID_FUSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-RAW-SCORE-INVARIANCE |
+| RET-RANK-002 | RAW-SCORE-INVARIANCE | HTTP integration | AF3C_PUBLIC_EVIDENCE | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-RAW-SCORE-INVARIANCE |
+| RET-RANK-003 | DEFAULT | unit | AF3B_HYBRID_FUSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-DEFAULT |
+| RET-RANK-003 | DEFAULT | PostgreSQL integration | AF3B_HYBRID_FUSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-RANK-003 | DEFAULT | HTTP integration | AF3C_PUBLIC_EVIDENCE | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+| RET-RANK-004 | COMPLETE-TIE-COMPARATOR-MATRIX | unit | AF3B_HYBRID_FUSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-COMPLETE-TIE-COMPARATOR-MATRIX |
+| RET-RANK-004 | COMPLETE-TIE-COMPARATOR-MATRIX | HTTP integration | AF3C_PUBLIC_EVIDENCE | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-COMPLETE-TIE-COMPARATOR-MATRIX |
+| RET-RANK-005 | DEFAULT | unit | AF3B_HYBRID_FUSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-U-DEFAULT |
+| RET-RANK-005 | DEFAULT | PostgreSQL integration | AF3B_HYBRID_FUSION | AF-3B | REQUIRED_NOT_YET_IMPLEMENTED | O-PG-DEFAULT |
+| RET-RANK-005 | DEFAULT | HTTP integration | AF3C_PUBLIC_EVIDENCE | AF-3C | REQUIRED_NOT_YET_IMPLEMENTED | O-HTTP-DEFAULT |
+<!-- CANONICAL_LEDGER_END -->
+
+The ledger contains no range, wildcard, shared owner, implicit phase, or
+mixed-status row. Every declared case-level test vocabulary value has at least
+one exact executable row for the variant when that level can prove its oracle;
+incapable levels are not declared. The suite parser rejects duplicate keys,
+undefined enums, unresolved case IDs, undeclared body labels, rows without a
+stable heading, missing/malformed Oracle references, duplicate case-local
+oracles, and any phase-specific mixed fixture. Rows are selected from the
+case's exact capable-level matrix, never by taking a Cartesian product of a
+case's labels and summary levels.
 
 ## Test conventions
 
@@ -50,10 +1333,17 @@ implemented, passing, skipped, or waived.
 - A valid persisted chunk hash matches `^[0-9a-f]{64}$`.
 - Unless a case says otherwise, query, result, candidate, and provider values
   are within configured bounds.
-- “Authorized Evidence” is built from the fixed final PostgreSQL snapshot and
-  carries `untrusted_document_content`.
-- “Authorized empty Evidence” means final authentication and exact-target
-  authorization succeeded but no eligible candidate survived.
+- “Internal authoritative retrieval record” is frozen, slotted, non-public, fully
+  materialized before final commit, structurally separates trusted control/
+  provenance from text, and classifies text only as
+  `untrusted_document_content`. It is not HTTP-serializable and cannot
+  serialize as public Evidence.
+- “Authorized empty internal authoritative retrieval record set” means final authentication and exact-
+  target authorization succeeded but no eligible candidate survived. Public
+  Evidence and Citation shapes are AF-3C-only mappings.
+- The RET-EVID prefix is retained for historical stable-ID traceability. It
+  does not name the AF-3A/AF-3B record type and does not imply that either
+  phase exposes public Evidence.
 - Every future private success and error response has
   `Cache-Control: private, no-store`.
 - Existing generic public behavior is `401 AUTHENTICATION_REQUIRED` and hidden
@@ -91,11 +1381,25 @@ implemented, passing, skipped, or waived.
   them as conforming JSON.
 - Planned test-level values are deterministic ordered sets drawn from:
   `unit`, `provider-adapter contract`, `PostgreSQL integration`,
-  `HTTP integration`, and `future consuming-phase acceptance`.
+  `deterministic concurrency`, `fault injection`, `HTTP integration`, and
+  `future consuming-phase acceptance`.
 - Unit tests use deterministic fakes and no network. Provider-adapter contract
   tests use bounded mock transports. PostgreSQL integration tests observe SQL,
   transaction isolation, snapshots, and concurrency. HTTP integration tests
   observe public status, envelopes, cache headers, and no-fallback behavior.
+
+The normative non-HTTP lifecycle is exact: preserve
+`SessionAuthenticationProof`; run and release one initial live-session,
+active-user, exact-target access operation; run the pure validator; run and
+release one scoped keyword operation; run exactly one embedding operation;
+run the read-only Chroma compatibility/query path; form the bounded union;
+open the fresh final transaction; sample one timezone-aware injected UTC
+`final_now` immediately before its first authoritative statement; establish
+one fixed snapshot and recheck authentication/access/capabilities; validate
+and load deterministic batches from that snapshot; materialize immutable
+internal authoritative retrieval records; commit and release; and perform no later
+authorization-sensitive or lazy load. No connection, transaction, ORM
+Session, or SessionTransaction crosses embedding or Chroma I/O.
 
 AF-3C has exactly two public operations and no other endpoint:
 
@@ -177,7 +1481,7 @@ declared capable levels.
 | F1J retrieval body plus one | `RET-BND-003::BODY-PLUS-ONE-65537` | Same as F1I. | Exact `application/json`; constructible valid 65,537-byte `R` fixture in one body event. | Byte 65,537 produces generic `422`; parser and every later call count are zero; private/no-store. |
 | F1K retrieval chunked plus one | `RET-BND-003::CHUNKED-BODY-PLUS-ONE-65537` | Same as F1I. | Same valid 65,537-byte `R` fixture split 32,768/32,768/1. | The final byte aborts immediately; no further receive, parse, schema, normalization, retrieval, or final SQL; generic `422`, private/no-store. |
 | F1L literal NUL JSON rejection | `RET-BND-003::LITERAL-NUL-JSON-PARSER-REJECTION` | Canonical path; live session; authorized target. | Exact `application/json`; one literal unescaped byte `0x00` occurs between the quotes of the `query` JSON string. | Strict JSON parsing rejects the unescaped control byte with generic `422 VALIDATION_ERROR`; schema, query-domain, normalization, and retrieval call counts are zero; private/no-store. |
-| F1M escaped U+0000 semantic handoff | `RET-BND-003::ESCAPED-U0000-DOMAIN-HANDOFF` | Canonical path; live session; authorized target. | Exact `application/json`; parameterized once with the valid ASCII JSON query escape `"\u0000"` and once with the embedded escape `"a\u0000b"`. | Both parse as strict JSON and hand their decoded values to RET-BND-001's same pre-NFC semantic rejection; each returns generic `422 VALIDATION_ERROR` with zero normalization, retrieval, or Evidence work and private/no-store. |
+| F1M escaped U+0000 semantic handoff | `RET-BND-003::ESCAPED-U0000-DOMAIN-HANDOFF` | Canonical path; live session; authorized target. | Exact `application/json`; parameterized once with the valid ASCII JSON query escape `"\u0000"` and once with the embedded escape `"a\u0000b"`. | Both parse as strict JSON and hand their decoded values to RET-BND-001's same pre-NFC semantic rejection; each returns generic `422 VALIDATION_ERROR` with zero normalization, retrieval, or public Evidence work and private/no-store. |
 | F1N U+0000 authentication precedence | `RET-BND-003::U0000-AUTHENTICATION-PRECEDENCE` | Canonical route form; missing session; target exists. | Parameterized once with the F1L literal-NUL body and once with the F1M escaped-U+0000-alone body. | Authentication returns generic `401`; target, media, body receive, parsing, query-domain, normalization, and retrieval call counts are zero; private/no-store. |
 | F1O U+0000 hidden-target precedence | `RET-BND-003::U0000-HIDDEN-TARGET-PRECEDENCE` | Canonical path; live session; target hidden by absent membership. | Parameterized once with the F1L literal-NUL body and once with the F1M escaped-U+0000-alone body. | Exact-target authorization returns generic hidden `404`; media, body receive, parsing, query-domain, normalization, and retrieval call counts are zero; private/no-store. |
 | F2A citation supported-media control | `RET-EVID-003::CITATION-SUPPORTED-MEDIA-CONTROL` | Canonical citation route; live session; authorized current target. | Exact `application/json`; valid strict body `C`. | Media/body/schema gates and final PostgreSQL resolution each execute once; exact citation object success with private/no-store. |
@@ -249,12 +1553,34 @@ one `POST` to the v2 collection `/query` path with exactly
 `where.knowledge_base_id.$eq`, and `include: ["distances"]`. It never requests
 documents, metadata, embeddings, URIs, data, or document filters.
 
+One adapter instance performs one successful compatibility probe, with
+concurrent first uses sharing a single-flight attempt. Success lives only
+until adapter close. Failure or cancellation fails current waiters and clears
+in-flight state; the same retrieval request does not retry, while a later
+independent request may make one new attempt. The canonical collection UUID
+comes from trusted configuration. Retrieval performs no collection create,
+`get_or_create`, update, upsert, delete, or other write-capable
+initialization. Embedding, probe, and query each have one total wall-clock
+deadline in the existing validated timeout domain (default 30 seconds,
+maximum 600 seconds), exactly one attempt, and no retry, backoff, failover,
+stale result, or fallback.
+
 The exact outbound-vector oracle configures embedding dimension `4`; the
 deterministic fake returns `[0.25, -0.5, 0.0, 1.0]`; and the POST contains
 exactly `"query_embeddings":[[0.25,-0.5,0.0,1.0]]`. The spy compares array
 cardinality, every value and its order, and canonical serialized JSON.
 Truncation, padding, replacement, normalization or reordering, a duplicate
 vector, a second embedding call, or any non-finite value fails.
+
+The embedding adapter invokes exactly
+`EmbeddingModel.embed([normalized_query])`. It returns one vector of the exact
+configured dimension containing only adapter-normalized built-in finite
+floats. The retrieval boundary performs no coercion, truncation, padding, or
+second-vector acceptance. Wrong count, dimension, type, conversion overflow,
+NaN, or infinity is fatal, discards completed keyword candidates, and permits
+no Chroma or final transaction. Raw/wire and decoded/decompressed embedding
+response ceilings are each inclusive at 2,097,152 bytes; bounded collection
+precedes strict UTF-8 and strict JSON materialization.
 
 Every raw response fixture has parsed media type `application/json` with no
 parameter or only case-insensitive `charset=utf-8`, and is one strict UTF-8
@@ -303,36 +1629,50 @@ Suite-wide source-isolation fixtures are mandatory:
 - **Provider-fatal:** keyword SQL has a known eligible nonempty sentinel before
   the Provider failure; the result is still generic `503` with no sentinel,
   Evidence, or fallback.
-- **Keyword-fatal:** the Provider has a known eligible nonempty dense sentinel
-  before the keyword/database failure; the result is still generic `503` with
-  no sentinel, Evidence, or fallback.
+- **Keyword-fatal:** scoped keyword SQL fails before embedding or Chroma. The
+  request aborts immediately with generic `503`, zero embedding and Chroma
+  calls, no possible dense sentinel, no result, and no fallback.
 
 Source completion order is controlled separately from source ranks. A
 positive dense case cannot pass through keyword evidence, and a positive
 keyword case cannot pass through dense evidence. These conventions override
 any less-specific “may have content” setup below: no Provider-fatal service
-variant may use an empty keyword path, and no keyword-fatal service variant may
-use an empty dense path.
+variant may use an empty keyword path, and no keyword-fatal variant may perform
+embedding or Provider work first.
 
-Whenever a case requires a secrecy scan, “all observable sinks” means
+For the mandatory scanner sidecar on every runtime row, “all observable
+sinks” means every sink observable at that row's assigned phase, level, and
+boundary. The complete cross-phase vocabulary is
 application log messages; access logs; exception/error records and exception
 string/`repr` forms; structured log keys and recursively nested values; trace
 and span names, attributes, status descriptions, and events; HTTP client and
 transport diagnostics; Provider transport records; exposed SQL/database/
 driver/transaction diagnostics; response status, headers, metadata, and body;
-and every other sink named by ADR-008. The shared recursive scanner fails on
+and every other sink named by ADR-008. AF-3A rows register their observable
+non-HTTP pure/service, application, internal authoritative retrieval record,
+and PostgreSQL sinks; AF-3B rows register those reachable in the embedding/
+Provider/hybrid boundary or regression; AF-3C rows register the observable
+response, headers, serialization, access, and public sinks, including unit
+serialization and PostgreSQL-backed public mapping where declared. The shared
+recursive scanner fails on
 exact equality or substring presence for any injected sentinel in any key,
 value, sequence member, byte string, or rendered representation. Successful
-HTTP cases invoke this scanner too. Only a sentinel at its exact intended
+and failed HTTP cases invoke this scanner too. Only a sentinel at its exact intended
 public Evidence or citation-resolution response field is allowlisted; an
 entire response object, headers/metadata, extra fields, diagnostics, and all
 other sinks remain scanned without exemption.
 
-This scanner is a mandatory assertion wrapper around every successful private
-HTTP execution in this specification, not only the privacy cases. It runs for
-each nonempty retrieval, authorized-empty retrieval, and successful citation
-resolution after response capture. A success case that does not register and
-scan every sink fails the suite even if its functional assertions pass.
+This scanner is a mandatory assertion sidecar on every canonical ledger row
+owned by AF-3A, AF-3B, or AF-3C, at every declared level and for both success
+and failure. AF-3A scans its observable non-HTTP pure/service, application,
+database, and internal authoritative retrieval record sinks; AF-3B scans its
+observable non-HTTP embedding/Provider/hybrid and regression sinks; AF-3C scans
+its observable HTTP/serialization/public sinks. Only the exact public Evidence
+or citation-resolution field path named by the row may be allowlisted; every
+non-public row and every failure row has an empty public-field allowlist. A row
+that does not register every reachable sentinel and scan every sink owned by
+its exact phase/boundary/level fails even if its functional assertion passes.
+The focused RET-PRIV cases test the scanner itself and do not waive it elsewhere.
 
 The P0-v1 provider-response hard ceilings used by the cases are:
 
@@ -438,7 +1778,10 @@ rounded half-to-even from the exact rational after ordering.
 - **Category:** Authentication and request scope.
 - **Initial database state:** Parameterized owner, editor, and viewer memberships each target eligible hashed content.
 - **Authenticated principal and membership state:** A live session for the parameterized member role.
-- **Provider or Chroma input:** One bounded canonical eligible candidate.
+- **Provider or Chroma input:** The AF-3A role-matrix row uses one bounded
+  keyword candidate and makes zero embedding/Chroma/Provider calls. The
+  separately labelled AF-3B regression may use a dense candidate; AF-3C alone
+  asserts public behavior.
 - **Concurrent state change:** None.
 - **Expected public result:** Each role receives the same authorized read Evidence contract, never a synthetic retrieval `403`.
 - **Expected internal validation result:** Current capability policy grants both retrieval read capabilities to each existing role.
@@ -524,7 +1867,10 @@ rounded half-to-even from the exact rational after ordering.
 - **Category:** Authentication and request scope.
 - **Initial database state:** Caller is a member of A and B; each has eligible content.
 - **Authenticated principal and membership state:** Live member requests exactly A.
-- **Provider or Chroma input:** Valid A candidate plus a B candidate.
+- **Provider or Chroma input:** The AF-3A row uses bounded keyword candidates
+  for A and injected B and makes zero Provider calls. The AF-3B hybrid
+  regression separately supplies dense A/B candidates; AF-3C alone asserts
+  the public response.
 - **Concurrent state change:** None.
 - **Expected public result:** Only A Evidence is returned.
 - **Expected internal validation result:** Request scope and every final predicate remain exactly A despite separate B access.
@@ -537,12 +1883,35 @@ rounded half-to-even from the exact rational after ordering.
 - **Category:** Authentication and request scope.
 - **Initial database state:** Target membership and access are current; no eligible content matches.
 - **Authenticated principal and membership state:** Live owner, editor, or viewer retains read capability through final snapshot.
-- **Provider or Chroma input:** Legal keyword retrieval returns zero; the bounded Provider response is a valid present-empty Provider envelope, including every required parallel collection at length zero, so parsing succeeds with zero deterministic Provider positions and zero dense candidates.
+- **Provider or Chroma input:** The six exact variants are deliberately split
+  by the behavior they prove. `AF3A-INITIAL-ACCESS-ZERO-HIT` stops after the
+  provider-independent live-session/target-access operation.
+  `AF3A-FINAL-REAUTH-ZERO-CANDIDATES` supplies zero candidates to the fake
+  final validator and proves that final authentication/access is not skipped.
+  `AF3A-FINAL-SNAPSHOT-ZERO-CANDIDATES` supplies zero candidates to the real
+  PostgreSQL final transaction. `AF3B-PRESENT-EMPTY-PROVIDER` proves only that
+  the canonical present-empty Provider envelope is a successful adapter
+  result. `AF3B-HYBRID-AUTHORIZED-EMPTY-REGRESSION` composes legal empty
+  keyword and dense sources and reruns the AF-3A final reauthentication path.
+  `AF3C-AUTHORIZED-EMPTY-HTTP` alone asserts the public response.
 - **Concurrent state change:** None.
 - **Expected public result:** Successful authorized empty Evidence and private/no-store.
-- **Expected internal validation result:** The adapter returns an empty dense candidate list without error; final authorization still runs; the unique union is empty and validation-batch query count is zero.
+- **Expected internal validation result:**
+
+  | Variant | Exact case-local oracle |
+  | --- | --- |
+  | `AF3A-INITIAL-ACCESS-ZERO-HIT` | The real initial operation observes the live session, active user, exact target membership/capability, releases its database resource, and publishes no retrieval result. |
+  | `AF3A-FINAL-REAUTH-ZERO-CANDIDATES` | A fake final-validator unit execution invokes final authentication/access exactly once even though the candidate set is empty and invokes zero validation batches. |
+  | `AF3A-FINAL-SNAPSHOT-ZERO-CANDIDATES` | The real first final transaction is `REPEATABLE READ`, `READ ONLY`; its first authoritative statement reauthenticates the session/user/target in that fixed snapshot, executes zero candidate batches, commits, and returns an empty internal authoritative retrieval record set. |
+  | `AF3B-PRESENT-EMPTY-PROVIDER` | The adapter accepts the exact canonical present-empty envelope and returns an empty dense candidate list without inventing a missing-collection or Provider failure. |
+  | `AF3B-HYBRID-AUTHORIZED-EMPTY-REGRESSION` | Empty keyword and dense maps form an empty union, final reauthentication still runs through the AF-3A boundary, and no partial or synthetic internal authoritative retrieval record is published. |
+  | `AF3C-AUTHORIZED-EMPTY-HTTP` | The authorized request returns the existing successful empty public Evidence shape with `Cache-Control: private, no-store`, no identifier/content disclosure, and no partial retrieval result. |
 - **Forbidden behavior:** `404`, `503`, a synthetic candidate, a missing-collection error, keyword-only degraded mode, skipped final authorization, or fabricated Evidence.
-- **Planned test level:** unit, provider-adapter contract, PostgreSQL integration, HTTP integration.
+- **Planned test level:** Unit only for final-reauth invocation;
+  provider-adapter contract only for the present-empty envelope; PostgreSQL
+  integration separately for initial access, final snapshot, and hybrid
+  orchestration; HTTP integration only for the public authorized-empty
+  outcome.
 - **Implementation status:** `REQUIRED_NOT_YET_IMPLEMENTED`.
 
 ### RET-AUTH-011 — Session revoked before request begins
@@ -559,6 +1928,18 @@ rounded half-to-even from the exact rational after ordering.
 - **Implementation status:** `REQUIRED_NOT_YET_IMPLEMENTED`.
 
 ## Final transaction and concurrency
+
+For RET-CONC-002 through RET-CONC-014, the canonical ledger's exact variant
+labels split the common timing property into independent fixtures. Every
+AF3A-KEYWORD label uses a bounded keyword candidate; every AF3A-SYNTHETIC
+label uses explicit bounded synthetic UUID/rank input; every AF3A-ZERO label
+uses no candidate; and AF3A-PROVIDER-INDEPENDENT-ELAPSED-BARRIER-EXPIRY uses a
+deterministic pause with zero external-adapter calls. Provider barriers,
+embedding timing, Chroma candidates, and hybrid unions occur only in the
+separate AF3B labels. The processing/failed states in RET-CONC-004 and all
+four failure points in RET-CONC-011 remain separate labels and are never
+collapsed. Generic “Provider” wording in a case body describes only its AF-3B
+regression or AF-3C HTTP execution.
 
 ### RET-CONC-001 — External-work lifecycle barriers retain no database resource
 
@@ -698,7 +2079,8 @@ rounded half-to-even from the exact rational after ordering.
 - **Provider or Chroma input:** One valid candidate; test barrier pauses after snapshot acquisition.
 - **Concurrent state change:** Membership deletion commits in another transaction before the final transaction commits.
 - **Expected public result:** Current request returns the already-snapshot-authorized Evidence; the next request returns hidden `404`.
-- **Expected internal validation result:** Every batch and Evidence field uses the original fixed snapshot.
+- **Expected internal validation result:** Every batch and every internal
+  authoritative retrieval record field uses the original fixed snapshot.
 - **Forbidden behavior:** Mixed snapshots, mid-transaction reauthorization against newer state, or claims of retroactive cancellation.
 - **Planned test level:** PostgreSQL integration, HTTP integration.
 - **Implementation status:** `REQUIRED_NOT_YET_IMPLEMENTED`.
@@ -732,11 +2114,14 @@ rounded half-to-even from the exact rational after ordering.
 ### RET-CONC-009 — Revocation after final commit
 
 - **Category:** Final transaction and concurrency.
-- **Initial database state:** Final transaction has loaded eligible Evidence for a current member.
+- **Initial database state:** The final transaction has loaded an eligible
+  internal authoritative retrieval record for a current member.
 - **Authenticated principal and membership state:** Authorization is valid through final commit.
 - **Provider or Chroma input:** One valid candidate.
 - **Concurrent state change:** Membership revocation commits after final transaction commit but before response serialization ends.
-- **Expected public result:** Current response serializes already-loaded immutable Evidence; subsequent requests return hidden `404`.
+- **Expected public result:** The current response maps the already-loaded
+  immutable internal authoritative retrieval record to public Evidence;
+  subsequent requests return hidden `404`.
 - **Expected internal validation result:** Serialization performs no authorization-sensitive database read.
 - **Forbidden behavior:** A second content/provenance fetch, mixed response, or asynchronous serialization cancellation claim.
 - **Planned test level:** PostgreSQL integration, HTTP integration.
@@ -760,12 +2145,28 @@ rounded half-to-even from the exact rational after ordering.
 - **Category:** Final transaction and concurrency.
 - **Initial database state:** Several batches contain eligible target chunks with distinct earlier-batch and later-batch content sentinels.
 - **Authenticated principal and membership state:** Live target member passes fixed-snapshot authorization.
-- **Provider or Chroma input:** The same bounded source-isolated candidate fixture spans multiple batches in four independently executable variants: (A) the second validation-batch statement raises a deterministic database error after batch one succeeds; (B) every read succeeds but final transaction commit raises a deterministic commit error; (C) final-transaction connection acquisition raises a deterministic database connection error; (D) a supported database statement-timeout mechanism expires during the second validation batch. If the selected driver/database boundary cannot distinguish timeout from connection failure, Variant D is explicitly not applicable there but remains required at the first level that exposes a deterministic statement timeout.
+- **Provider or Chroma input:** The same bounded source-isolated candidate
+  fixture spans multiple batches in four independently executable variants:
+  (A) the second validation-batch statement raises a deterministic database
+  error after batch one succeeds; (B) every read succeeds but final
+  transaction commit raises a deterministic commit error; (C) final-
+  transaction connection acquisition raises a deterministic database
+  connection error; (D) the real PostgreSQL `statement_timeout` mechanism is
+  set transaction-locally and expires during the second validation-batch
+  statement after batch one succeeds. Variant D is mandatory at PostgreSQL
+  integration and its separate AF-3B hybrid regression is mandatory at that
+  same level; neither may be skipped, waived, or satisfied by a connection-
+  failure assertion.
 - **Concurrent state change:** None; each variant has exactly its named injected fault and no alternate branch.
-- **Expected public result:** Every applicable variant returns generic planned `503 RETRIEVAL_UNAVAILABLE`, no Evidence, neither content sentinel, and private/no-store.
+- **Expected public result:** Every phase-qualified AF-3C variant returns
+  generic planned `503 RETRIEVAL_UNAVAILABLE`, no public Evidence, neither
+  content sentinel, no identifier or partial retrieval result, and
+  `Cache-Control: private, no-store`.
 - **Expected internal validation result:** Variant A discards the successful first-batch records; Variant B publishes nothing before commit success and discards all loaded records; Variant C never begins validation; Variant D rolls back and discards all prior records. Each path has an independently asserted normalized failure classification.
 - **Forbidden behavior:** Treating one variant as coverage for another, partial Evidence, dense-only or keyword-only fallback, commit/publication of an earlier batch, either candidate content sentinel in the error, or an ambiguous “database error” assertion that does not prove the injected branch.
-- **Planned test level:** PostgreSQL integration, HTTP integration.
+- **Planned test level:** All four AF-3A variants and all four AF-3B hybrid
+  regressions are mandatory PostgreSQL integration rows. The four
+  phase-qualified public mappings are mandatory HTTP integration rows.
 - **Implementation status:** `REQUIRED_NOT_YET_IMPLEMENTED`.
 
 ### RET-CONC-012 — Access loss with zero provider candidates
@@ -779,6 +2180,100 @@ rounded half-to-even from the exact rational after ordering.
 - **Expected internal validation result:** Final authorization runs before the zero-batch branch and observes access loss.
 - **Forbidden behavior:** Skipping final authorization because `U = 0`, `200 []`, or revealing the prior membership.
 - **Planned test level:** PostgreSQL integration, HTTP integration.
+- **Implementation status:** `REQUIRED_NOT_YET_IMPLEMENTED`.
+
+### RET-CONC-013 — Fresh final authentication clock and Provider-time expiry
+
+- **Category:** Final transaction and concurrency. This case owns nine
+  independently executable, phase-qualified variant identities:
+  `RET-CONC-013::FINAL-NOW-FRESH-AWARE`,
+  `RET-CONC-013::EXPIRES-GREATER-VALID`,
+  `RET-CONC-013::EXPIRES-EQUALITY-EXPIRED`,
+  `RET-CONC-013::AF3A-PROVIDER-INDEPENDENT-ELAPSED-BARRIER-EXPIRY`,
+  `RET-CONC-013::AF3B-SESSION-EXPIRES-DURING-PROVIDER-REGRESSION`,
+  `RET-CONC-013::AF3C-HTTP-FINAL-NOW-FRESH-AWARE`,
+  `RET-CONC-013::AF3C-HTTP-EXPIRES-GREATER-VALID`,
+  `RET-CONC-013::AF3C-HTTP-EXPIRES-EQUALITY-EXPIRED`, and
+  `RET-CONC-013::AF3C-HTTP-SESSION-EXPIRES-DURING-PROVIDER`.
+- **Initial database state:** A live session, active user, target membership,
+  and eligible content exist. An injected UTC clock exposes separately
+  controlled initial and final values; Provider timestamps use distinct
+  sentinels and cannot satisfy the clock call.
+- **Authenticated principal and membership state:** Initial proof-aware access
+  succeeds and preserves `SessionAuthenticationProof`.
+- **Provider or Chroma input:** The first three variants use deterministic
+  non-HTTP controls. The
+  `RET-CONC-013::AF3A-PROVIDER-INDEPENDENT-ELAPSED-BARRIER-EXPIRY` row uses a
+  deterministic pause/barrier between initial and final authentication, with
+  zero embedding/Chroma/Provider calls. In the Provider-time variant, keyword succeeds, embedding
+  succeeds, and Chroma blocks while the session advances from live at initial
+  authentication to expired before the final transaction.
+- **Concurrent state change:** The Provider-time variant releases Chroma only
+  after the injected clock reaches session expiry. Other variants have none.
+- **Expected public result:** AF-3A and AF-3B rows have no public oracle. The
+  four AF-3C outcomes are exact:
+
+  | AF-3C variant | Exact HTTP oracle |
+  | --- | --- |
+  | `AF3C-HTTP-FINAL-NOW-FRESH-AWARE` | With a timezone-aware fresh injected final clock and a still-live session, return the existing successful retrieval response and `Cache-Control: private, no-store`; expose no clock value. |
+  | `AF3C-HTTP-EXPIRES-GREATER-VALID` | When `expires_at > final_now`, return the existing successful retrieval response and private/no-store; do not classify the session expired. |
+  | `AF3C-HTTP-EXPIRES-EQUALITY-EXPIRED` | When `expires_at == final_now`, return generic `401 AUTHENTICATION_REQUIRED`, private/no-store, no content or identifier disclosure, and no partial retrieval result. |
+  | `AF3C-HTTP-SESSION-EXPIRES-DURING-PROVIDER` | When Provider work succeeds but the session expires before the final snapshot, return generic `401 AUTHENTICATION_REQUIRED`, private/no-store, no Provider detail, content, identifier, keyword/dense candidate, or partial retrieval result. |
+- **Expected internal validation result:** `final_now` is freshly sampled
+  exactly once, is timezone-aware UTC, and is sampled immediately before the
+  first final authoritative statement. The same bound value governs the
+  complete final authentication check. `expires_at > final_now` is valid;
+  equality is expired. Initial or Provider time is never reused. The
+  Provider-time row proves expiry during Provider work is observed at final
+  recheck.
+- **Forbidden behavior:** A naive clock value; multiple final samples; an
+  earlier sample; reusing initial or Provider time; accepting equality;
+  returning accumulated keyword/dense candidates after expiry; or mapping
+  authentication loss to empty success or `404`.
+- **Planned test level:** Unit and PostgreSQL rows prove the three exact AF-3A
+  clock predicates. PostgreSQL plus deterministic concurrency prove the
+  provider-independent AF-3A elapsed-barrier expiry. Unit, PostgreSQL, and
+  deterministic concurrency prove the separate AF-3B Provider-time
+  regression. Only the four phase-qualified rows above execute at HTTP
+  integration.
+- **Implementation status:** `REQUIRED_NOT_YET_IMPLEMENTED`.
+
+### RET-CONC-014 — Physical deletion before final snapshot with stale Chroma ID
+
+- **Category:** Final transaction and concurrency. The AF-3B regression is
+  `RET-CONC-014::AF3B-PHYSICAL-DELETE-BEFORE-FINAL-SNAPSHOT-REGRESSION`; the
+  AF-3C public variant is
+  `RET-CONC-014::AF3C-HTTP-PHYSICAL-DELETE-BEFORE-FINAL-SNAPSHOT`; the provider-
+  independent prerequisite is
+  `RET-CONC-014::AF3A-PHYSICAL-DELETE-KEYWORD-BEFORE-FINAL-SNAPSHOT`.
+- **Initial database state:** Real PostgreSQL contains one completed document
+  and eligible chunk with unique content, provenance, identity, and existence
+  sentinels. Chroma's rebuildable index contains that canonical chunk ID.
+- **Authenticated principal and membership state:** A live target member
+  passes proof-aware initial access and remains authorized.
+- **Provider or Chroma input:** The AF-3A row uses the scoped keyword candidate
+  and zero embedding/Chroma/Provider calls. In the separate AF-3B regression,
+  scoped keyword completes and the read-only Chroma query returns the stale
+  canonical ID after a separate actor physically deletes the PostgreSQL
+  document and chunk.
+- **Concurrent state change:** The physical PostgreSQL deletion commits before
+  the request opens its final transaction and acquires its snapshot.
+- **Expected public result:** The AF-3A and AF-3B non-HTTP legs each produce an
+  authorized-empty internal authoritative retrieval record set. The later
+  AF-3C HTTP leg maps that to authorized empty
+  public Evidence. Neither reveals deleted text, provenance, identity, or an
+  existence distinction.
+- **Expected internal validation result:** The real final snapshot finds no
+  authoritative row, omits the stale candidate, fully materializes an empty
+  internal authoritative retrieval record set, commits, releases, and performs
+  no lazy reload.
+- **Forbidden behavior:** A fake-only substitute; soft deletion when physical
+  deletion is required; trusting stale Chroma text/metadata; deleted content,
+  provenance, ID, count, or existence-detail disclosure; candidate-specific
+  `404`; or nonempty output.
+- **Planned test level:** PostgreSQL integration, deterministic concurrency,
+  HTTP integration. The exact AF-3A and AF-3B deletion/MVCC rows are mandatory
+  real PostgreSQL; AF-3C owns only HTTP/public mapping.
 - **Implementation status:** `REQUIRED_NOT_YET_IMPLEMENTED`.
 
 ## Provider transport, decoding, and taxonomy
@@ -816,12 +2311,14 @@ rounded half-to-even from the exact rational after ordering.
   | `RET-PROV-001::CONTENT-ENCODING-IDENTITY` | `Content-Encoding: identity` is the sole token. |
   | `RET-PROV-001::CONTENT-ENCODING-GZIP` | `Content-Encoding: gzip` is the sole token and bounded streaming decode produces the canonical body. |
 - **Concurrent state change:** None.
-- **Expected public result:** Every variant returns the expected authoritative Evidence item and private/no-store.
+- **Expected public result:** Every variant returns the expected authoritative
+  public Evidence item and private/no-store.
 - **Expected internal validation result:** Every named grammar branch is
   accepted independently. Every comparison uses `value <= ceiling`; equality
   is accepted without truncation or omission, bounded parsing succeeds, all
   unsolicited values are discarded as authority, and ordinary PostgreSQL
-  candidate validation and Evidence loading continue.
+  candidate validation and internal authoritative retrieval record loading
+  continue.
 - **Forbidden behavior:** Treating one positive branch as coverage for
   another; rejecting with `>= ceiling`; imposing a ceiling one unit lower;
   truncating an at-limit field; confusing a metadata null element with a
@@ -1288,7 +2785,9 @@ rounded half-to-even from the exact rational after ordering.
 ### RET-PROV-028 — Mixed valid and candidate-local-invalid records
 
 - **Category:** Provider transport, decoding, and taxonomy.
-- **Initial database state:** Target has eligible hashed chunks A, C, E, and G; invalid-position records cannot contribute Evidence.
+- **Initial database state:** Target has eligible hashed chunks A, C, E, and G;
+  invalid-position records cannot contribute an internal authoritative
+  retrieval record.
 - **Authenticated principal and membership state:** Live target member.
 - **Provider or Chroma input:** After successful bounded strict-JSON decoding, the exact ordered typed list is `[A valid rank 1, malformed-ID rank 2, C valid rank 3, wrong-type-score rank 4, E valid rank 5, typed-NaN rank 6, G valid rank 7]`; no non-finite value is serialized into JSON. The dense-only convention proves no keyword evidence exists.
 - **Concurrent state change:** None.
@@ -1423,7 +2922,12 @@ rounded half-to-even from the exact rational after ordering.
 - **Provider or Chroma input:** Two position-preserving parameterized variants each include a malformed bounded record and the separate valid canonical candidate. Variant A omits the malformed record's ID field. Variant B gives it a non-string JSON ID, with fixtures for `null`, boolean, number, array, and object. Every envelope preserves deterministic record positions and provider ordering.
 - **Concurrent state change:** None.
 - **Expected public result:** One deterministic authorized result containing Evidence only for the valid canonical candidate and private/no-store; neither variant becomes `503` or an empty result.
-- **Expected internal validation result:** Only the malformed record is omitted; it produces no Evidence and cannot authorize or widen scope. The valid candidate continues through PostgreSQL validation at its original provider position and source rank; existing deterministic rank, RRF, and tie-breaking rules remain intact. No keyword-only fallback occurs.
+- **Expected internal validation result:** Only the malformed record is
+  omitted; it produces no internal authoritative retrieval record and cannot
+  authorize or widen scope. The valid candidate continues through PostgreSQL
+  validation at its original provider position and source rank; existing
+  deterministic rank, RRF, and tie-breaking rules remain intact. No keyword-
+  only fallback occurs.
 - **Forbidden behavior:** Whole-response failure while positions remain deterministic; ID coercion or substitution; Evidence or authority from the malformed record; omission of the valid candidate; compacting or reordering provider ranks; or keyword-only fallback.
 - **Planned test level:** unit, provider-adapter contract, PostgreSQL integration, HTTP integration.
 - **Implementation status:** `REQUIRED_NOT_YET_IMPLEMENTED`.
@@ -1436,7 +2940,9 @@ rounded half-to-even from the exact rational after ordering.
 - **Provider or Chroma input:** C appears at dense ranks 2 and 5 in one bounded valid list.
 - **Concurrent state change:** None.
 - **Expected public result:** Exactly one Evidence item for C.
-- **Expected internal validation result:** Dense absolute rank 2 is preserved; its exact RRF contribution is `1/62`; rank 5 adds neither contribution nor duplicate Evidence.
+- **Expected internal validation result:** Dense absolute rank 2 is preserved;
+  its exact RRF contribution is `1/62`; rank 5 adds neither contribution nor a
+  duplicate internal authoritative retrieval record.
 - **Forbidden behavior:** Malformed-response classification, later-rank overwrite, rank compaction, contribution `1/65`, or duplicate output.
 - **Planned test level:** unit, provider-adapter contract, PostgreSQL integration, HTTP integration.
 - **Implementation status:** `REQUIRED_NOT_YET_IMPLEMENTED`.
@@ -1473,13 +2979,213 @@ rounded half-to-even from the exact rational after ordering.
 - **Planned test level:** provider-adapter contract, PostgreSQL integration, HTTP integration.
 - **Implementation status:** `REQUIRED_NOT_YET_IMPLEMENTED`.
 
+### RET-PROV-041 — Embedding response bounds and exact vector validation
+
+- **Category:** Provider transport, decoding, and taxonomy. Every label is an
+  independently executable row:
+  `RET-PROV-041::WRONG-VECTOR-COUNT`,
+  `RET-PROV-041::WRONG-DIMENSION`,
+  `RET-PROV-041::WRONG-VALUE-TYPE`,
+  `RET-PROV-041::NORMALIZATION-CONVERSION-OVERFLOW`,
+  `RET-PROV-041::NAN`, `RET-PROV-041::POSITIVE-INFINITY`,
+  `RET-PROV-041::NEGATIVE-INFINITY`,
+  `RET-PROV-041::WIRE-EXACT-2097152`,
+  `RET-PROV-041::WIRE-PLUS-ONE-2097153`,
+  `RET-PROV-041::DECODED-EXACT-2097152`,
+  `RET-PROV-041::DECODED-PLUS-ONE-2097153`,
+  `RET-PROV-041::TOTAL-DEADLINE`, and
+  `RET-PROV-041::NO-AUTOMATIC-RETRY`.
+- **Initial database state:** Initial access and scoped keyword retrieval have
+  completed; a known eligible keyword sentinel makes discard observable.
+- **Authenticated principal and membership state:** Live target member with a
+  preserved proof and no retained database resource.
+- **Provider or Chroma input:** Exactly one
+  `EmbeddingModel.embed([normalized_query])` call. The valid control returns
+  one configured-dimension list of built-in finite floats. Each row changes
+  only its named condition. Wrong value type executes every declared type
+  parameter (integer, boolean, string, decimal/float-like object, and numeric
+  subclass) without sampling. The byte rows use bounded streaming before
+  strict UTF-8/JSON materialization. Deadline covers the complete operation.
+- **Concurrent state change:** None.
+- **Expected public result:** Every fatal row produces the generic planned
+  unavailable outcome at AF-3C, with no keyword sentinel, partial output, or
+  fallback. Inclusive byte-equality controls proceed to the valid-vector
+  result.
+- **Expected internal validation result:** Exactly one vector and exact
+  configured dimension are required. Only adapter-normalized built-in finite
+  floats pass. No coercion, truncation, padding, duplicate/second vector, or
+  retrieval-boundary conversion is permitted. Count, dimension, type,
+  conversion overflow, NaN, and either infinity discard keyword candidates and
+  permit zero Chroma probes/queries and zero final transactions. Raw and
+  decoded ceilings each accept 2,097,152 and reject the first byte above it.
+  One total-deadline attempt is made.
+
+  The label-specific oracle is exact: `WRONG-VECTOR-COUNT` rejects zero or
+  more than one vector; `WRONG-DIMENSION` rejects any length other than the
+  configured dimension; `WRONG-VALUE-TYPE` executes and rejects integer,
+  boolean, string, decimal/float-like, and numeric-subclass parameters without
+  sampling; `NORMALIZATION-CONVERSION-OVERFLOW` rejects overflow during the
+  adapter's normalization/conversion step; `NAN`, `POSITIVE-INFINITY`, and
+  `NEGATIVE-INFINITY` independently reject their named value;
+  `WIRE-EXACT-2097152` and `DECODED-EXACT-2097152` independently accept their
+  inclusive byte equality with an otherwise valid vector;
+  `WIRE-PLUS-ONE-2097153` and `DECODED-PLUS-ONE-2097153` independently reject
+  their first excess byte; `TOTAL-DEADLINE` times out the one total operation;
+  and `NO-AUTOMATIC-RETRY` records exactly one attempted call after failure.
+
+  | Level | Distinct level-specific oracle for every retained label |
+  | --- | --- |
+  | unit | Observe only the exact local vector/count/dimension/type/finite/byte/deadline/attempt decision named by the label; no database claim is made. |
+  | provider-adapter contract | Observe the exact bounded embedding request/response transport, normalization, and decoded adapter outcome for the named label; no orchestration or PostgreSQL claim is imported. |
+  | PostgreSQL integration | Complete real scoped keyword SQL and release its transaction/connection before embedding. For each fatal label, reject the exact result, discard the completed keyword sentinel, retain no database resource across embedding, begin zero Chroma queries and zero final-validator transactions, and publish no success/partial internal authoritative retrieval record. For either exact-byte equality label, retain no database resource across embedding, accept the valid vector, use the present-empty Chroma control, and begin the later final transaction only through a newly acquired database resource. |
+  | fault injection | For every row actually enumerated at this level, inject only the named overflow/non-finite/plus-one/deadline/attempt fault and observe one fatal branch. Exact-byte equality controls have no fault-injection row. |
+  | HTTP integration | Either exact-byte equality control returns the existing successful authorized response and private/no-store; every fatal label returns generic `503 RETRIEVAL_UNAVAILABLE`, private/no-store, no content/identifier/Provider detail, and no partial retrieval result. |
+- **Forbidden behavior:** Sampling a value-type or non-finite row; accepting a
+  second vector; coercion; padding/truncation; retry, backoff, failover,
+  alternate model, cached vector, keyword-only fallback, Chroma work, or final
+  SQL after fatal validation.
+- **Planned test level:** All thirteen labels execute at unit,
+  provider-adapter contract, PostgreSQL integration, and HTTP integration.
+  Fault injection executes the eleven fatal/fault labels and deliberately has
+  no exact-byte-equality row. The PostgreSQL row for every label is mandatory
+  and proves the real database lifecycle consequence above rather than
+  duplicating the adapter assertion.
+- **Implementation status:** `REQUIRED_NOT_YET_IMPLEMENTED`.
+
+### RET-PROV-042 — Compatibility-probe single-flight and instance lifetime
+
+- **Category:** Provider transport, decoding, and taxonomy. This case owns
+  `RET-PROV-042::CONCURRENT-FIRST-USE-SINGLE-FLIGHT`,
+  `RET-PROV-042::SUCCESS-CACHED-UNTIL-CLOSE`,
+  `RET-PROV-042::FAILURE-WAITERS-AND-STATE-CLEARING`,
+  `RET-PROV-042::CANCELLATION-WAITERS-AND-STATE-CLEARING`, and
+  `RET-PROV-042::NO-SAME-REQUEST-PROBE-RETRY`.
+- **Initial database state:** Authorized requests have valid keyword
+  candidates; deterministic adapter instances expose probe/query call ledgers
+  and close state.
+- **Authenticated principal and membership state:** Each request is a live
+  target member and owns no database resource at probe entry.
+- **Provider or Chroma input:** Barrier-driven concurrent first uses join one
+  bounded version probe. Separate rows release it with success, failure, or
+  cancellation, close the adapter where required, and start a later
+  independent request after cleared failure state.
+- **Concurrent state change:** Deterministic latches coordinate waiters; no
+  sleeps, polling, or race-dependent assertions are permitted.
+- **Expected public result:** Success proceeds normally. Failure/cancellation
+  fails every current waiter with no partial result; cancellation publishes no
+  fabricated response for a cancelled task. A later independent request may
+  perform one new probe.
+- **Expected internal validation result:** Concurrent first uses produce
+  exactly one probe. Success is cached only for that adapter until close;
+  post-close use cannot reuse it. Failure/cancellation clears in-flight state.
+  No failed request retries its probe.
+
+  | Variant | Exact deterministic-concurrency oracle |
+  | --- | --- |
+  | `CONCURRENT-FIRST-USE-SINGLE-FLIGHT` | A barrier holds the first probe while all first-use callers arrive; the call ledger contains exactly one probe and every waiter observes the same successful compatibility result. |
+  | `SUCCESS-CACHED-UNTIL-CLOSE` | After the one shared successful probe, all current waiters and later uses of that adapter observe the cached success with no second probe; close invalidates only that instance, and a distinct/new adapter performs exactly one independent probe. |
+  | `FAILURE-WAITERS-AND-STATE-CLEARING` | One shared probe fails; every current waiter observes the same normalized failure, the in-flight state is cleared, no waiter queries, and one later independent request may issue exactly one new probe. |
+  | `CANCELLATION-WAITERS-AND-STATE-CLEARING` | The shared probe task is cancelled; every current waiter terminates without a fabricated success, the in-flight state is cleared, no waiter queries, and one later independent request may issue exactly one new probe. |
+  | `NO-SAME-REQUEST-PROBE-RETRY` | Across the shared failure/cancellation release, every affected request records one joined probe attempt and zero same-request retries; a later independent request's one new attempt is not counted as a retry. |
+
+  At PostgreSQL integration, every variant first completes real keyword work,
+  releases every database resource before the shared probe, and observes no
+  retained resource across the wait. Failure, cancellation, and no-retry rows
+  discard keyword candidates and begin zero final transactions; success rows
+  may proceed only after the probe/query path and acquire a new final-
+  transaction resource. This real database lifecycle observation is distinct
+  from the provider-adapter and deterministic-concurrency oracles.
+- **Forbidden behavior:** One probe per waiter; process-global or post-close
+  success cache; a stuck failed future; waiter disagreement; same-request
+  retry; automatic retry loop; sleeps/polling; partial query; or fallback.
+- **Planned test level:** Every label has an exact unit, provider-adapter
+  contract, PostgreSQL integration, deterministic-concurrency, and HTTP row.
+  Fault injection is retained only for failure, cancellation, and no-same-
+  request-retry; shared-success and adapter-lifetime caching have no injected-
+  fault property and therefore no fault-injection row. All five deterministic-
+  concurrency rows are mandatory and use latches, never sleeps or polling.
+- **Implementation status:** `REQUIRED_NOT_YET_IMPLEMENTED`.
+
+### RET-PROV-043 — Trusted collection UUID and read-only bounded operations
+
+- **Category:** Provider transport, decoding, and taxonomy. This case owns
+  `RET-PROV-043::TRUSTED-CONFIGURED-COLLECTION-UUID`,
+  `RET-PROV-043::NO-COLLECTION-WRITE-INITIALIZATION`,
+  `RET-PROV-043::PROBE-AND-QUERY-TOTAL-DEADLINES`, and
+  `RET-PROV-043::ONE-ATTEMPT-NO-FALLBACK`.
+- **Initial database state:** Authorized target and eligible keyword candidate
+  exist; trusted configuration supplies tenant, database, canonical collection
+  UUID, and validated timeouts.
+- **Authenticated principal and membership state:** Live target member; all
+  prior database operations are released.
+- **Provider or Chroma input:** A transport spy captures every method/path and
+  a fault injector blocks independently in probe and query. Timeout parameters
+  cover default 30 seconds, valid configured maximum 600 seconds, and
+  configuration rejection above 600.
+- **Concurrent state change:** None.
+- **Expected public result:** Valid read-only probe/query succeeds. Each
+  timeout/failure is generic unavailable with no partial output or fallback.
+- **Expected internal validation result:** The exact trusted collection UUID,
+  never Provider-discovered or caller-supplied identity, appears in the one
+  query path. Retrieval issues only the specified version `GET` and query
+  `POST`; creation, `get_or_create`, update, upsert, delete, and other write-
+  capable initialization calls remain zero on success and every failure.
+  Probe and query each get one bounded total wall-clock deadline and exactly
+  one attempt; RET-PROV-041 separately owns embedding deadlines and attempts.
+- **Exact tuple oracles:** The ledger retains only the 15 tuples below. Each
+  case-local Oracle reference resolves to the single independently observable
+  condition in this table; a level omitted for a label has no distinct
+  executable oracle and is not declared.
+
+  | Variant | Test level | Exact executable oracle |
+  | --- | --- | --- |
+  | `TRUSTED-CONFIGURED-COLLECTION-UUID` | unit | With canonical configured UUID A and distinct caller/Provider decoy UUID B, the pure request-target construction selects A; B cannot enter the target, and a noncanonical configured value fails before transport. No database or HTTP stack is present. |
+  | `TRUSTED-CONFIGURED-COLLECTION-UUID` | provider-adapter contract | The transport ledger records the exact version `GET` followed by the one query `POST` whose path contains configured UUID A; there is no discovery/get-collection call and decoy UUID B never appears in a target path. |
+  | `TRUSTED-CONFIGURED-COLLECTION-UUID` | HTTP integration | One authenticated successful retrieval traverses the real HTTP route with a transport spy; the only Chroma query path uses configured UUID A, a distinct untrusted decoy cannot substitute it, and neither collection UUID is exposed publicly. |
+  | `NO-COLLECTION-WRITE-INITIALIZATION` | provider-adapter contract | First-use success, missing-collection response, probe failure, and query failure each leave the transport method/path ledger free of create, `get_or_create`, update, upsert, delete, or any other write-capable initialization call. |
+  | `NO-COLLECTION-WRITE-INITIALIZATION` | fault injection | Probe and query faults are injected independently; a probe fault prevents query, both branches make zero write-capable calls, and neither branch starts recovery initialization. |
+  | `NO-COLLECTION-WRITE-INITIALIZATION` | HTTP integration | Separate successful and Provider-fatal authenticated requests produce only their specified public result while the shared transport spy proves zero write-capable collection calls on both paths. |
+  | `PROBE-AND-QUERY-TOTAL-DEADLINES` | unit | A fake monotonic clock proves that probe and query each receive one total 30-second default or configured-at-most-600-second budget that is not reset across operation substeps; configuration above 600 fails before transport. |
+  | `PROBE-AND-QUERY-TOTAL-DEADLINES` | provider-adapter contract | The transport records one end-to-end deadline for the complete version operation and one for the complete query operation, covering connection, upload, response streaming, decode, and validation without a per-read or per-substep reset. |
+  | `PROBE-AND-QUERY-TOTAL-DEADLINES` | fault injection | Latches block probe and query in separate executions while the fake clock reaches that operation's total deadline; the named operation aborts once, later stages do not run, and there is no retry or fallback. |
+  | `PROBE-AND-QUERY-TOTAL-DEADLINES` | HTTP integration | Separate authenticated requests whose probe or query reaches its total deadline each return only generic private/no-store `503 RETRIEVAL_UNAVAILABLE`, with no Evidence, partial result, retry, or fallback. |
+  | `ONE-ATTEMPT-NO-FALLBACK` | unit | Deterministic fake probe and query failures each produce an exact call count of one and zero retry, backoff, alternate Provider/collection, stale result, keyword-only result, or final-validator call. |
+  | `ONE-ATTEMPT-NO-FALLBACK` | provider-adapter contract | For each failure point, the transport ledger contains one attempted operation and no repeated or alternate method/path; a probe failure has zero query calls and a query failure has exactly one query call. |
+  | `ONE-ATTEMPT-NO-FALLBACK` | PostgreSQL integration | Real scoped keyword SQL first returns a known eligible candidate, then the one Provider attempt fails; no final-validator transaction or internal authoritative retrieval record is produced and the keyword candidate is not returned as fallback. |
+  | `ONE-ATTEMPT-NO-FALLBACK` | fault injection | Independent probe and query failures assert one injected branch, exact attempt count one, zero retry/backoff/failover/stale-result use, and zero continuation beyond the failed boundary. |
+  | `ONE-ATTEMPT-NO-FALLBACK` | HTTP integration | With a known nonempty keyword candidate and a failing Provider operation, the authenticated route returns only generic private/no-store `503 RETRIEVAL_UNAVAILABLE`; the Provider attempt count is one and no Evidence or keyword-only fallback is serialized. |
+
+- **Forbidden behavior:** Collection discovery as authority; client/Provider
+  UUID substitution; create-on-missing; write-capable initialization; timeout
+  reset between substeps; retry, backoff, failover, stale result, alternate
+  collection, or keyword-only fallback.
+- **Planned test level:** Unit applies only to configured UUID, total deadline,
+  and one-attempt logic; provider-adapter contract applies to all four labels;
+  PostgreSQL integration applies only to one-attempt/no-fallback; fault
+  injection applies only to no-write initialization, total deadlines, and
+  one-attempt/no-fallback; HTTP integration applies to all four labels. The
+  ledger declares exactly those tuples without Cartesian expansion or
+  sampling.
+- **Implementation status:** `REQUIRED_NOT_YET_IMPLEMENTED`.
+
 ## Request, result, union, and SQL bounds
+
+The bounds families use the canonical ledger's phase-qualified fixtures.
+RET-BND-006 AF-3A owns only the exact keyword cutoff. For RET-BND-008 through
+RET-BND-015, every AF3A row receives zero, keyword, or explicit bounded
+synthetic final-validator input and measures only unique-input, batch-size-64,
+query-count, reconstruction, and PostgreSQL amplification properties. Every
+AF3B-HYBRID row separately supplies dense/hybrid maps and owns union/fusion
+regression. Public cutoff, Evidence count, and serialization assertions occur
+only in AF3C rows. No AF-3A bounds fixture invokes embedding, Chroma, Provider,
+dense union, or RRF.
 
 ### RET-BND-001 — Query semantic and scalar domain
 
-- **Category:** Request, result, union, and SQL bounds. The stable
-  parameterized execution group is
-  `RET-BND-001::QUERY-NORMALIZATION-AND-SCALAR-DOMAIN` for ADR-008-R01.
+- **Category:** Request, result, union, and SQL bounds. ADR-008-R01 is
+  decomposed into the exact unit, database-gate, keyword-bind, hybrid-
+  regression, and public identities in the canonical ledger; there is no
+  composite query-domain oracle.
 - **Initial database state:** Authorized target exists.
 - **Authenticated principal and membership state:** Live target member.
 - **Provider or Chroma input:** Independently executable strict-body variants
@@ -1489,15 +3195,16 @@ rounded half-to-even from the exact rational after ordering.
   canonically decomposed `"e\u0301"` and precomposed `"\u00e9"` subvariants,
   which both normalize exactly to NFC `"\u00e9"`; (G) missing `query`; (H)
   `query` as number, boolean, null, array, or object; and (I) a JSON string
-  containing a lone escaped surrogate. The following additional stable
-  variants are separately constructible. The case-sensitive, no-NFKC, U+200B,
-  and post-normalization boundary variants use a downstream embedding fake
-  keyed to the exact expected normalized string plus a keyword-bound-parameter
-  ledger; only the expected string produces that row's unique dense Evidence
-  sentinel, and a transformed string produces no sentinel.
-  The U+0001 row is instead executed at every declared level as a supporting
-  semantic-validation observation with no downstream retrieval or result
-  oracle. U+0000 rejection variants use the exact stage-call ledger.
+  containing a lone escaped surrogate. A through I resolve to the separately
+  named unit identities below rather than one broad tuple. The case-sensitive,
+  no-NFKC, U+200B, and post-normalization boundary unit identities prove only
+  pure parsing; their separately phase-qualified AF-3A rows prove the real
+  keyword bind. The separately labelled
+  `RET-BND-001::AF3B-HYBRID-QUERY-NORMALIZATION-REGRESSION` may add a
+  downstream embedding fake and dense sentinel after AF-3A is closed.
+  The U+0001 row is unit-only because it proves only semantic acceptance and
+  preservation. U+0000 database and HTTP identities use their own phase-
+  qualified gate-order/public labels.
 
   | Stable variant label | JSON query fixture and exact gate/downstream value |
   | --- | --- |
@@ -1508,6 +3215,19 @@ rounded half-to-even from the exact rational after ordering.
   | `RET-BND-001::U0000-ALONE-REJECTION` | The valid JSON source escape `"\u0000"` decodes to U+0000 alone; exact string type, Unicode-scalar validity, and strict UTF-8 representability pass, then the query is rejected before NFC. |
   | `RET-BND-001::EMBEDDED-U0000-REJECTION` | The valid JSON source `"a\u0000b"` decodes with embedded U+0000 and follows the same pre-NFC semantic rejection path. |
   | `RET-BND-001::ADJACENT-U0001-PRESERVATION` | The valid JSON source `"a\u0001b"` decodes with embedded U+0001 and passes query semantic validation with the exact sequence preserved. U+0001 is neither deleted, replaced, normalized, collapsed, nor treated as whitespace. This supporting parameter assigns no downstream retrieval or public-result behavior. |
+
+  | Oracle allocation | Exact observable pass/fail condition |
+  | --- | --- |
+  | Unit `NORMALIZED-SCALAR-EXACT-1`, `NORMALIZED-SCALAR-EXACT-2048`, and `NORMALIZED-SCALAR-PLUS-ONE-2049` | The pure parser respectively accepts normalized scalar equality 1, accepts equality 2,048, or rejects 2,049. Each is a separate execution. |
+  | Unit `EACH-WHITESPACE-TRIM-AND-COLLAPSE` | Every code point in the finite ADR whitespace set independently trims at both edges and collapses an interior run to one U+0020, without sampling. |
+  | Unit `NFC-CANONICAL-EQUIVALENCE` | The decomposed and precomposed fixtures produce equal requests whose exact normalized query is U+00E9. |
+  | Unit `WHITESPACE-ONLY-REJECTION`, `MISSING-QUERY-REJECTION`, `QUERY-EXACT-STRING-TYPE`, and `LONE-SURROGATE-REJECTION` | Each named pure-parser defect independently raises only the fixed validation classification; the exact finite wrong-type and high/low-surrogate parameters all execute. |
+  | Unit named preservation/U+0000 identities | Each exact fixture proves only its named parser acceptance, preservation, normalization exclusion, or pre-NFC rejection. `POST-NORMALIZATION-SCALAR-BOUNDARY` remains required because the exact TAB + 2,048 `a` + U+3000 assertion is absent from merged tests. |
+  | PostgreSQL `AF3A-INITIAL-ACCESS-INVALID-QUERY-GATE-ORDER`, `AF3A-U0000-ALONE-GATE-ORDER`, and `AF3A-EMBEDDED-U0000-GATE-ORDER` | The live session/active-user/exact-target access operation may complete, then the named parser defect causes zero keyword statements and zero final transactions; no invalid text is sent to PostgreSQL. |
+  | PostgreSQL `AF3A-KEYWORD-BIND-*` identities | After pure parsing, the exact named normalized value is the real keyword query's bound parameter; the keyword resource is released and Provider/final work is outside this oracle. |
+  | PostgreSQL `AF3B-HYBRID-QUERY-NORMALIZATION-REGRESSION` | Each accepted case-sensitive, no-NFKC, U+200B, and post-normalization parameter reaches the single embedding input byte-for-byte/code-point-for-code-point and produces only its named hybrid regression result. |
+  | HTTP `AF3C-HTTP-VALID-NORMALIZED-QUERY` and the four named preservation/boundary success identities | The authenticated authorized request returns the existing successful response, private/no-store, with only the expected public Evidence field values and no query disclosure. |
+  | HTTP `AF3C-HTTP-INVALID-QUERY-VALIDATION` and the two named U+0000 identities | The exact defect returns generic `422 VALIDATION_ERROR`, private/no-store, no content or identifier disclosure, and no partial retrieval result. |
 - **Concurrent state change:** None.
 - **Expected public result:** A, B, E, and both F subvariants return authorized
   empty Evidence and private/no-store. The case-sensitive, no-NFKC, U+200B,
@@ -1526,17 +3246,19 @@ rounded half-to-even from the exact rational after ordering.
   replace, collapse, whitespace-map, or U+FFFD-map the value, and it is not
   generalized to all Unicode `Cc` controls. Equality 2,048 passes; plus one
   fails before retrieval work. The case-sensitive, no-NFKC, U+200B, and post-
-  normalization boundary rows assert exact code-point equality at the keyword
-  SQL bind and sole embedding input, the unique fake-vector/candidate branch,
-  and exact returned sentinel, making transformation observable beyond a
-  preservation-only prose assertion. The U+0001 supporting parameter asserts
+  normalization unit rows assert exact code-point equality only at the pure
+  validator output. Their phase-qualified AF-3A rows separately assert the
+  real keyword SQL bind and database-resource release. The AF-3B regression
+  separately asserts the sole embedding input,
+  fake-vector/candidate branch, and exact returned sentinel. The U+0001 supporting parameter asserts
   only semantic acceptance and exact preservation; it assigns no keyword,
   embedding, Chroma/Provider, candidate, ranking, or Evidence behavior. For
   either authenticated, initially
   authorized escaped-U+0000 row, initial authentication/target PostgreSQL may
   have completed, but NFC/whitespace-normalization calls, keyword statements,
   embedding calls, Chroma/Provider calls, final authoritative transactions,
-  and Evidence counts are all zero. The PostgreSQL integration execution
+  and internal authoritative retrieval record/public Evidence counts are all
+  zero. The PostgreSQL integration execution
   observes that ledger and must not send U+0000 to PostgreSQL to manufacture a
   driver or database error.
 
@@ -1545,8 +3267,9 @@ rounded half-to-even from the exact rational after ordering.
   public responses, and captured sinks; only fixed, non-user-controlled field
   and classification labels are permitted. The future implementation may use
   `field(repr=False)` as one acceptable mechanism, but this case mandates no
-  exclusive Python mechanism. The complete recursive all-sink runtime proof
-  remains with the capable AF-3C privacy acceptance layer.
+  exclusive Python mechanism. AF-3A owns its non-HTTP query/parser/internal
+  sink checks, AF-3B owns the hybrid non-HTTP regression sinks, and AF-3C owns
+  only public HTTP response/header/serialization sink behavior.
 - **Forbidden behavior:** Treating a variant as coverage for another;
   preserving decomposed F rather than NFC; NFKC, NFKD, or compatibility
   normalization; ASCII or Unicode case folding; trimming/collapsing U+200B;
@@ -1560,21 +3283,25 @@ rounded half-to-even from the exact rational after ordering.
   `Cc` controls; disclosing query-derived text in a
   classification, diagnostic, exception, response, or captured sink; raw
   query logging; or byte-only validation.
-- **Planned test level:** unit, PostgreSQL integration, HTTP integration. The
-  PostgreSQL execution permits the initial authentication/target statements,
-  requires zero keyword statements and zero final authoritative transactions,
-  and cannot pass by deliberately binding U+0000 and catching a
-  driver/database failure.
+- **Planned test level:** Exact unit identities prove parser behavior;
+  PostgreSQL identities prove either live initial-access gate order or an
+  exact keyword bind/resource-release oracle; the AF-3B PostgreSQL regression
+  proves hybrid propagation; and phase-qualified HTTP identities prove only
+  their exact public success or validation outcome. U+0001 has no database or
+  HTTP row. No database row uses `PURE_REQUEST_VALIDATOR`.
 - **Implementation status:** `REQUIRED_NOT_YET_IMPLEMENTED`.
 
 ### RET-BND-002 — Query UTF-8 byte limit
 
 - **Category:** Request, result, union, and SQL bounds. The stable
-  parameterized execution group is
-  `RET-BND-002::QUERY-UTF8-BYTE-DOMAIN` for ADR-008-R01.
+  execution identities are `RET-BND-002::UTF8-BYTES-EXACT-4096` and
+  `RET-BND-002::UTF8-BYTES-PLUS-ONE-4097` for ADR-008-R01.
 - **Initial database state:** Authorized target exists.
 - **Authenticated principal and membership state:** Live target member.
-- **Provider or Chroma input:** Two independently executable normalized queries stay within the 2,048-scalar limit: (A) 1,024 U+1F642 scalar values encode to exactly 4,096 UTF-8 bytes; (B) the same query plus one ASCII `a` encodes to exactly 4,097 bytes.
+- **Provider or Chroma input:** The exact-4096 identity uses 1,024 U+1F642
+  scalar values. The plus-one identity uses the same query plus one ASCII `a`
+  for exactly 4,097 UTF-8 bytes. Both pure-validator unit rows make zero
+  Provider calls; their separate AF-3C HTTP rows own public behavior.
 - **Concurrent state change:** None.
 - **Expected public result:** Variant A returns authorized empty Evidence and private/no-store; Variant B returns existing `422 VALIDATION_ERROR`, no Evidence, and private/no-store.
 - **Expected internal validation result:** Strict UTF-8 byte equality passes and byte plus one independently rejects before Provider or keyword work.
@@ -1603,7 +3330,7 @@ rounded half-to-even from the exact rational after ordering.
   hidden-target-precedence parameters have a live session but no target
   membership.
 - **Provider or Chroma input:** Each row below is a separate deterministic
-  execution at every declared capable level. Controls use source-isolated,
+  execution only at the levels declared for its exact ledger identity. Controls use source-isolated,
   bounded keyword and canonical Provider fixtures that return the exact
   requested Evidence prefix. Provider, request-media, body-parser, schema,
   target-repository, keyword, embedding, and final-validator spies expose the
@@ -1625,7 +3352,29 @@ rounded half-to-even from the exact rational after ordering.
   | `RET-BND-003::ESCAPED-U0000-DOMAIN-HANDOFF` | The canonical path and exact media carry, as separate parameters, exact ASCII JSON bodies `{"query":"\u0000"}` and `{"query":"a\u0000b"}`. Both are syntactically valid strict JSON; parsing must decode them and hand the decoded values to RET-BND-001, which owns the query-domain decision. |
   | `RET-BND-003::U0000-AUTHENTICATION-PRECEDENCE` | With no session, separately execute the literal-NUL body and escaped-U+0000-alone body from the preceding two rows. |
   | `RET-BND-003::U0000-HIDDEN-TARGET-PRECEDENCE` | With a live user but no membership in the existing target, separately execute the same literal-NUL and escaped-U+0000-alone bodies. |
-  | `RET-BND-003::REQUESTED-COUNT-DOMAIN` | The canonical path and exact `Content-Type: application/json` parameterize `requested_count` as omitted; integer `1`; integer `0`; integer `-1`; integer `50`; integer `51`; boolean `true`; float `1.0`; and numeric string `"1"`. Each is a separate execution with valid query `"a"`. |
+  | `RET-BND-003::PARSER-DEFAULT-10` | The pure parser receives `{"query":"a"}` and returns exact integer count 10. |
+  | `RET-BND-003::PARSER-MINIMUM-1` | The pure parser accepts exact built-in integer 1. |
+  | `RET-BND-003::PARSER-MAXIMUM-50` | The pure parser accepts exact built-in integer 50. |
+  | `RET-BND-003::PARSER-ZERO-REJECTED` | The pure parser rejects exact built-in integer 0. |
+  | `RET-BND-003::PARSER-NEGATIVE-ONE-REJECTED` | The pure parser rejects exact built-in integer -1; this is required but has no exact merged unit assertion. |
+  | `RET-BND-003::PARSER-PLUS-ONE-51-REJECTED` | The pure parser rejects exact built-in integer 51. |
+  | `RET-BND-003::PARSER-BOOLEAN-TRUE-REJECTED` | The pure parser rejects exact boolean `true` and does not accept it as integer 1. |
+  | `RET-BND-003::PARSER-FLOAT-1-REJECTED` | The pure parser rejects exact float `1.0` without coercion. |
+  | `RET-BND-003::PARSER-STRING-1-REJECTED` | The pure parser rejects exact string `"1"` without coercion. |
+
+  The downstream requested-count obligations are different canonical
+  identities. `AF3A-INVALID-COUNT-STOPS-BEFORE-KEYWORD` proves real keyword
+  and final-database non-participation after any rejected parser count.
+  `AF3A-KEYWORD-CEILING-INDEPENDENT-OF-REQUESTED-COUNT` proves with real
+  PostgreSQL that accepted count 1, default 10, and count 50 never widen the
+  deterministic keyword cutoff above 128. At AF-3B,
+  `AF3B-CONFIGURED-PROVIDER-COUNT-FORMULA` proves exact `C = min(128, 128,
+  checked_multiply(R, 4))` both in the service calculation and outbound
+  adapter request, while `AF3B-DENSE-COUNT-BOUNDED-BY-POSITIONS` proves only
+  `D <= P <= C` after exact response validation. At AF-3C,
+  `AF3C-HTTP-REQUESTED-COUNT-VALIDATION` owns generic public validation for
+  invalid counts and `AF3C-PUBLIC-RESULT-CUTOFF` owns only exact public result
+  counts 1, 10, and 50.
 
   The authorized body-validation group additionally executes one field at a
   time for `count`, `document_id`, `document_ids`, `chunk_id`, and
@@ -1642,7 +3391,8 @@ rounded half-to-even from the exact rational after ordering.
   `Cache-Control: private, no-store`; no redirect response is permitted. The
   unsupported-media execution, media-before-body execution, both body-plus-
   one executions, every authorized-body-validation execution, and requested-
-  count values `0`, `-1`, `51`, `true`, `1.0`, and `"1"` each return exactly
+  count values `0`, `-1`, `51`, `true`, `1.0`, and `"1"` in the
+  `AF3C-HTTP-REQUESTED-COUNT-VALIDATION` execution each return exactly
   the existing generic
   `422 VALIDATION_ERROR` envelope, zero Evidence, and
   `Cache-Control: private, no-store`. The authorized literal-NUL parser row and
@@ -1691,8 +3441,9 @@ rounded half-to-even from the exact rational after ordering.
   the string containing `a`, U+0000, and `b`. After the semantic rejection,
   each parameter records zero NFC calls, zero whitespace-normalization calls,
   zero keyword statements, zero embedding calls, zero Chroma/Provider calls,
-  zero final authoritative transactions, and zero Evidence construction or
-  publication. The literal-NUL parser row and escaped-U+0000 semantic rows
+  zero final authoritative transactions, and zero internal authoritative
+  retrieval record or public Evidence construction/publication. The literal-
+  NUL parser row and escaped-U+0000 semantic rows
   therefore have different internal gate ledgers even though their public
   outcomes are generic `422 VALIDATION_ERROR`. For both precedence-body
   parameters, the
@@ -1703,11 +3454,15 @@ rounded half-to-even from the exact rational after ordering.
   authorized-body-validation execution passes authentication,
   exact-target authorization, and request-media validation, then reaches the
   strict body parser/schema stage and rejects there before keyword,
-  embedding, Provider, or final-transaction work. Requested-count omission
-  applies exact default 10; integer `1` proves the minimum; integer `50`
-  proves the inclusive maximum and configured Provider count 128; each
-  failing count is rejected without coercion before over-fetch arithmetic or
-  retrieval work.
+  embedding, Provider, or final-transaction work. The nine pure requested-
+  count identities observe only parser output or fixed validation failure.
+  The negative-one identity remains unimplemented because no exact merged
+  unit assertion supplies `-1`. AF-3A database rows separately observe zero
+  repository participation for invalid counts and the fixed keyword ceiling
+  for valid counts. AF-3B rows separately observe configured outbound count
+  and retained dense count. Neither downstream property is inferred from the
+  parser. AF-3C rows separately observe public validation and final result
+  cutoff.
 - **Forbidden behavior:** The canonical-path or supported-media control being
   rejected at its named gate. A noncanonical-path parameter being lowercased,
   rehyphenated, redirected, accepted, target-resolved, body-parsed,
@@ -1730,10 +3485,13 @@ rounded half-to-even from the exact rational after ordering.
   wrong JSON types as one execution; accepting booleans as integers; silently
   clamping; overflow arithmetic; partial Evidence; fallback Evidence; or a
   Provider call on any failing `422` execution.
-- **Planned test level:** unit, HTTP integration. Every stable variant label
-  and every parameter row is independently executable at both levels; unit
-  executions use deterministic gate/repository spies and HTTP executions
-  assert the public envelope, headers, routing, and downstream call ledger.
+- **Planned test level:** The nine parser-count identities are unit-only.
+  AF-3A gate/repository identities are PostgreSQL integration only. AF-3B
+  configured-count and dense-count identities execute independently at unit
+  and provider-adapter contract levels. AF-3C validation and public-cutoff
+  identities are HTTP integration only. The remaining request-wire variants
+  retain only the exact unit/HTTP rows enumerated in the ledger; no count
+  identity is expanded across levels by Cartesian product.
 - **Implementation status:** `REQUIRED_NOT_YET_IMPLEMENTED`.
 
 ### RET-BND-004 — Dense over-fetch arithmetic below ceiling
@@ -1767,7 +3525,9 @@ rounded half-to-even from the exact rational after ordering.
 - **Category:** Request, result, union, and SQL bounds.
 - **Initial database state:** More than `MAX_KEYWORD_CANDIDATES` eligible target chunks match.
 - **Authenticated principal and membership state:** Live target member.
-- **Provider or Chroma input:** Dense response is bounded and valid.
+- **Provider or Chroma input:** The AF-3A row has no Provider input and
+  measures the exact keyword cutoff. The separate AF-3B regression adds a
+  bounded dense response; AF-3C owns the public result limit.
 - **Concurrent state change:** None.
 - **Expected public result:** After all 128 keyword candidates are validated and exactly ranked, final public count is `F = min(R, E)` and never exceeds the accepted requested count.
 - **Expected internal validation result:** Legal scoped keyword SQL returns at most exactly 128 rows; `K <= 128`, union/validation operate before the public cutoff, and only final exact RRF order is cut to `R`.
@@ -1848,7 +3608,7 @@ rounded half-to-even from the exact rational after ordering.
 - **Provider or Chroma input:** Across every repetition, the ordered keyword list, ordered dense list, and their serialized UUID-to-absolute-rank maps are byte-identical. Independently executable repetitions vary only non-rank-bearing factors: keyword/dense completion order, unique-union insertion order, dictionary/map iteration order, validation-batch result arrival order, and PostgreSQL row-return order before UUID-keyed reconstruction.
 - **Concurrent state change:** None.
 - **Expected public result:** Every repetition returns identical final Evidence ordering.
-- **Expected internal validation result:** The same UUID sort produces the same contiguous 64/64/remainder partitions, exactly `ceil(U / 64) = 3` validation queries, identical absolute rank maps, exact RRF values, and byte-identical Evidence.
+- **Expected internal validation result:** The same UUID sort produces the same contiguous 64/64/remainder partitions, exactly `ceil(U / 64) = 3` validation queries, identical absolute rank maps, exact RRF values, and byte-identical internal authoritative retrieval records.
 - **Forbidden behavior:** Permuting an ordered source list such as dense `[A, B]` into `[B, A]` and calling it non-rank-bearing; changing any source rank map; hash/set iteration ordering, completion/arrival-order partitions, SQL row-order reconstruction, N+1 queries, or unstable results.
 - **Planned test level:** unit, PostgreSQL integration, HTTP integration.
 - **Implementation status:** `REQUIRED_NOT_YET_IMPLEMENTED`.
@@ -1894,12 +3654,26 @@ rounded half-to-even from the exact rational after ordering.
 
 ## Keyword SQL scope
 
+Each RET-KEY case has an exact AF3A keyword identity, a separate
+AF3B-HYBRID regression identity, and an AF3C-HTTP identity in the canonical
+ledger. The AF-3A fixtures exercise only exact target scoping before score,
+completed/current/valid-hash eligibility, bound
+`plainto_tsquery('simple', normalized_query)`, `ts_rank_cd(..., 0)`, exact
+score-descending/native-UUID-ascending order, the 128 cutoff, shared final
+revalidation, bounded scoped counts, and the user-scoped repository boundary.
+They use keyword candidates and make zero embedding/Chroma/Provider/fusion
+calls. Provider-empty, dense, mixed-source, RRF, public Evidence, and HTTP
+route assertions belong only to the separate AF-3B or AF-3C rows.
+
 ### RET-KEY-001 — Scoped deterministic PostgreSQL keyword ranking
 
 - **Category:** Keyword SQL scope.
 - **Initial database state:** Knowledge base A contains exactly `MAX_KEYWORD_CANDIDATES + 1 = 129` eligible matching chunks. Controlled text produces known `ts_rank_cd` score groups, including at least two equal-score rows whose native UUID order places one at normative rank 128 and the other at rank 129. UUIDs and insertion order are chosen so insertion/heap order disagrees with the full `keyword_score DESC, chunk UUID ASC` order. Knowledge base B contains identical and additional matches but is outside A's scope.
 - **Authenticated principal and membership state:** A live member requests exactly A; B is excluded by current SQL authorization and scope predicates before keyword score or rank assignment.
-- **Provider or Chroma input:** The Provider returns the canonical present-empty response, proving keyword-only success; no dense identity can satisfy the result.
+- **Provider or Chroma input:** The AF-3A row has no Provider input and proves
+  the exact keyword list directly. The AF-3B regression uses the canonical
+  present-empty Provider response to prove keyword-only hybrid success; no
+  dense identity can satisfy that regression.
 - **Concurrent state change:** Rebuild/repeat the fixture with varied insertion order and deliberately varied physical/row-return order, including an execution shape that would expose a pre-order `LIMIT`.
 - **Expected public result:** Every repetition returns the same requested prefix of the exact A-only top-128 UUID set; returned items expose the same one-based keyword ranks, have no dense ranks, and B never appears.
 - **Expected internal validation result:** Unit assertions fix `simple`, bound `plainto_tsquery`, `ts_rank_cd(..., 0)`, and the expected full total order. PostgreSQL assertions compute the oracle independently, prove A scoping before scoring, prove the rank-128/rank-129 tie and native UUID cutoff, and require exactly the first 128 UUIDs with ranks 1–128 in every repetition. RRF receives those ranks unchanged.
@@ -1912,10 +3686,20 @@ rounded half-to-even from the exact rational after ordering.
 - **Category:** Keyword SQL scope.
 - **Initial database state:** Target A is authorized; injected canonical candidate belongs to B.
 - **Authenticated principal and membership state:** Live A member.
-- **Provider or Chroma input:** Keyword repository test double injects B after the scoped-query boundary; dense list is empty.
+- **Provider or Chroma input:** The AF-3A scoped repository test double injects
+  B only after keyword generation and therefore after the keyword-query
+  boundary; it makes zero Provider calls. The
+  separate AF-3B regression adds an explicitly empty dense list.
 - **Concurrent state change:** None.
 - **Expected public result:** Authorized empty A Evidence when no legal A candidate exists.
-- **Expected internal validation result:** Shared fixed-snapshot validator rejects B again by exact target and access predicates.
+- **Expected internal validation result:** The
+  `AF3A-CROSS-SCOPE-REVALIDATION` PostgreSQL oracle belongs exclusively to
+  `AF3A_FINAL_VALIDATOR`: the shared fixed-snapshot validator rejects injected
+  B by exact target and access predicates. `RET-KEY-001::AF3A-SCOPED-DETERMINISTIC-ORDER-CUTOFF`
+  separately owns real SQL scope-before-score at
+  `AF3A_KEYWORD`.
+  The AF-3B hybrid row proves only the hybrid regression through that final
+  validator, and the AF-3C row proves only the authorized-empty public outcome.
 - **Forbidden behavior:** Trusting keyword origin as authority, B disclosure, or bypassing shared validation.
 - **Planned test level:** PostgreSQL integration, HTTP integration.
 - **Implementation status:** `REQUIRED_NOT_YET_IMPLEMENTED`.
@@ -1925,7 +3709,8 @@ rounded half-to-even from the exact rational after ordering.
 - **Category:** Keyword SQL scope.
 - **Initial database state:** Inaccessible B has many matches; authorized A has none.
 - **Authenticated principal and membership state:** Live A member with no B membership.
-- **Provider or Chroma input:** Dense response is a valid empty collection.
+- **Provider or Chroma input:** The AF-3A row has no Provider input. The
+  separate AF-3B regression adds a valid empty dense collection.
 - **Concurrent state change:** None.
 - **Expected public result:** Authorized empty A Evidence with no global or B count.
 - **Expected internal validation result:** SQL and telemetry expose only bounded A-scoped counts.
@@ -1933,12 +3718,14 @@ rounded half-to-even from the exact rational after ordering.
 - **Planned test level:** PostgreSQL integration, HTTP integration.
 - **Implementation status:** `REQUIRED_NOT_YET_IMPLEMENTED`.
 
-### RET-KEY-004 — HTTP retrieval cannot use worker/internal repository
+### RET-KEY-004 — User-facing retrieval cannot use worker/internal repository
 
 - **Category:** Keyword SQL scope.
 - **Initial database state:** Internal repository could see multiple private knowledge bases; user repository sees only target A.
 - **Authenticated principal and membership state:** Live A member.
-- **Provider or Chroma input:** Bounded valid provider response.
+- **Provider or Chroma input:** The AF-3A scoped-repository row makes zero
+  Provider calls. The AF-3B regression adds a bounded valid Provider response;
+  AF-3C alone drives the HTTP route.
 - **Concurrent state change:** None.
 - **Expected public result:** Only authorized A Evidence.
 - **Expected internal validation result:** Dependency/spy proves user-facing service calls only the scoped repository path.
@@ -2015,17 +3802,38 @@ rounded half-to-even from the exact rational after ordering.
 
 ## Evidence, eligibility, and citations
 
-### RET-EVID-001 — Authoritative Evidence projection
+### RET-EVID-001 — Internal authoritative retrieval record and authoritative projection
 
 - **Category:** Evidence, eligibility, and citations.
 - **Initial database state:** Eligible chunk has authoritative IDs, text, persisted hash, display filename, offsets, and optional page range; document storage key contains a sentinel path.
 - **Authenticated principal and membership state:** Live target member with current read capabilities.
-- **Provider or Chroma input:** Valid ID plus disagreeing bounded text and provenance metadata.
+- **Provider or Chroma input:** The AF-3A projection row uses a keyword
+  candidate or an explicit bounded synthetic candidate and makes zero
+  embedding/Chroma/Provider calls. The AF-3B fused-extension row uses a valid
+  dense ID plus disagreeing bounded text and provenance metadata. AF-3C maps
+  only the already-materialized internal values.
 - **Concurrent state change:** None.
-- **Expected public result:** The PostgreSQL-authoritative partition contains only target/document/chunk IDs, `normalized_text` as content, persisted valid hash, approved source display name, and persisted optional page/character ranges. The derived partition contains only preserved keyword/dense ranks, display-only fused score, fused rank, deterministic citation reference, and fixed `untrusted_document_content`.
-- **Expected internal validation result:** The authoritative partition loads from one allowlisted projection in the fixed snapshot. Each derived field proves its sole input: validated absolute rank maps; exact RRF; the authoritative target/chunk IDs and hash in `af3:citation:v1:<knowledge_base_uuid>:<chunk_uuid>:<content_sha256>`; or the fixed trust literal.
-- **Forbidden behavior:** Claiming every Evidence field is loaded from PostgreSQL; deriving authoritative fields from rank maps; deriving ranks/score/trust from PostgreSQL row order or content; Provider authority; storage path, secret, raw embedding, internal exception, or post-commit reload.
-- **Planned test level:** PostgreSQL integration, HTTP integration.
+- **Expected public result:** The AF-3A/AF-3B non-HTTP leg exposes no public
+  Evidence. AF-3C later maps only the allowlisted authoritative and derived
+  primitives into its public schema.
+- **Expected internal validation result:** The internal authoritative retrieval
+  record type is frozen, slotted,
+  non-public, has no lazy ORM state, is fully materialized before final commit,
+  and fails closed when passed to the public Evidence serializer. Its trusted
+  control/provenance member contains only authoritative IDs, persisted hash,
+  approved display identity, persisted page/character provenance, and bounded
+  derived rank/fusion primitives only in the AF-3B extension. Its separate
+  document-text member contains
+  `normalized_text` and only the fixed classification
+  `untrusted_document_content`. Each authoritative value loads from one
+  allowlisted projection in the fixed snapshot; each derived value proves its
+  sole permitted input.
+- **Forbidden behavior:** Naming the internal type public `Evidence`; generic
+  public serialization before AF-3C; a `__dict__` or lazy load; text sharing a
+  trusted-control field; claiming every field is loaded from PostgreSQL;
+  deriving authoritative fields from ranks; Provider authority; storage path,
+  secret, raw embedding, internal exception, or post-commit reload.
+- **Planned test level:** unit, PostgreSQL integration, HTTP integration.
 - **Implementation status:** `REQUIRED_NOT_YET_IMPLEMENTED`.
 
 ### RET-EVID-002 — Completed legacy chunk with null content hash
@@ -2033,7 +3841,10 @@ rounded half-to-even from the exact rational after ordering.
 - **Category:** Evidence, eligibility, and citations.
 - **Initial database state:** Completed legacy document has a chunk whose authoritative `content_sha256` is null.
 - **Authenticated principal and membership state:** Live target member otherwise retains full read access.
-- **Provider or Chroma input:** Valid canonical ID for the legacy chunk with bounded text, UUID, timestamp, and metadata.
+- **Provider or Chroma input:** The AF-3A row supplies the legacy ID as a
+  bounded keyword or synthetic final-validator candidate with zero Provider
+  calls. The separate AF-3B regression supplies the canonical dense ID with
+  bounded untrusted text/metadata.
 - **Concurrent state change:** None.
 - **Expected public result:** No Evidence for that chunk, no citation, and authorized empty Evidence if it is the only candidate.
 - **Expected internal validation result:** Persisted-null hash makes the chunk ineligible and omission is non-disclosing.
@@ -2330,7 +4141,9 @@ rounded half-to-even from the exact rational after ordering.
 - **Category:** Evidence, eligibility, and citations.
 - **Initial database state:** Target access is current; canonical candidates are unknown, null-hash, stale, or attached to non-completed documents at final snapshot.
 - **Authenticated principal and membership state:** Live target member remains authorized.
-- **Provider or Chroma input:** Structurally valid bounded canonical IDs.
+- **Provider or Chroma input:** The AF-3A row uses structurally valid bounded
+  keyword or synthetic canonical IDs with zero Provider calls. The separate
+  AF-3B regression uses bounded hybrid IDs.
 - **Concurrent state change:** Ineligibility is committed before snapshot acquisition.
 - **Expected public result:** Authorized empty Evidence and private/no-store.
 - **Expected internal validation result:** Final PostgreSQL validation returns no eligible authoritative record without public reasons.
@@ -2339,6 +4152,14 @@ rounded half-to-even from the exact rational after ordering.
 - **Implementation status:** `REQUIRED_NOT_YET_IMPLEMENTED`.
 
 ## AF-3 untrusted-evidence boundary
+
+For each RET-INJ case, AF3A-KEYWORD-INTERNAL-RECORD uses a keyword candidate
+or explicit bounded synthetic final-validator candidate and produces only a
+non-public internal authoritative retrieval record whose text classification
+is `untrusted_document_content`. AF3B-HYBRID-INTERNAL-RECORD-REGRESSION is a
+separate dense/fusion regression and cannot close AF-3A. AF3C-PUBLIC-EVIDENCE-
+HTTP alone owns public Evidence and HTTP serialization. Generic “valid
+candidate” wording below never implies Provider work in the AF-3A row.
 
 ### RET-INJ-001 — “Ignore previous instructions” remains data
 
@@ -2490,8 +4311,8 @@ rounded half-to-even from the exact rational after ordering.
   embedding, or keyword calls.
 - **Concurrent state change:** None.
 - **Expected public result:** Nonempty retrieval exposes sentinels only at
-  their intended Evidence fields; empty retrieval returns the exact empty
-  Evidence shape with no sensitive sentinel; citation resolution exposes
+  their intended public Evidence fields; empty retrieval returns the exact
+  empty Evidence shape with no sensitive sentinel; citation resolution exposes
   values only in the exact closed success object. Every row is HTTP `200` and
   private/no-store. No path, secret, embedding, raw payload, or diagnostic is
   public.
@@ -2537,7 +4358,7 @@ rounded half-to-even from the exact rational after ordering.
   values whose byte strings do not contain one another. The controlled
   fixture inputs, eligible records, and bounded request/client context assign
   one unique sentinel to each sensitive class: raw query; normalized query;
-  authoritative Evidence text;
+  internal authoritative retrieval record text;
   knowledge-base UUID; document UUID; chunk UUID; user UUID; session ID;
   citation ID; filesystem path; object-storage path; database credential;
   secret/token; bounded raw Provider response body; and bounded Provider
@@ -2549,79 +4370,101 @@ rounded half-to-even from the exact rational after ordering.
   constructs distinct later database-exception detail, driver-diagnostic
   detail, and transaction-diagnostic detail sentinels; a diagnostic category
   is captured when that boundary exposes it to the harness. The later-batch
-  variant has every sensitive class in live request/client context and has
-  loaded the Evidence and identifying classes into accumulated batch-1 state
+  variant has every applicable non-Provider sensitive class in live request/
+  client context and has loaded the internal authoritative retrieval record
+  and identifying classes into accumulated batch-1 state
   before batch 2 fails. Earlier fatal variants retain their sentinels only in
   inputs and context reachable before their named failure; they do not claim
-  that final Evidence loaded before the Provider or keyword stage.
-- **Authenticated principal and membership state:** A live active target
-  member has a current session. Authentication, canonical path parsing,
-  exact-target authorization, exact request-media validation, and strict body
-  validation succeed before each named fatal branch.
-- **Provider or Chroma input:** The four rows below are separate constructible
-  executions. All non-Provider-fatal rows use a successful bounded canonical
-  Provider response and successful Provider parsing. That response carries
-  the raw-body sentinel in one bounded, cardinality-aligned unsolicited
-  `documents` string that the adapter must ignore, and the controlled mock
-  client places the Provider-diagnostic sentinel in its bounded diagnostic
-  context before returning the response. Provider-related sentinels therefore
-  remain in the earlier adapter/client context so an unsafe later context dump
-  is observable without a simultaneous Provider failure.
+  that a final internal authoritative retrieval record loaded before the
+  Provider or keyword stage.
+- **Authenticated principal and membership state:** Every execution has a live
+  active target member and current session. AF-3A and AF-3B non-HTTP rows begin
+  at their owned service/database boundary after their applicable non-HTTP
+  proof, membership, and exact-target prerequisites; they do not traverse or
+  assert any HTTP route, path, media, body, response, header, or serialization
+  gate. Each corresponding AF-3C HTTP row separately traverses its public
+  route/path, authentication/authorization, exact request-media, and strict
+  body gates according to that public operation's precedence contract before
+  reaching the named downstream fatal branch.
+- **Provider or Chroma input:** The eight variants below expand to exactly ten
+  canonical non-HTTP rows at their capable levels and are separate
+  constructible executions. Every AF-3A row uses only keyword or explicit
+  bounded synthetic candidates, configures embedding/Chroma/Provider spies to
+  prove zero calls, and has no dense or Provider-response sentinel. AF-3B
+  failure rows use the exact external boundary named by their label. Only the
+  two AF-3B hybrid database regressions carry previously successful bounded
+  Provider work into their distinct final-database failures.
 
   | Stable variant label | Exact failure fixture and execution stage |
   | --- | --- |
-  | `RET-PRIV-004::PROVIDER-FATAL-ALL-SINK-SECRECY` | Scoped keyword SQL first returns a known eligible nonempty keyword sentinel. The bounded Provider branch then raises its injected Provider-fatal exception containing the Provider-detail sentinel. |
-  | `RET-PRIV-004::KEYWORD-DATABASE-FATAL-ALL-SINK-SECRECY` | The canonical Provider first returns a known eligible nonempty dense sentinel. Scoped keyword SQL then raises its injected database exception containing the database and exposed driver diagnostics. |
-  | `RET-PRIV-004::FINAL-COMMIT-ALL-SINK-SECRECY` | Keyword and Provider work succeed; final authorization and every required validation batch load known eligible keyword and dense sentinels. The actual final transaction commit then raises its injected commit exception containing the database and exposed transaction diagnostics. |
-  | `RET-PRIV-004::LATER-BATCH-ALL-SINK-SECRECY` | Valid bounded source maps contain 65 dense identities and 64 disjoint keyword identities, giving sorted union `U = 129`, batch size `B = 64`, and required query count `Q = 3`. Final connection acquisition and fixed-snapshot authorization succeed. Batch 1 succeeds and loads 64 PostgreSQL-authoritative records, including accumulated Evidence and identifying sentinels. Validation batch 2 raises its injected database exception containing the later-batch database, exposed driver, and exposed transaction diagnostics. A statement-ordinal ledger distinguishes this validation-query failure from initial connection, first-batch, and final-commit failures; planned batch 3 and commit each have zero calls. |
+  | `RET-PRIV-004::EMBEDDING-FATAL-ALL-SINK-SECRECY` | Scoped keyword SQL first returns a known eligible nonempty keyword sentinel. The one embedding operation fails; the keyword sentinel is discarded and Chroma/final-transaction calls are zero. |
+  | `RET-PRIV-004::PROVIDER-FATAL-ALL-SINK-SECRECY` | Scoped keyword SQL and embedding succeed. The bounded Chroma/provider branch raises its injected Provider-fatal exception containing the Provider-detail sentinel; keyword candidates are discarded and final-transaction calls are zero. |
+  | `RET-PRIV-004::KEYWORD-DATABASE-FATAL-ALL-SINK-SECRECY` | Scoped keyword SQL raises its injected database exception containing the database and exposed driver diagnostics before embedding or Chroma begins. Embedding, compatibility-probe, query, dense-candidate, union, and final-transaction calls are all zero; no dense sentinel can exist. |
+  | `RET-PRIV-004::FINAL-AUTHORIZATION-STATEMENT-FATAL-ALL-SINK-SECRECY` | Keyword or zero-candidate setup reaches the first final authoritative statement, which alone raises the injected database exception. No Provider work or validation batch occurs. |
+  | `RET-PRIV-004::FINAL-COMMIT-ALL-SINK-SECRECY` | Bounded keyword or synthetic candidates drive final authorization and every required validation batch. The actual final transaction commit raises its injected commit exception; every accumulated internal authoritative retrieval record is discarded. |
+  | `RET-PRIV-004::LATER-BATCH-ALL-SINK-SECRECY` | Exactly 129 bounded synthetic candidate identities give `U = 129`, batch size `B = 64`, and `Q = 3` without Provider work. Batch 1 loads 64 PostgreSQL-authoritative internal authoritative retrieval records; batch 2 alone fails. Batch 3 and commit each have zero calls, and all accumulated records are discarded. |
+  | `RET-PRIV-004::AF3B-HYBRID-FINAL-COMMIT-ALL-SINK-REGRESSION` | Scoped keyword work, the one embedding operation, bounded successful Provider work, hybrid union/fusion, final authorization, and every required validation batch succeed. The real final transaction reaches commit and commit alone fails. No result, candidate, query, content, identifier, Provider detail, or partial state appears in any allowed non-HTTP sink. This regression does not transfer AF-3A ownership of the commit contract. |
+  | `RET-PRIV-004::AF3B-HYBRID-LATER-BATCH-ALL-SINK-REGRESSION` | Scoped keyword work, the one embedding operation, and bounded successful Provider work produce enough valid hybrid candidates for at least two validation batches. Batch one accumulates internal authoritative retrieval records; a later batch alone fails; every accumulated record is discarded, no later batch/commit/publication occurs, and no result, candidate, query, content, identifier, Provider detail, or partial state appears in any allowed non-HTTP sink. This regression does not transfer AF-3A ownership of the batch contract. |
 
 - **Concurrent state change:** None. Each execution has exactly one injected
   fatal branch. The later-batch execution uses deterministic statement
   ordinals and call ledgers, with no timing race and no concurrent mutation.
-- **Expected public result:** Every execution returns exactly the byte-stable
+- **Expected public result:** Every corresponding AF-3C HTTP row returns exactly the byte-stable
   generic planned `503 RETRIEVAL_UNAVAILABLE` envelope and
   `Cache-Control: private, no-store`. The response contains zero Evidence,
   zero citation content, zero partial result, zero fallback result, zero
   Provider raw body, zero Provider exception detail, zero database exception
   detail, and none of the query, ID, path, credential, secret/token, content,
   driver, or transaction sentinels.
-- **Expected internal validation result:** Before each execution, the harness
-  invokes the same shared success/failure scanner from Test conventions and
-  captures ordinary log message text; structured log keys and values; access
-  logs; exception and error logs; trace and span names, attributes, events,
-  and status descriptions; HTTP client logs; HTTP transport logs; database
-  client and driver diagnostics exposed to the harness; captured exception
-  objects and their string and `repr` representations; and response status,
-  metadata, headers, and body. The scanner walks every nested key,
+  `AF3C-HTTP-HYBRID-FINAL-COMMIT-FAILURE` maps only the successful-Provider/
+  failed-final-commit regression, and
+  `AF3C-HTTP-HYBRID-LATER-BATCH-FAILURE` maps only the successful-Provider/
+  failed-later-batch regression; neither public row substitutes for the other.
+- **Expected internal validation result:** Before each non-HTTP execution, the
+  owning phase invokes the shared scanner from Test conventions over the
+  sinks it can actually observe: AF-3A captures its application/log/trace,
+  exception, SQL/database-client/driver/transaction, and internal
+  authoritative retrieval record sinks; AF-3B captures those plus embedding/
+  Provider transport/client and
+  hybrid-state sinks. AF-3C separately runs the scanner over HTTP response,
+  header, serialization, access-log, and public sink behavior. The scanner
+  walks every nested key,
   value, sequence member, byte string, exception representation, and larger
   rendered string. For every sink and every sentinel, both exact equality and
   substring presence are deterministic failures. Only the normalized
-  content-free failure classification is permitted. The Provider-fatal
-  execution discards the keyword sentinel. The keyword/database-fatal
-  execution discards the dense sentinel. The final-commit execution publishes
+  content-free failure classification is permitted. The embedding-fatal and
+  Provider-fatal executions each discard the keyword sentinel at their exact
+  boundary. The keyword/database-fatal
+  execution aborts immediately with zero embedding/Chroma work and therefore
+  no dense sentinel. The final-authorization, final-commit, and later-batch
+  AF-3A executions perform zero Provider work. The final-commit execution publishes
   nothing before commit success, then discards all loaded records. The
   later-batch execution proves batch 1 loaded sensitive authoritative state,
   records batch 2 as the sole failure, rolls back the final transaction,
   discards every accumulated record, makes zero batch-3 calls, makes zero
   commit calls, performs no fusion or response publication, and never
-  continues with the 64 earlier records.
+  continues with the 64 earlier records. The two AF-3B regressions separately
+  prove final-commit and later-batch discard/all-sink properties after
+  successful Provider/hybrid work without changing AF-3A ownership.
 - **Forbidden behavior:** Treating success-path secrecy as fatal-path
   coverage; using the broad parent case without executing each stable label;
   omitting a sentinel class, sink class, structured key, nested value,
   exception representation, response metadata field, or substring scan; any
   sentinel, stack trace, SQL/Provider/database detail, raw payload, partial
   Evidence, citation, stale cache, or alternate successful response;
-  keyword-only fallback after Provider failure; dense-only fallback after
-  keyword/database failure; publication before final commit; retaining batch
+  keyword-only fallback after Provider failure; any embedding/Provider work or
+  dense-only fallback after keyword/database failure; publication before final commit; retaining batch
   1 records after the later-batch failure; running batch 3; running final
   commit; or requiring Provider failure and later-batch database failure to be
   the same trigger.
-- **Planned test level:** Provider-fatal secrecy is independently executable
-  at provider-adapter contract, PostgreSQL integration, and HTTP integration.
-  Keyword/database-fatal, final-commit, and later-batch secrecy are each
-  independently executable at PostgreSQL integration and HTTP integration.
-  These label-specific capable levels preserve the stable ID's existing level
-  classification.
+- **Planned test level:** Embedding-fatal and Provider-fatal secrecy are each
+  independently executable at provider-adapter contract, PostgreSQL
+  integration, and HTTP integration. Keyword/database-fatal, final-
+  authorization-statement, final-commit, and later-batch are independently
+  executable at PostgreSQL integration with separately owned HTTP mappings.
+  Both AF-3B hybrid final-commit and hybrid later-batch regressions are
+  independent PostgreSQL integration obligations with their own phase-
+  qualified AF-3C HTTP mappings.
 - **Implementation status:** `REQUIRED_NOT_YET_IMPLEMENTED`.
 
 ### RET-PRIV-005 — Every reachable private response is no-store
@@ -2645,7 +4488,9 @@ rounded half-to-even from the exact rational after ordering.
 
 ### RET-PRIV-006 — Telemetry batching fields are bounded and content-free
 
-- **Category:** Privacy, public errors, and cache behavior.
+- **Category:** Privacy, public errors, and cache behavior. The non-HTTP
+  regression is `RET-PRIV-006::AF3B-HYBRID-TELEMETRY-BOUNDS`; the public row
+  is `RET-PRIV-006::AF3C-HTTP-TELEMETRY-BOUNDS`.
 - **Initial database state:** Authorized target has several batches of eligible chunks.
 - **Authenticated principal and membership state:** Live target member.
 - **Provider or Chroma input:** Bounded keyword/dense candidates span several batches with some local omissions.
@@ -2725,44 +4570,100 @@ that cannot observe them.
 | ADR requirement | Stable acceptance cases |
 | --- | --- |
 | ADR-008-R01 — Exactly two strict public shapes, shared bounded body, decoded-query domain/normalization/count contract, ordered live-session authentication, exact target, and no client-ID authorization | Retrieval matrix `RET-AUTH-001::UNAUTHENTICATED-PRECEDENCE`, `RET-AUTH-005::HIDDEN-TARGET-PRECEDENCE`, and all RET-BND-003 stable variants, including exact/plus-one/chunked body rows and the distinct literal-NUL/escaped-U+0000 gate and precedence rows; every individually named public-operation variant in RET-EVID-003 plus `RET-EVID-008::CITATION-HIDDEN-TARGET-PRECEDENCE` and `RET-EVID-008::CITATION-REFERENCE-TARGET-MISMATCH`; U+0000 rejection, adjacent-U+0001 preservation, and normalization/scalar variants in RET-BND-001; UTF-8 domain in RET-BND-002; RET-AUTH-002 through RET-AUTH-011 for remaining authentication/scope branches |
-| ADR-008-R02 — Initial request/database work ends before embedding; no request-owned transaction, connection, Session, or SessionTransaction spans embedding or Chroma; failure/cancellation cleanup precedes final work | RET-AUTH-001, RET-AUTH-011; `RET-CONC-001::EMBEDDING-LIFECYCLE-SUCCESS`; `RET-CONC-001::EMBEDDING-LIFECYCLE-FAILURE`; `RET-CONC-001::EMBEDDING-LIFECYCLE-CANCELLATION`; `RET-CONC-001::CHROMA-LIFECYCLE-REVOCATION`; RET-CONC-002 through RET-CONC-003 |
-| ADR-008-R03 — Actual final request transaction is fixed `REPEATABLE READ` and `READ ONLY`, with first-statement reauthorization | RET-CONC-001 (the actual first final retrieval authorization query or order-preserving same-transaction hook proves both settings in the real request), RET-CONC-002 through RET-CONC-003, RET-CONC-012, and RET-EVID-003 success/failure rows for the citation final transaction and first-statement recheck; never a helper, mutation actor, or unrelated session |
-| ADR-008-R04 — Same snapshot for all batches and every authoritative Evidence/citation field | RET-CONC-006 through RET-CONC-010, RET-EVID-001, RET-EVID-003 |
-| ADR-008-R05 — Request linearization and revocation timing | RET-CONC-001 through RET-CONC-009 |
-| ADR-008-R06 — All-or-nothing transaction failure | RET-CONC-011, RET-PRIV-004 |
+| ADR-008-R02 — Exact proof/initial-release/pure-validation/keyword-release/embedding/Chroma/union/final-transaction lifecycle and resource barriers | RET-AUTH-001, RET-AUTH-011; all RET-CONC-001 lifecycle variants; the separate AF3A and AF3B identities in RET-CONC-002 through RET-CONC-003; RET-KEY-001 through RET-KEY-004; RET-PRIV-004 keyword-, embedding-, and Provider-fatal identities |
+| ADR-008-R03 — Fresh timezone-aware final clock, strict expiry boundary, and actual fixed `REPEATABLE READ`, `READ ONLY` first-statement reauthorization | RET-CONC-001 (actual request settings), RET-CONC-002 through RET-CONC-003, RET-CONC-012, every RET-CONC-013 clock/expiry variant, and RET-EVID-003 citation final-transaction rows; never a helper, mutation actor, unrelated session, initial time, or Provider timestamp |
+| ADR-008-R04 — Same snapshot for all batches and every internal authoritative retrieval record/public-citation field | Provider-independent AF3A identities and separate AF3B regression identities in RET-CONC-006 through RET-CONC-010; RET-EVID-001 internal authoritative retrieval record identities; RET-EVID-003 public Citation identities |
+| ADR-008-R05 — Request linearization, revocation/deletion timing, and stale derived IDs | RET-CONC-001 through RET-CONC-010, RET-CONC-012 through RET-CONC-014 |
+| ADR-008-R06 — All-or-nothing transaction failure | The four AF3A failure identities and four distinct AF3B hybrid regressions in RET-CONC-011; RET-PRIV-004's AF3A final-authorization, final-commit, and later-batch identities plus the separate `AF3B-HYBRID-FINAL-COMMIT-ALL-SINK-REGRESSION` and `AF3B-HYBRID-LATER-BATCH-ALL-SINK-REGRESSION` identities |
 | ADR-008-R07 — PostgreSQL authority for identity, scope, state, content, hash, source/provenance, and every citation-resolution field | RET-AUTH-007 through RET-AUTH-009, RET-PROV-030 through RET-PROV-031, RET-PROV-033 through RET-PROV-037, RET-KEY-001 through RET-KEY-004, RET-EVID-001 through RET-EVID-010, especially the exact public citation operation and current authoritative resolution in RET-EVID-003 through RET-EVID-009 |
 | ADR-008-R08 — Completed status plus persisted non-null valid hash | RET-KEY-001, RET-EVID-002, RET-EVID-009, RET-EVID-010 |
 | ADR-008-R09 — Exact citation operation, current reauthentication/target authorization, authoritative revision binding, and non-bearer reference | RET-EVID-003 through RET-EVID-009, including each named citation HTTP precedence/body/schema variant |
-| ADR-008-R10 — Canonical pinned bounded Chroma version/query contract, exact single embedding payload, and no Provider authority | RET-AUTH-009, RET-CONC-001 embedding variants, RET-PROV-016 through RET-PROV-022, RET-PROV-023 through RET-PROV-031, RET-PROV-035 through RET-PROV-036, RET-PROV-040 exact configured-dimension vector/payload oracle, RET-KEY-002, RET-EVID-001 |
+| ADR-008-R10 — Exact bounded single embedding operation, exact vector validation, and no Provider authority | RET-CONC-001 embedding variants; RET-PROV-040 exact payload oracle; every RET-PROV-041 embedding count/dimension/type/overflow/non-finite/byte/deadline/attempt variant including its distinct real-PostgreSQL lifecycle oracle; RET-PROV-023 through RET-PROV-031; RET-KEY-002; RET-EVID-001 |
 | ADR-008-R11 — Version/query inclusive wire/decode ceilings, exact field/metadata grammar and bounds, and exact depth counting | All named positive grammar variants in RET-PROV-001 paired with RET-PROV-010 through RET-PROV-013 and every named negative grammar branch in RET-PROV-016; RET-PROV-002 through RET-PROV-009; RET-PROV-014; every bounded version variant in RET-PROV-020 |
 | ADR-008-R12 — Strict UTF-8/RFC 8259 and unsupported-range numeric failures, canonical response-fatal taxonomy, version/missing-field fatality, independent Provider outage branches, and no fallback | RET-PROV-003 through RET-PROV-006, RET-PROV-009 through RET-PROV-014, RET-PROV-015 (fully canonical literal `NaN`, `Infinity`, and `-Infinity` wire failures plus valid-JSON `1e400` finite-domain failure), RET-PROV-016 (encoding/unknown/duplicate/null/return-field policy), RET-PROV-017 (every missing required key), RET-PROV-018 through RET-PROV-022 (configured count, version probe, position, connection, timeout), RET-BND-007, RET-CONC-011, RET-PRIV-004 |
 | ADR-008-R13 — Position-preserving candidate-local taxonomy and authorized empty | RET-PROV-008, RET-PROV-025 through RET-PROV-038 (including missing and non-string ID variants), RET-EVID-010 |
 | ADR-008-R14 — Finite wire-distance domain, typed diagnostic `None`, post-decoder typed non-finite/wrong-type omission, absolute-position preservation, and ignored bounded disagreement | RET-PROV-015, RET-PROV-023 through RET-PROV-024, RET-PROV-025 through RET-PROV-026 (`float("nan")`, `float("inf")`, and `float("-inf")` at exact rank 2 with valid ranks 1/3), RET-PROV-027 (string/object/boolean/null/array matrix at exact rank 2), RET-PROV-028 (mixed absolute ranks), RET-PROV-030 through RET-PROV-031, RET-PROV-038 |
 | ADR-008-R15 — Duplicate earliest-rank behavior | RET-PROV-039, RET-BND-013, RET-RANK-003 |
 | ADR-008-R16 — Exact body/decoded-query/request/configured-Provider/raw-position/dense/keyword/union/batch/final-result domains and bounded SQL work | RET-BND-001 through RET-BND-003, including the U+0000 exclusion, adjacent-U+0001 control, distinct raw/escaped JSON paths, and 65,536/65,537 body rows; RET-EVID-003 citation body rows; RET-BND-004 through RET-BND-015; RET-PROV-002 through RET-PROV-007; all four RET-PROV-019 C40/C128 equality/plus-one rows; RET-KEY-001 |
-| ADR-008-R17 — Scoped deterministic PostgreSQL keyword rank generation and internal-path exclusion | RET-KEY-001 (scoped deterministic score, total order, and one-based ranks), RET-KEY-002 through RET-KEY-004 |
-| ADR-008-R18 — Deterministic union, batching, non-rank-bearing permutations, query count, reconstruction, and independent failure branches | RET-BND-008 through RET-BND-015 (especially RET-BND-012's byte-identical source lists/rank maps), RET-CONC-010, RET-CONC-011 |
+| ADR-008-R17 — Scoped deterministic PostgreSQL keyword rank generation and internal-path exclusion | The exact AF3A keyword identities in RET-KEY-001 through RET-KEY-004; their separately labelled AF3B hybrid regressions; AF3C HTTP/internal-repository assertions only in the exact AF3C rows |
+| ADR-008-R18 — Deterministic union, batching, non-rank-bearing permutations, query count, reconstruction, and independent failure branches | Provider-independent AF3A synthetic-input identities and separate AF3B hybrid regressions in RET-BND-008 through RET-BND-015; the separate AF3A/AF3B identities in RET-CONC-010 and RET-CONC-011 |
 | ADR-008-R19 — Exact rational RRF, absolute source-rank prerequisites, earliest-rank preservation, display serialization, and tie-breaking | RET-KEY-001 (deterministic keyword source ranks), RET-PROV-025 through RET-PROV-028 (dense invalid-position ranks remain 1/3 and 1/3/5/7), RET-PROV-038 (valid companion retains original position), RET-PROV-039 (earliest dense rank/contribution), RET-BND-013 (earliest ranks across duplicates), RET-RANK-001 through RET-RANK-005 (exact rational formula, mixed sources, collision, full tie order) |
-| ADR-008-R20 — Explicit PostgreSQL-authoritative versus deterministic-derived Evidence partitions, trust class, and excluded data | RET-EVID-001 (field-by-field authority/derivation oracle), RET-EVID-002 through RET-EVID-010, RET-RANK-001 through RET-RANK-005, RET-INJ-001 through RET-INJ-006, RET-PRIV-002, RET-PRIV-003 |
+| ADR-008-R20 — Frozen/slotted/non-public internal authoritative retrieval record, structural trust separation, complete pre-commit materialization, and AF-3C-only public schemas | RET-CONC-007 through RET-CONC-010, RET-CONC-014, RET-EVID-001, RET-EVID-002, RET-EVID-010, RET-RANK-001 through RET-RANK-005, RET-INJ-001 through RET-INJ-006; AF-3C public mapping in RET-EVID-003 through RET-EVID-009 and RET-PRIV-002 through RET-PRIV-003 |
 | ADR-008-R21 — P0 AF-3 semantic injection boundary | RET-INJ-001 through RET-INJ-006 |
 | ADR-008-R22 — Later consumer-specific acceptance | RET-FUT-001 through RET-FUT-004 |
 | ADR-008-R23 — Public errors, valid present-empty behavior, authorized empty, no synthetic `403`, and cache | RET-AUTH-004, RET-AUTH-005, RET-AUTH-010 (present-empty provider response), RET-AUTH-011, RET-CONC-011, RET-BND-008 (present-empty dense source and zero union), RET-PRIV-004, RET-PRIV-005 |
-| ADR-008-R24 — Same recursive exact/substring all-sink scanner on success/failure with field-specific public allowlists and bounded telemetry | RET-PRIV-001; RET-PRIV-002; all three success-only variants in RET-PRIV-003 plus the mandatory scanner wrapper on every successful HTTP case; all four fatal variants in RET-PRIV-004; RET-PRIV-006 |
+| ADR-008-R24 — Same recursive exact/substring all-sink scanner on success/failure with field-specific public allowlists and bounded telemetry | Exact ledger projection: every canonical row whose Owner is AF-3A, AF-3B, or AF-3C, at that row's declared level and execution boundary. RET-PRIV-001/002/003/004/006 provide focused sentinel, allowlist, mutation, fatal-path, and telemetry conformance controls but do not narrow the projection; FUTURE rows are excluded until their named consumer activates them. |
 | ADR-008-R25 — P0 response/trust controls remain distinct from P1 hardening | RET-PROV-006, RET-PROV-010, RET-INJ-001 through RET-INJ-006, RET-FUT-001 through RET-FUT-004 |
+| ADR-008-R26 — Per-instance single-flight compatibility, state clearing, trusted collection UUID, read-only retrieval, bounded total deadlines, and one-attempt/no-fallback policy | RET-PROV-020 version-contract variants, all RET-PROV-042 single-flight/lifetime/failure/cancellation/no-retry variants, and exactly the 15 level-qualified RET-PROV-043 tuples retained by its executable oracle matrix |
+| ADR-008-R27 — No security-correctness migration/index dependency and semantics-preserving optional performance work | RET-KEY-001 exact unindexed semantic oracle and its future indexed implementation regression at real PostgreSQL level |
 
 This matrix covers initial authorization, final snapshot authorization,
 revocation timing, fixed snapshots, candidate parsing, cross-scope rejection,
 provider body limits and taxonomy, request/result limits, SQL batch bounds,
-keyword SQL scope, null-hash exclusion, Evidence trust classification,
+keyword SQL scope, null-hash exclusion, internal authoritative retrieval record and public Evidence trust classification,
 citation reauthorization, RRF determinism, provider outage, no fallback, cache
 control, privacy logging, and P0 injection-evidence handling.
 
 ## Suite acceptance rule
 
-All 109 AF-3 runtime cases from `RET-AUTH-001` through `RET-PRIV-006` must be
-implemented and pass at every listed level before AF-3 is complete. The four
-cases `RET-FUT-001` through `RET-FUT-004` are mandatory additions for their
-later consuming phases and are not AF-3C runtime claims.
+AF-3 completes only when every canonical row owned by AF-3A, AF-3B, or AF-3C
+is implemented and passing. A status on one row never marks its stable ID or a
+different level implemented. The four FUTURE rows become mandatory only with
+their named consumers and are not AF-3C runtime claims.
+
+For every such runtime row, passing includes the ADR-008-R24 scanner sidecar at
+the same boundary and level. Functional success without its owned sink scan is
+a row failure; no phase close may sample, defer, or replace that sidecar with a
+RET-PRIV case-level result.
+
+### AF-3A close gate
+
+AF-3A closes only when every canonical row whose Owner is AF-3A is implemented
+and passing at its exact level. Its permitted execution boundaries are only
+PURE_REQUEST_VALIDATOR, AF3A_INITIAL_ACCESS, AF3A_KEYWORD,
+AF3A_FINAL_VALIDATOR, and AF3A_CONCURRENCY. The gate rejects any AF-3A row
+that performs embedding, Chroma/Provider, dense, hybrid union, fusion, public
+Evidence/Citation, or HTTP work. No AF-3B or AF-3C row can satisfy or block the
+AF-3A close classification.
+
+### AF-3B entry gate
+
+AF-3B may enter only after the AF-3A close gate above is satisfied. Entry is
+derived from AF-3A-owned provider-independent rows only. No unsplit mixed
+fixture, AF-3B regression, Provider-time row, or public row is an AF-3A
+prerequisite, so the dependency is non-circular.
+
+### AF-3B close gate
+
+After entry, AF-3B closes only when every canonical row whose Owner is AF-3B
+is implemented and passing. AF3B_HYBRID_REGRESSION rows are explicit
+phase-qualified reruns of AF-3A controls after dense/hybrid extension; they do
+not change the ownership or status of the underlying AF-3A prerequisite row.
+In addition, AF-3B close reruns the following exact AF-3A-owned rows without
+transferring them or changing their status:
+
+- `RET-AUTH-010::AF3A-FINAL-SNAPSHOT-ZERO-CANDIDATES` at PostgreSQL integration;
+- `RET-CONC-011::AF3A-BATCH-TWO-STATEMENT-FAILURE` at PostgreSQL integration;
+- `RET-CONC-011::AF3A-BATCH-TWO-STATEMENT-TIMEOUT` at PostgreSQL integration;
+- `RET-CONC-011::AF3A-FINAL-COMMIT-FAILURE` at PostgreSQL integration;
+- `RET-CONC-011::AF3A-FINAL-CONNECTION-FAILURE` at PostgreSQL integration;
+- `RET-CONC-013::AF3A-PROVIDER-INDEPENDENT-ELAPSED-BARRIER-EXPIRY` at PostgreSQL integration;
+- `RET-CONC-013::AF3A-PROVIDER-INDEPENDENT-ELAPSED-BARRIER-EXPIRY` at deterministic concurrency;
+- `RET-KEY-002::AF3A-CROSS-SCOPE-REVALIDATION` at PostgreSQL integration;
+- `RET-PRIV-004::KEYWORD-DATABASE-FATAL-ALL-SINK-SECRECY` at PostgreSQL integration;
+- `RET-PRIV-004::FINAL-AUTHORIZATION-STATEMENT-FATAL-ALL-SINK-SECRECY` at PostgreSQL integration;
+- `RET-PRIV-004::FINAL-COMMIT-ALL-SINK-SECRECY` at PostgreSQL integration; and
+- `RET-PRIV-004::LATER-BATCH-ALL-SINK-SECRECY` at PostgreSQL integration.
+
+No sampling, skip, waiver, global case status, or single-level surrogate
+satisfies the AF-3B close gate.
+
+### AF-3C public gate
+
+HTTP, request-wire, media, public-error, cache, serialization, public Evidence,
+Citation, and public all-sink rows are owned only by AF-3C. They remain
+REQUIRED_NOT_YET_IMPLEMENTED and cannot become passing through AF-3A close,
+AF-3B entry, or AF-3B close. They still block AF-3 as a whole.
 
 A documentation review does not satisfy a runtime case. Any change to a stable
 ID, expected result, trust decision, limit profile, taxonomy, transaction

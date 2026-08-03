@@ -1,8 +1,10 @@
 # AgentForge roadmap
 
 AF-0, AF-1, AF-2A, the explicitly approved end-to-end AF-2B scope, and the
-minimal AF-2S1 knowledge-access boundary are implemented. AF-3 onward remain
-planned and unimplemented. Interfaces are introduced only with their first
+minimal AF-2S1 knowledge-access boundary are implemented. Current `main` also
+contains two partial AF-3A prerequisites: the pure retrieval-request validator
+and `SessionAuthenticationProof`. AF-3A is not complete; all other AF-3 runtime
+work remains planned. Interfaces are introduced only with their first
 consuming feature. No phase begins before the previous phase meets its
 acceptance criteria. P1 work cannot block the P0 recruiting demo.
 
@@ -162,12 +164,66 @@ AF-2S1.
 
 ## AF-3 — Hybrid retrieval and citations
 
-**Status:** Planned and unimplemented.
+**Status:** Incomplete. Only the pure AF-3A retrieval-request validator and
+`SessionAuthenticationProof` are merged; no retrieval orchestration, keyword
+or dense retrieval, final validator/loader, fusion, internal authoritative
+retrieval record, public Evidence, Citation, or HTTP retrieval behavior is
+implemented.
 
-AF-3 implementation cannot begin until the documentation-only security design
-gate in ADR-008 and `retrieval-security-acceptance.md` completes the governance
-sequence below. The gate defines required behavior; it does not implement or
-authorize retrieval.
+### AF-3 canonical project-control record
+
+The active documentation work is classified as Parent `AF-3-DOC-R1`, current
+remediation `AF-3-DOC-R1-R6`, **Merge-Review Phase-Fixture and
+Canonical-Identity Remediation**. The preceding
+`AF3_DOC_R1_INDEPENDENT_MERGE_REVIEW` result is `BLOCK` with exactly two
+findings. The R6 Documentation Remediation Gate fixes only those phase-fixture
+and canonical-identity findings plus this canonical record; once its exact
+manifest is frozen, its stop state and only permitted current gate are the
+Independent Read-Only Documentation Approval Review. The Commit Gate, Release
+Gate, Merge Gate, AF-3A-03, AF-3B, and AF-3C remain `BLOCKED`. This record is
+updated only by the bounded gate that changes it, and the remediation cannot
+approve itself.
+
+Canonical AF-3 phase and slice ownership is frozen as follows:
+
+| Work ID | Owner and scope | Entry/exit state |
+| --- | --- | --- |
+| AF-3-DOC-R1 | Design Architect/remediation writer owns the documentation contract only. Remediation cycles append `-R1`, `-R2`, and later monotonically increasing suffixes without changing this parent. | Must be independently approved, committed, reviewed, and merged before runtime work is authorized. Current cycle is `AF-3-DOC-R1-R6`; its frozen stop state is the Independent Read-Only Documentation Approval Review. |
+| AF-3A-01 | Pure retrieval-request validator. | `MERGED`; not an AF-3A close. |
+| AF-3A-02 | `SessionAuthenticationProof` and `authenticate_session_with_proof`. | `MERGED`; not an AF-3A close. |
+| AF-3A-03 | Proof-aware initial access plus scoped deterministic keyword SQL. | `BLOCKED` until AF-3-DOC-R1 is merged and a separate implementation-start approval is issued. |
+| AF-3A-04 | First provider-independent final `REPEATABLE READ`, `READ ONLY` validator/loader and internal authoritative retrieval record. | `BLOCKED` until AF-3A-03 is merged and separately authorized. |
+| AF-3A-05 | Provider-independent concurrency, deletion, failure, all-sink security, and AF-3A phase close. | `BLOCKED` until AF-3A-04 is merged and separately authorized; AF-3A becomes `CLOSED` only after its complete owner-filtered ledger exit set passes on merged `main`. |
+| AF-3B | Embedding, read-only Chroma query, bounded dense handling, hybrid union, and deterministic fusion. | `BLOCKED` until AF-3A is `CLOSED`; closes only from AF-3B-owned rows plus the named AF-3A regression reruns. |
+| AF-3C | HTTP, public Evidence/Citation, serialization, public errors/cache/privacy, and the complete public retrieval gate. | `BLOCKED` until AF-3B is `CLOSED`; its merge does not imply production readiness. |
+
+The frozen order is AF-3-DOC-R1 merge, AF-3A-03, AF-3A-04, AF-3A-05 and
+AF-3A closure, AF-3B and its closure, then AF-3C. `MERGED` and `CLOSED`, role
+separation, session reuse, baseline hashing, evidence invalidation, risk-based
+verification, single-writer operation, and output requirements use the
+repository-wide framework in `../AGENTS.md`. The acceptance tuple and its
+owner/boundary/status/oracle remain canonical only in
+`retrieval-security-acceptance.md`.
+
+The underlying documentation candidate addresses four independently confirmed
+contract defects: incomplete all-sink applicability, AF-3C HTTP outcomes mixed
+into AF-3A acceptance, a citation-success HTTP boundary assigned to public
+Evidence, and a non-executable RET-PROV-043 level expansion. R6 changes no
+runtime, test implementation, stable ID, ledger tuple, owner, boundary,
+status, oracle, or security requirement. It separates the phase-specific
+RET-PRIV-004 fixture prerequisites, restores one exact canonical identity, and
+records the post-merge-review remediation cycle and stop gate. The control
+framework also treats phase/slice mismatch, classifying a merged slice as a
+closed phase, repeating still-valid reviews/tests, using a stale or incorrectly
+scoped hash baseline, concurrent writers, cross-repository contamination,
+self-approval, and reuse of invalidated evidence as stop-worthy project risks.
+Those controls do not invent unrecorded historical events or any reviewer
+finding beyond the last complete visible finding.
+
+Remaining AF-3 implementation cannot begin until the documentation-only
+security design gate in ADR-008 and `retrieval-security-acceptance.md`
+completes the governance sequence below. The gate defines required behavior;
+it does not implement or authorize retrieval.
 
 The complete AF-3 design-to-implementation governance sequence is:
 
@@ -186,15 +242,15 @@ The complete AF-3 design-to-implementation governance sequence is:
 13. separate merge approval;
 14. merge into `main`;
 15. local `main` synchronization and branch cleanup;
-16. separate explicit AF-3A implementation-start approval; and
-17. creation of a new AF-3A implementation branch.
+16. separate explicit approval for the next AF-3A implementation slice; and
+17. creation of a new AF-3A implementation branch for that slice.
 
 A PASS from a local design review is not commit approval. A committed local
 branch is not implementation approval. An open or merged design PR is not
-itself AF-3A implementation approval. AF-3A begins only after the design
-contract is merged into `main` and a separate implementation-start
-authorization is issued. This remediation candidate stops for step 4 and does
-not claim that any later step is complete.
+itself approval for more AF-3A implementation. The next AF-3A runtime slice
+begins only after this remediated design contract is merged into `main` and a
+separate implementation-start authorization is issued. This remediation
+candidate stops for step 4 and does not claim that any later step is complete.
 
 AF-3 cannot be considered complete until its executable adversarial
 candidate-validation and untrusted-evidence suite passes. AF-2S2 remains P1
@@ -203,59 +259,72 @@ make AgentForge production-ready.
 
 ### AF-3A — Scoped retrieval contracts and PostgreSQL keyword baseline
 
-**Status:** Planned and unimplemented.
+**Status:** In progress and incomplete. Current `main` contains only the pure
+retrieval-request validator and `SessionAuthenticationProof` prerequisites.
 
 **Objective:** Establish the bounded one-knowledge-base retrieval contract and
 the first PostgreSQL-scoped candidate path without introducing an external
 vector query.
 
-**Included scope:** The single retrieval domain contract that AF-3C later maps
-to `POST /api/v1/knowledge-bases/{knowledge_base_id}/retrieval`: exact
-`query`/`requested_count` fields, strict types/default/extra-field policy,
-disclosure-preserving authentication/target/body-validation order, a strict
-decoded Unicode-scalar/UTF-8 query domain that semantically rejects any U+0000
+**Included scope:** Provider-independent service and domain contracts that
+AF-3C may later map to HTTP: a decoded in-memory request mapping with exact
+`query`/`requested_count` fields, strict types/default/extra-field policy, and
+a strict Unicode-scalar/UTF-8 query domain that semantically rejects any U+0000
 before NFC as validation, not normalization, because PostgreSQL text cannot
 represent code zero,
 exact NFC and whitespace normalization with no case folding/NFKC/NFKD/excluded-
 whitespace transformation, ordered post-normalization scalar then strict
 UTF-8 byte limits, and fixed P0-v1 count domains; exactly one target knowledge
-base; current session/user
-and existing read-capability enforcement; membership- and document-state-scoped
-PostgreSQL keyword candidates with the deterministic 128-row total-order
-cutoff; the first implementation of the shared final authoritative PostgreSQL
-candidate-validation and Evidence-loading transaction using
+base; preservation of the internal `SessionAuthenticationProof`; one short
+proof-aware initial live-session, active-user, exact-target access operation;
+membership- and document-state-scoped deterministic PostgreSQL keyword
+candidates with the 128-row total-order cutoff; the first implementation of
+the shared final authoritative PostgreSQL candidate-validation and internal
+authoritative retrieval record loader transaction using
 `REPEATABLE READ` and `READ ONLY`, with fixed-snapshot reauthorization and no
 AF-3A, AF-3B, or AF-3C read-write exception; deterministic fake adapters; unit
-and PostgreSQL integration tests.
+and real-PostgreSQL integration, concurrency, and fault-injection tests. Every
+AF-3A canonical success or failure row also runs the shared recursive scanner
+as a non-HTTP sidecar over all sinks observable at that row's exact boundary
+and level, including applicable database and internal authoritative retrieval
+record sinks. The internal authoritative retrieval record is
+frozen, slotted, non-public, fully materialized before commit, and keeps
+trusted control/provenance separate from text classified only as
+`untrusted_document_content`.
 
-**Explicit exclusions:** Chroma queries, dense retrieval, RRF, HTTP retrieval
-endpoints, answer generation, RAG, reranking, Agent Runtime, tools, and
-approvals.
+**Explicit exclusions:** Chroma queries, dense retrieval, RRF, public
+`Evidence`, public `Citation`, HTTP retrieval endpoints, answer generation,
+prompt construction, RAG, ChatModel execution, reranking, Agent Runtime,
+tools, and approvals.
 
-**Acceptance criteria:** The domain request has one non-coercing shape,
-independently executable minimum/equality/plus-one boundaries, and fixed
-`401`/hidden-`404`/`422` ordering. A literal unescaped NUL fails strict JSON;
-after the allowed earlier authentication, canonical-target parsing, exact-
-target membership/capability authorization, media, bounded-body, strict-JSON,
-schema, exact-type, Unicode-scalar, and strict UTF-8 validity gates, the ASCII
-JSON escape `"\u0000"` is rejected by the semantic query-domain gate before
-NFC or retrieval with generic private/no-store `422 VALIDATION_ERROR`, zero
-keyword or final-transaction SQL, and no normalization, embedding,
-Chroma/Provider, or Evidence work. U+0000 is rejected rather than transformed
-or sent to
-PostgreSQL, while the adjacent U+0001 control is accepted and preserved so the
-rule does not become a blanket Unicode-`Cc` prohibition. Keyword candidates
+**Acceptance criteria:** The pure domain request accepts exactly one decoded,
+non-coercing in-memory mapping and has independently executable
+minimum/equality/plus-one boundaries. It has no request-wire, media, bounded-
+body, JSON-token, HTTP status/envelope/header/cache, or public-response oracle;
+those outcomes belong only to AF-3C. AF-3A sees a decoded U+0000 value and
+raises its internal `RetrievalRequestValidationError` before NFC, keyword SQL,
+or the final transaction, with no normalization, embedding, Chroma/Provider,
+public Evidence, or HTTP work. Whether U+0000 arrived as literal or escaped
+JSON is not an AF-3A distinction. U+0000 is rejected rather than transformed
+or sent to PostgreSQL, while the adjacent U+0001 control is accepted and
+preserved so the rule does not become a blanket Unicode-`Cc` prohibition.
+Proof-aware initial access, scoped keyword work, final validation, and all
+their results remain internal provider-independent operations. Keyword candidates
 are bounded and scoped in SQL from the first query; the exact score/native-
 UUID order precedes `LIMIT
 128`, including tied rows across a 129-row cutoff fixture; global search and
 unrestricted worker repositories are absent from user-facing retrieval; the
-shared validator batch-checks current
+shared first final validator/loader batch-checks current
 membership, capability, target knowledge base, completed-document state, and
 chunk identity; `completed` status is insufficient when persisted
 `content_sha256` is null or invalid; no runtime hash, timestamp, UUID, or
 provider value invents a revision; authoritative text and provenance load only
 from PostgreSQL; client document/chunk IDs never authorize; ordinary tests use
-deterministic fakes.
+deterministic fakes. AF-3A is not complete until proof-aware initial access,
+scoped keyword retrieval, the first final validator/loader, final
+reauthentication and access classification, fixed-snapshot candidate
+validation, and their AF-3A concurrency gates are implemented, reviewed,
+tested, and merged.
 
 **Proposed commit message:** `feat(retrieval): add scoped keyword retrieval contracts`
 
@@ -265,6 +334,12 @@ deterministic fakes.
 
 **Objective:** Add bounded dense candidate hints and deterministic hybrid
 fusion without allowing provider data to become authority.
+
+**Entry gate:** AF-3B MUST NOT begin dense retrieval, Provider querying, or
+fusion until every AF-3A prerequisite above is implemented, tested, reviewed,
+and merged. AF-3B may reuse those controls; it may not absorb, duplicate, or
+begin the missing scoped keyword path or first final PostgreSQL validator/
+loader.
 
 **Included scope:** Query embedding through the existing `EmbeddingModel`
 boundary with a distinct no-database-resource lifecycle barrier and failure/
@@ -281,15 +356,24 @@ use `REPEATABLE READ` and `READ ONLY` after provider work; current AF-3 permits
 no read-write exception, and any future exception requires a separately
 approved ADR change, a new acceptance case, and an explicit security and
 transaction review before implementation; fixed-snapshot session/user,
-membership, capability, document, chunk, Evidence, and provenance validation;
+membership, capability, document, chunk, provenance, and internal
+authoritative retrieval record validation;
 deterministic candidate-union partitioning into 64-row batches and bounded
 query counts; deterministic deduplication; exact-rational fixed-constant RRF
 with 12-place display-only serialization; explicit required-Provider,
 keyword/database, later-batch, connection/timeout, and final-commit failure
-semantics with no fallback; deterministic adapter and concurrency tests.
+semantics with no fallback; separate hybrid final-commit and hybrid later-
+batch all-sink regressions after successful Provider work; bounded candidate
+handling and fusion; the shared recursive scanner on every AF-3B canonical
+success or failure row over the non-HTTP embedding/Provider/hybrid and
+reachable regression sinks at that row's exact boundary and level; applicable
+AF-3A non-HTTP regression reruns; and deterministic
+Provider-adapter, real-PostgreSQL, concurrency, and fault-injection tests.
 
-**Explicit exclusions:** Model-based reranking, silent keyword-only fallback,
-answer generation, RAG, HTTP endpoints, Agent Runtime, tools, and approvals.
+**Explicit exclusions:** Scoped keyword implementation, the first final
+validator/loader, public Evidence or Citation schemas, model-based reranking,
+silent keyword-only fallback, answer generation, prompt construction, RAG,
+ChatModel execution, HTTP endpoints, Agent Runtime, tools, and approvals.
 
 **Acceptance criteria:** Chroma supplies only bounded untrusted candidate IDs
 and rank/distance hints. The pinned raw HTTP v2 request/response contract
@@ -302,15 +386,17 @@ bytes, and JSON depth 16. Provider wire responses use strict RFC 8259 JSON:
 literal `NaN`, `Infinity`, and `-Infinity` tokens are invalid JSON, and a
 syntactically valid unsupported-range distance such as `1e400` is outside the
 finite IEEE-754 binary64 domain. Both are response-fatal before candidate
-iteration and produce planned generic `503`, no partial result, no Evidence,
-no keyword-only fallback, and no candidate-local continuation. Numeric tests
-mutate only `distances[0][0]` in an otherwise canonical envelope. Only after
+iteration and produce no partial internal authoritative retrieval record or
+keyword-only fallback; AF-3C later maps them to planned generic `503`.
+Numeric tests mutate only `distances[0][0]` in an otherwise canonical
+envelope. Only after
 bounded decoding succeeds may a named typed adapter, SDK boundary, or
 deterministic test double omit one candidate whose typed score is equivalent
 to `float("nan")`, `float("inf")`, or `float("-inf")`; other valid candidates
 retain their original absolute ranks and exact contributions, no non-finite
 value is serialized into conforming JSON, and PostgreSQL remains the only
-authorization, Evidence, provenance, and citation authority. Bounded
+authorization, internal authoritative retrieval record, provenance, and later
+citation authority. Bounded
 unsolicited Provider text and metadata never become response or authorization
 data.
 
@@ -329,10 +415,12 @@ charset/encoding branches are individually fatal. For default `R = 10`,
 No database transaction, checked-out connection, Session, or
 SessionTransaction spans embedding or Chroma work; each has a separate
 observable barrier and final validation begins only after both complete. The final transaction's first
-authoritative statement fixes one `REPEATABLE READ` snapshot and revalidates
+authoritative statement uses one freshly sampled, timezone-aware injected UTC
+`final_now`, fixes one `REPEATABLE READ` snapshot, and revalidates
 session, active user, exact target, membership, and current read capabilities.
 Every deterministically partitioned candidate batch and all
-PostgreSQL-authoritative Evidence fields load in that snapshot; no
+PostgreSQL-authoritative internal authoritative retrieval record fields load
+in that snapshot; no
 authorization-sensitive reload follows commit.
 Changes before snapshot acquisition are visible, changes after it govern later
 requests, and the design claims no asynchronous cancellation. Batch or
@@ -373,10 +461,11 @@ responses; existing `401` and
 hidden-object `404` integration; planned generic `503` retrieval-unavailable
 behavior; deterministic retrieval fixtures; executable candidate-manipulation,
 fixed-snapshot concurrency, privacy, citation, provider-bound, and
-untrusted-evidence cases; source-isolated no-fallback fixtures; the same
-recursive all-sink exact/substring scanner on every nonempty/empty retrieval
-success, citation success, and fatal path, with only exact public response
-fields allowlisted; bounded non-content retrieval metrics.
+untrusted-evidence cases; source-isolated no-fallback fixtures; and the same
+recursive public all-sink exact/substring scanner on every AF-3C canonical
+success or failure row at its exact boundary and level, with only exact public
+Evidence or citation-resolution response fields allowlisted; bounded non-
+content retrieval metrics.
 
 The generic API framework retains `403`, but current owner/editor/viewer
 retrieval grants every member role the read capabilities. AF-3C does not
@@ -389,7 +478,8 @@ ChatModel execution, reranking, Agent Runtime, tools, approvals,
 advanced prompt-injection detection, model/runtime consumer guardrails, parser
 sandboxing, hostile-document resource containment, and production hardening.
 
-**Acceptance criteria:** PostgreSQL-authoritative Evidence identity, text,
+**Acceptance criteria:** PostgreSQL-authoritative public Evidence identity,
+text,
 hash, display source, and persisted provenance load from the fixed final
 snapshot; absolute source ranks, exact fused rational/display, fused rank,
 fixed trust literal, and citation reference use only their ADR-008 permitted
@@ -416,12 +506,22 @@ boundary, not nonexistent RAG, ChatModel, Agent Runtime, tool, or approval
 consumers. Each later consuming phase must add its own future consuming-phase
 acceptance cases. Private cache and public error contracts are deterministic;
 Provider/keyword/database/commit failures prove no fallback or accumulated
-Evidence. Success-only and failure sentinels are recursively scanned across
-ordinary, structured keys/nested values, access, exception, trace/span event,
-HTTP/Provider transport, SQL/driver diagnostic, and response metadata/body
-sinks, with no general response-object exemption. All AF-3 cases in
+public Evidence. Every AF-3A, AF-3B, and AF-3C canonical row incorporates the
+scanner sidecar at its own boundary and level; the RET-PRIV success/failure
+matrices are conformance and negative controls, not the only covered rows.
+AF-3C success-only and failure sentinels are recursively
+scanned across public HTTP/serialization, ordinary, structured keys/nested
+values, access, exception, trace/span event, and response metadata/body sinks,
+with no general response-object exemption. AF-3A separately owns its non-HTTP
+database and internal authoritative retrieval record scans, and AF-3B
+separately owns non-HTTP embedding/Provider/hybrid scans. All AF-3 cases in
 `retrieval-security-acceptance.md` are executable and pass at every specified
 test level.
+
+AF-3C remains the sole owner of HTTP, request-wire, media, public-error,
+cache, serialization, public Evidence, public Citation, and public all-sink
+privacy behavior. Those obligations remain explicitly unimplemented and do
+not block an otherwise passing AF-3B non-HTTP exit classification.
 
 **Proposed commit message:** `feat(retrieval): add authenticated evidence and citations`
 
