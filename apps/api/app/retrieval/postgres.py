@@ -6,6 +6,7 @@ from uuid import UUID
 
 from sqlalchemy import Select, bindparam, exists, func, literal, literal_column, select, text
 from sqlalchemy.dialects.postgresql import UUID as PostgreSQLUUID
+from sqlalchemy.engine import Row
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.sql.elements import ColumnElement
@@ -43,6 +44,19 @@ _READ_ROLE_VALUES = (
     KnowledgeBaseRole.VIEWER.value,
 )
 _VALID_CONTENT_SHA256_PATTERN = r"^[0-9a-f]{64}$"
+
+type _FinalCandidateValues = tuple[
+    UUID,
+    UUID,
+    UUID,
+    str,
+    str | None,
+    str,
+    int | None,
+    int | None,
+    int | None,
+    int | None,
+]
 
 
 def _utc_now() -> datetime:
@@ -276,7 +290,7 @@ def _final_authorization_statement() -> Select[tuple[bool, bool, str, str]]:
     )
 
 
-def _final_candidate_statement() -> Select[tuple[object, ...]]:
+def _final_candidate_statement() -> Select[_FinalCandidateValues]:
     return (
         select(
             KnowledgeBase.id.label("knowledge_base_id"),
@@ -309,7 +323,7 @@ def _final_candidate_statement() -> Select[tuple[object, ...]]:
     )
 
 
-def _record_from_row(row: object) -> _InternalAuthoritativeRetrievalRecord:
+def _record_from_row(row: Row[_FinalCandidateValues]) -> _InternalAuthoritativeRetrievalRecord:
     return _InternalAuthoritativeRetrievalRecord(
         trusted=_TrustedAuthoritativeProvenance(
             knowledge_base_id=row.knowledge_base_id,
