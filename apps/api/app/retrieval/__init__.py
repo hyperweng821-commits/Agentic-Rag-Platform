@@ -5,8 +5,16 @@ from app.retrieval.domain import (
     RetrievalRequestValidationError,
     parse_retrieval_request,
 )
-from app.retrieval.postgres import MAX_KEYWORD_CANDIDATES, PostgresRetrievalAccess
+from app.retrieval.postgres import (
+    MAX_KEYWORD_CANDIDATES,
+    PostgresFinalAuthoritativeLoader,
+    PostgresRetrievalAccess,
+)
 from app.retrieval.service import (
+    FINAL_VALIDATION_BATCH_SIZE,
+    MAX_FINAL_CANDIDATES,
+    FinalCandidateLimitError,
+    FinalCandidateValidatorLoader,
     KeywordCandidate,
     RetrievalAuthenticationError,
     RetrievalTargetNotFoundError,
@@ -16,8 +24,13 @@ from app.retrieval.service import (
 )
 
 __all__ = [
+    "FINAL_VALIDATION_BATCH_SIZE",
+    "MAX_FINAL_CANDIDATES",
     "MAX_KEYWORD_CANDIDATES",
+    "FinalCandidateLimitError",
+    "FinalCandidateValidatorLoader",
     "KeywordCandidate",
+    "PostgresFinalAuthoritativeLoader",
     "PostgresRetrievalAccess",
     "RetrievalAuthenticationError",
     "RetrievalRequest",

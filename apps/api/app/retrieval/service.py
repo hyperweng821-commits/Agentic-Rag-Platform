@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Final, Protocol
 from uuid import UUID
 
 from app.retrieval.domain import RetrievalRequest, parse_retrieval_request
@@ -28,6 +28,101 @@ class RetrievalUnavailableError(Exception):
 
     def __init__(self) -> None:
         super().__init__("Retrieval is unavailable.")
+
+
+class FinalCandidateLimitError(ValueError):
+    """Reject an unbounded final-validation input before PostgreSQL work."""
+
+
+FINAL_VALIDATION_BATCH_SIZE: Final = 64
+MAX_FINAL_CANDIDATES: Final = 192
+UNTRUSTED_DOCUMENT_CONTENT: Final = "untrusted_document_content"
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class _TrustedAuthoritativeProvenance:
+    """Fully loaded PostgreSQL control and provenance primitives."""
+
+    knowledge_base_id: UUID
+    document_id: UUID
+    chunk_id: UUID
+    content_sha256: str
+    source_display_name: str
+    page_start: int | None
+    page_end: int | None
+    character_start: int | None
+    character_end: int | None
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class _UntrustedDocumentContent:
+    """Document text structurally confined to an untrusted data member."""
+
+    text: str = field(repr=False)
+    trust_classification: str = field(
+        default=UNTRUSTED_DOCUMENT_CONTENT,
+        init=False,
+        repr=False,
+    )
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class _InternalAuthoritativeRetrievalRecord:
+    """Minimal non-public record materialized before final transaction commit."""
+
+    trusted: _TrustedAuthoritativeProvenance = field(repr=False)
+    document_content: _UntrustedDocumentContent = field(repr=False)
+
+
+CandidateBatch = tuple[UUID, ...]
+
+
+class FinalAuthoritativeLoader(Protocol):
+    """Provider-neutral final authorization and authoritative loading port."""
+
+    async def load_authoritative_records(
+        self,
+        *,
+        proof: SessionAuthenticationProof,
+        knowledge_base_id: UUID,
+        candidate_batches: tuple[CandidateBatch, ...],
+    ) -> tuple[_InternalAuthoritativeRetrievalRecord, ...]: ...
+
+
+class FinalCandidateValidatorLoader:
+    """Bound, canonicalize, and validate final candidate identities."""
+
+    def __init__(self, loader: FinalAuthoritativeLoader) -> None:
+        self._loader = loader
+
+    async def validate_and_load(
+        self,
+        *,
+        proof: SessionAuthenticationProof,
+        knowledge_base_id: UUID,
+        candidate_ids: Sequence[UUID],
+    ) -> tuple[_InternalAuthoritativeRetrievalRecord, ...]:
+        """Always reauthorize, including the authorized-empty path."""
+        batches = _canonical_candidate_batches(candidate_ids)
+        return await self._loader.load_authoritative_records(
+            proof=proof,
+            knowledge_base_id=knowledge_base_id,
+            candidate_batches=batches,
+        )
+
+
+def _canonical_candidate_batches(
+    candidate_ids: Sequence[UUID],
+) -> tuple[CandidateBatch, ...]:
+    if any(not isinstance(candidate_id, UUID) for candidate_id in candidate_ids):
+        raise TypeError("Final candidates must be UUID values.")
+    ordered = tuple(sorted(set(candidate_ids)))
+    if len(ordered) > MAX_FINAL_CANDIDATES:
+        raise FinalCandidateLimitError(f"Final candidate count exceeds {MAX_FINAL_CANDIDATES}.")
+    return tuple(
+        ordered[offset : offset + FINAL_VALIDATION_BATCH_SIZE]
+        for offset in range(0, len(ordered), FINAL_VALIDATION_BATCH_SIZE)
+    )
 
 
 @dataclass(frozen=True, slots=True)
