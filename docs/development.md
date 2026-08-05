@@ -53,7 +53,8 @@ uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 
 ## Current Compose startup
 
-The default profile starts only PostgreSQL and FastAPI:
+The default profile starts PostgreSQL, applies Alembic migrations through a
+one-shot service, and then starts FastAPI:
 
 ```bash
 docker compose up --build
@@ -62,6 +63,7 @@ docker compose up --build
 The default services are:
 
 - `postgres`
+- `migrate`
 - `api`
 
 PostgreSQL is reachable by containers at `postgres:5432` but has no host port.
@@ -80,13 +82,14 @@ Stop them with:
 docker compose down
 ```
 
-## AF-2B infrastructure profile
+## Local ingestion demo
 
-ChromaDB and Ollama are isolated behind `rag`:
+Provision the configured local models explicitly, then start the canonical
+upload-to-completed demo:
 
 ```bash
-docker compose --profile rag up --build
-# or: make up-rag
+make pull-models
+make demo
 ```
 
 React is isolated behind `frontend`:
@@ -96,14 +99,24 @@ docker compose --profile frontend up --build
 # or: make up-frontend
 ```
 
-The `rag` profile starts the Ollama and Chroma services consumed by AF-2B. It
-does not add retrieval or RAG APIs, and neither `make up-rag` nor
-`scripts/bootstrap.sh` pulls the configured Ollama embedding model. The worker
-is an explicit CLI process rather than an always-running Compose service.
+`make pull-models` starts Ollama and populates the persistent `ollama_data`
+volume. Normal startup never downloads a model. The ingestion path requires
+the configured `OLLAMA_EMBED_MODEL`; the chat model pulled by the existing
+helper is not used by ingestion.
+
+`make demo` activates the `rag` profile and starts the API, Chroma, Ollama, and
+one persistent worker built from the API image. The API and worker share the
+managed upload volume. Both wait behind the one-shot migration service, and
+the worker additionally waits for PostgreSQL, Chroma, and Ollama health. No
+manual second worker process is required. Provider or model failures keep the
+existing bounded retry/failure semantics.
+
 Only Ollama joins the dedicated `model_egress` network needed for explicit
-model pulls; PostgreSQL and Chroma remain confined to the internal backend
-network. PostgreSQL, Chroma, and Ollama have no host-published ports in the
-default project; the API and optional Web service bind only to `127.0.0.1`.
+model pulls; PostgreSQL, Chroma, and the worker remain confined to the internal
+backend network. PostgreSQL, Chroma, Ollama, and the worker have no
+host-published ports. The API and optional Web service bind only to
+`127.0.0.1`. The demo does not add Retrieval or Agent UI behavior; those remain
+later work.
 
 The optional ChromaDB service in `compose.test.yaml` is also isolated behind
 the `rag` profile. Test PostgreSQL and Chroma ports bind only to `127.0.0.1`.
@@ -118,7 +131,9 @@ docker compose exec postgres sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 ```
 
 Application and migration commands use the internal `postgres:5432` service
-address:
+address. Normal `make up` and `make demo` startup already runs `upgrade head`
+before the API or worker starts; these commands are useful for inspection or
+an explicit idempotent recheck:
 
 ```bash
 docker compose exec api uv run alembic current
@@ -174,29 +189,24 @@ Credentialed browser clients must originate from an explicit
 `CORS_ORIGINS` entry. Wildcard CORS is rejected; adding an origin does not
 replace session, CSRF, or membership checks.
 
-## Ingestion worker and index rebuild
+## Ingestion worker, smoke, and index rebuild
 
-Start the AF-2B infrastructure, pull the configured local models, and apply
-migrations before running the worker:
-
-```bash
-make up-rag
-make pull-models
-docker compose exec api uv run alembic upgrade head
-```
-
-Process at most one available job and exit:
+The Compose worker continuously polls with
+`INGESTION_WORKER_POLL_INTERVAL_SECONDS`. Exercise it through the real
+authenticated API with an existing local user:
 
 ```bash
-docker compose exec api uv run python -m app.workers.ingestion_worker --once
+export AGENTFORGE_SMOKE_EMAIL=owner@example.com
+read -rsp "Smoke password: " AGENTFORGE_SMOKE_PASSWORD && printf '\n'
+export AGENTFORGE_SMOKE_PASSWORD
+./scripts/smoke_demo_ingestion.sh
+unset AGENTFORGE_SMOKE_PASSWORD
 ```
 
-Poll continuously with the configured
-`INGESTION_WORKER_POLL_INTERVAL_SECONDS`:
-
-```bash
-docker compose exec api uv run python -m app.workers.ingestion_worker
-```
+The script creates a knowledge base and unique text document, verifies the
+upload response is `pending`, and polls the existing status endpoint until the
+job is `completed` or `failed`. It defaults to an explicit 180-second timeout;
+set `AGENTFORGE_SMOKE_TIMEOUT_SECONDS` from 10 through 600 to override it.
 
 Rebuild the derived index for one PostgreSQL-authoritative document or
 knowledge base without an HTTP retrieval endpoint:

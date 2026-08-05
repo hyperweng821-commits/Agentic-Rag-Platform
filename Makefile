@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-.PHONY: help bootstrap up up-rag up-frontend down logs ps pull-models lint format typecheck test build build-all compose-config
+.PHONY: help bootstrap up demo up-frontend down logs ps pull-models lint format typecheck test build build-all compose-config
 
 help:
 	@awk 'BEGIN {FS = ":.*##"; printf "Usage: make <target>\n\n"} /^[a-zA-Z_-]+:.*?##/ {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -12,7 +12,7 @@ bootstrap: ## Prepare and start the current AgentForge foundation
 up: ## Start the AgentForge API foundation and PostgreSQL
 	docker compose up --build -d postgres api
 
-up-rag: ## Start the API plus AF-2B Ollama and Chroma infrastructure
+demo: ## Start the complete local upload-to-ingestion demo stack
 	docker compose --profile rag up --build -d
 
 up-frontend: ## Start the foundation plus the AgentForge frontend
@@ -55,4 +55,5 @@ build-all: ## Build API and frontend images explicitly
 
 compose-config: ## Validate the Docker Compose files
 	docker compose config --quiet
+	./scripts/check_demo_compose.sh
 	docker compose -f compose.test.yaml config --quiet
