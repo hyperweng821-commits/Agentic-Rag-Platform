@@ -22,6 +22,27 @@ These rules apply to the entire repository.
 - Keep external SDKs behind adapters introduced alongside real consumers.
 - Keep Agent execution bounded by explicit limits.
 
+## Retrieval authentication and target visibility
+
+**Authentication failure and target invisibility are separate outcomes, and
+their evaluation order is the security property.**
+
+Authentication must be evaluated before any target lookup. An invalid,
+expired, revoked, or otherwise unusable credential must produce the same
+`401` response for every target.
+
+After authentication succeeds, an absent target and a target the caller is
+not entitled to discover must produce the same hidden `404` response.
+
+A `403` remains valid only when an authenticated caller can legitimately know
+that the resource exists but lacks permission for the requested non-hidden
+operation.
+
+Do not reorder authentication and target-visibility checks. Do not
+short-circuit final reauthorization when a candidate collection is empty. No
+empty-result optimization may bypass final authentication or target
+authorization.
+
 ## Tools and approval
 
 - Apply deterministic policy before every tool execution.
