@@ -30,9 +30,13 @@ from app.db.models import (
     User,
     UserSession,
 )
-from app.retrieval import FinalCandidateValidatorLoader, PostgresFinalAuthoritativeLoader
+from app.retrieval import (
+    FinalCandidateValidatorLoader,
+    PostgresFinalAuthoritativeLoader,
+    PostgresRetrievalAccess,
+)
 from app.retrieval import postgres as final_postgres
-from app.retrieval.service import RetrievalAuthenticationError
+from app.retrieval.service import RetrievalAuthenticationError, RetrievalTargetNotFoundError
 from app.security.authentication import SessionAuthenticationProof
 from app.security.principal import Principal
 
@@ -187,6 +191,30 @@ async def _seed_access(
     return identity, knowledge_base
 
 
+async def _seed_keyword_candidate(
+    postgres_sessions: async_sessionmaker[AsyncSession],
+    *,
+    knowledge_base_id: UUID,
+) -> None:
+    document = _document(knowledge_base_id, name=f"empty-path-{uuid4()}")
+    content = f"alpha empty-path candidate {uuid4()}"
+    chunk = _chunk(
+        document.id,
+        chunk_id=uuid4(),
+        index=0,
+        content=content,
+        content_sha256=hashlib.sha256(content.encode()).hexdigest(),
+    )
+    async with postgres_sessions() as session, session.begin():
+        session.add_all([document, chunk])
+
+
+def _access(
+    postgres_sessions: async_sessionmaker[AsyncSession],
+) -> PostgresRetrievalAccess:
+    return PostgresRetrievalAccess(postgres_sessions, clock=lambda: _FINAL_NOW)
+
+
 def _validator(
     postgres_sessions: async_sessionmaker[AsyncSession],
     *,
@@ -321,6 +349,10 @@ async def test_final_snapshot_reauthorizes_with_zero_candidate_queries(
         postgres_sessions,
         expires_at=_FINAL_NOW + timedelta(hours=1),
     )
+    await _access(postgres_sessions).verify_initial_access(
+        proof=identity.proof,
+        knowledge_base_id=knowledge_base.id,
+    )
 
     with _capture_sql(postgres_sessions) as statements:
         records = await _validator(postgres_sessions).validate_and_load(
@@ -344,6 +376,107 @@ async def test_final_snapshot_reauthorizes_with_zero_candidate_queries(
         statements=tuple(statements),
         records=records,
     )
+
+
+async def test_revoked_session_with_zero_keyword_candidates_fails_final_reauthorization(
+    postgres_sessions: async_sessionmaker[AsyncSession],
+) -> None:
+    identity, knowledge_base = await _seed_access(
+        postgres_sessions,
+        expires_at=_FINAL_NOW + timedelta(hours=1),
+    )
+    await _seed_keyword_candidate(
+        postgres_sessions,
+        knowledge_base_id=knowledge_base.id,
+    )
+    access = _access(postgres_sessions)
+    await access.verify_initial_access(
+        proof=identity.proof,
+        knowledge_base_id=knowledge_base.id,
+    )
+
+    async with postgres_sessions() as session, session.begin():
+        stored_session = await session.get(UserSession, identity.session.id)
+        assert stored_session is not None
+        stored_session.revoked_at = _FINAL_NOW
+
+    keyword_candidates = await access.scoped_keyword_candidates(
+        proof=identity.proof,
+        knowledge_base_id=knowledge_base.id,
+        normalized_query="alpha",
+    )
+    candidate_ids = tuple(candidate.chunk_id for candidate in keyword_candidates)
+    assert candidate_ids == ()
+
+    with (
+        _capture_sql(postgres_sessions) as statements,
+        pytest.raises(RetrievalAuthenticationError),
+    ):
+        await _validator(postgres_sessions).validate_and_load(
+            proof=identity.proof,
+            knowledge_base_id=knowledge_base.id,
+            candidate_ids=candidate_ids,
+        )
+
+    assert statements[0].strip().upper() == (
+        "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"
+    )
+    assert "current_setting('transaction_isolation')" in statements[1]
+    assert "current_setting('transaction_read_only')" in statements[1]
+    assert "FROM document_chunks" not in " ".join(statements)
+    assert len(statements) == 2
+
+
+async def test_removed_membership_with_zero_keyword_candidates_hides_final_target(
+    postgres_sessions: async_sessionmaker[AsyncSession],
+) -> None:
+    identity, knowledge_base = await _seed_access(
+        postgres_sessions,
+        expires_at=_FINAL_NOW + timedelta(hours=1),
+    )
+    await _seed_keyword_candidate(
+        postgres_sessions,
+        knowledge_base_id=knowledge_base.id,
+    )
+    access = _access(postgres_sessions)
+    await access.verify_initial_access(
+        proof=identity.proof,
+        knowledge_base_id=knowledge_base.id,
+    )
+
+    async with postgres_sessions() as session, session.begin():
+        membership = await session.get(
+            KnowledgeBaseMembership,
+            (knowledge_base.id, identity.user.id),
+        )
+        assert membership is not None
+        await session.delete(membership)
+
+    keyword_candidates = await access.scoped_keyword_candidates(
+        proof=identity.proof,
+        knowledge_base_id=knowledge_base.id,
+        normalized_query="alpha",
+    )
+    candidate_ids = tuple(candidate.chunk_id for candidate in keyword_candidates)
+    assert candidate_ids == ()
+
+    with (
+        _capture_sql(postgres_sessions) as statements,
+        pytest.raises(RetrievalTargetNotFoundError),
+    ):
+        await _validator(postgres_sessions).validate_and_load(
+            proof=identity.proof,
+            knowledge_base_id=knowledge_base.id,
+            candidate_ids=candidate_ids,
+        )
+
+    assert statements[0].strip().upper() == (
+        "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"
+    )
+    assert "current_setting('transaction_isolation')" in statements[1]
+    assert "current_setting('transaction_read_only')" in statements[1]
+    assert "FROM document_chunks" not in " ".join(statements)
+    assert len(statements) == 2
 
 
 @pytest.mark.parametrize(
