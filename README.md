@@ -74,17 +74,26 @@ Prerequisites:
 
 - Git
 - Docker Engine with Docker Compose v2
+- curl and Python 3 for the included upload smoke
 
 ```bash
 git clone <repository-url> agentforge
 cd agentforge
 cp .env.example .env
-docker compose up --build
+make pull-models
+make demo
 ```
 
-The default command starts only `postgres` and `api`. PostgreSQL is internal to
-Compose, while the API binds only to `127.0.0.1`. When both containers are
-healthy, verify the public health endpoint:
+`make pull-models` is the explicit model-provisioning step. It starts Ollama
+and stores the configured models in `ollama_data`; `make demo` never downloads
+a model implicitly. The ingestion path requires
+`OLLAMA_EMBED_MODEL` (default `qwen3-embedding:0.6b`) to reach `completed`.
+
+`make demo` builds one API image and starts PostgreSQL, a one-shot Alembic
+migration gate, FastAPI, Chroma, Ollama, and the persistent ingestion worker.
+The API and worker share `upload_data`, and no separate worker command is
+needed. PostgreSQL and the providers remain internal to Compose, while the API
+binds only to `127.0.0.1`. Verify the public health endpoint:
 
 ```bash
 curl http://localhost:8000/api/v1/health
@@ -106,14 +115,6 @@ API documentation is available at <http://localhost:8000/docs>.
 Uploaded files use the local `upload_data` volume. Configure
 `MAX_UPLOAD_SIZE_BYTES` to change the default 10 MiB per-file limit.
 
-Apply database migrations from the repository root:
-
-```bash
-docker compose up -d
-docker compose exec api uv run alembic upgrade head
-docker compose exec api uv run alembic current
-```
-
 Create the first local user through the operator CLI. It prompts for a password
 without echoing it:
 
@@ -121,6 +122,22 @@ without echoing it:
 docker compose exec api uv run python -m app.cli.security \
   bootstrap-user --email owner@example.com
 ```
+
+Use that account to exercise one supported text upload and poll its durable job
+from `pending` to `completed`. The smoke has a 180-second default timeout and
+cannot wait indefinitely:
+
+```bash
+export AGENTFORGE_SMOKE_EMAIL=owner@example.com
+read -rsp "Smoke password: " AGENTFORGE_SMOKE_PASSWORD && printf '\n'
+export AGENTFORGE_SMOKE_PASSWORD
+./scripts/smoke_demo_ingestion.sh
+unset AGENTFORGE_SMOKE_PASSWORD
+```
+
+If a configured provider or the embedding model is unavailable, the existing
+bounded retry contract is preserved and the job eventually reaches `failed`
+rather than being reported as completed.
 
 Existing pre-AF-2S knowledge bases intentionally remain inaccessible until an
 operator previews and applies an explicit claim:
@@ -134,13 +151,12 @@ docker compose exec api uv run python -m app.cli.security \
 docker compose down
 ```
 
-Equivalent helpers are `make up`, `make up-rag`, and `make up-frontend`.
-`make up-rag` starts the Ollama and Chroma infrastructure consumed by AF-2B;
-it does not pull the configured embedding model automatically. The frontend
-profile remains an application shell and does not imply that planned retrieval
-or agent capabilities exist. PostgreSQL, Chroma, and Ollama have no
-host-published ports in the default project; the API and optional Web service
-bind only to loopback.
+`make up` remains the API-only development foundation, while `make demo` is the
+canonical supported upload-to-completed workflow. `make up-frontend` adds the
+current application shell. Retrieval and the Agent UI remain separate later
+work; starting the demo does not add either capability. PostgreSQL, Chroma,
+Ollama, and the worker have no host-published ports; the API and optional Web
+service bind only to loopback.
 
 ## Local backend development
 

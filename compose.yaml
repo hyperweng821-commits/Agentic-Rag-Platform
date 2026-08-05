@@ -24,6 +24,18 @@ services:
     profiles: ["rag"]
     volumes:
       - chroma_data:/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bash",
+          "-ec",
+          "exec 3<>/dev/tcp/127.0.0.1/8000; printf 'GET /api/v2/heartbeat HTTP/1.0\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3; grep -q 'HTTP/1.[01] 200' <&3",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
     restart: unless-stopped
     networks: [backend]
 
@@ -42,11 +54,12 @@ services:
     networks: [backend, model_egress]
 
   api:
+    image: &api-image agentforge-api:development
     build:
       context: .
       dockerfile: apps/api/Dockerfile
       target: development
-    environment:
+    environment: &api-environment
       APP_NAME: ${APP_NAME:-agentic-rag-backend}
       APP_VERSION: ${APP_VERSION:-0.1.0}
       APP_ENV: ${APP_ENV:-development}
@@ -87,12 +100,16 @@ services:
     ports:
       - "127.0.0.1:${API_PORT:-8000}:8000"
     volumes:
-      - ./apps/api:/app
-      - api_venv:/app/.venv
+      - ./apps/api/app:/app/app
+      - ./apps/api/alembic:/app/alembic
+      - ./apps/api/alembic.ini:/app/alembic.ini
+      - ./apps/api/tests:/app/tests
       - upload_data:/app/data/uploads
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health', timeout=3)"]
       interval: 10s
@@ -101,6 +118,42 @@ services:
       start_period: 15s
     restart: unless-stopped
     networks: [backend, frontend]
+
+  migrate:
+    image: *api-image
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-agentic_rag}:${POSTGRES_PASSWORD:-agentic_rag_dev_only}@postgres:5432/${POSTGRES_DB:-agentic_rag}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+    restart: "no"
+    networks: [backend]
+
+  worker:
+    image: *api-image
+    profiles: ["rag"]
+    command: ["python", "-m", "app.workers.ingestion_worker"]
+    init: true
+    environment: *api-environment
+    volumes:
+      - upload_data:/app/data/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      chroma:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    networks: [backend]
 
   web:
     build:
@@ -133,6 +186,5 @@ volumes:
   postgres_data:
   chroma_data:
   ollama_data:
-  api_venv:
   upload_data:
   web_node_modules:
