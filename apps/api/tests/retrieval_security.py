@@ -47,8 +47,7 @@ RET-BND-003|PARSER-NEGATIVE-ONE-REJECTED|unit|PURE_REQUEST_VALIDATOR|AF-3A|REQUI
 """.strip()
 
 
-def _parse_pure_request_validator_remediation_ledger(
-) -> frozenset[CanonicalAcceptanceTuple]:
+def _parse_pure_request_validator_remediation_ledger() -> frozenset[CanonicalAcceptanceTuple]:
     rows: list[CanonicalAcceptanceTuple] = []
     for row in _PURE_REQUEST_VALIDATOR_REMEDIATION_LEDGER_ROWS.splitlines():
         fields = row.split("|")
@@ -60,9 +59,7 @@ def _parse_pure_request_validator_remediation_ledger(
     return frozenset(rows)
 
 
-PURE_REQUEST_VALIDATOR_REMEDIATION_TUPLES = (
-    _parse_pure_request_validator_remediation_ledger()
-)
+PURE_REQUEST_VALIDATOR_REMEDIATION_TUPLES = _parse_pure_request_validator_remediation_ledger()
 
 
 _AF3A03_LEDGER_ROWS = """
@@ -233,8 +230,7 @@ def pure_request_validator_remediation_tuple(
     ]
     if len(matches) != 1:
         raise AssertionError(
-            "Expected one pure-request remediation tuple for "
-            f"{(case_id, variant, test_level)!r}"
+            f"Expected one pure-request remediation tuple for {(case_id, variant, test_level)!r}"
         )
     return matches[0]
 
