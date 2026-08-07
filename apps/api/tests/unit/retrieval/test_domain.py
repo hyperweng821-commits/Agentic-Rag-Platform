@@ -1,9 +1,16 @@
 """Unit tests for the pure AF-3A-1 retrieval request contract."""
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
+from logging import LogRecord
 from types import MappingProxyType
 
 import pytest
+from tests.retrieval_security import (
+    CanonicalAcceptanceTuple,
+    arm_r24_log_capture,
+    assert_r24_sidecar,
+    pure_request_validator_remediation_tuple,
+)
 
 from app.retrieval.domain import (
     RetrievalRequest,
@@ -43,6 +50,27 @@ class _DuckTypedMapping:
 
     def get(self, key: str, default: object = None) -> object:
         return "valid" if key == "query" else default
+
+
+def _assert_pure_request_r24_sidecar(
+    canonical_tuple: CanonicalAcceptanceTuple,
+    *,
+    sentinels: tuple[str | bytes, ...],
+    log_records: Sequence[LogRecord],
+    exception_error_records: object = (),
+) -> None:
+    assert_r24_sidecar(
+        canonical_tuple,
+        sentinels=sentinels,
+        log_records=log_records,
+        sinks={
+            "exception_error_records": exception_error_records,
+            "trace_span_names_attributes_status_events": (),
+            "postgres_sql_database_driver_transaction_diagnostics": (),
+            "service_diagnostics": (),
+            "internal_authoritative_retrieval_record_diagnostics": (),
+        },
+    )
 
 
 def test_list_payload_is_rejected_with_validation_error() -> None:
@@ -118,6 +146,7 @@ def test_requested_count_accepts_inclusive_boundaries(requested_count: int) -> N
 @pytest.mark.parametrize(
     "requested_count",
     [
+        pytest.param(-1, id="negative-one"),
         pytest.param(0, id="zero"),
         pytest.param(51, id="fifty-one"),
         pytest.param(True, id="boolean"),
@@ -130,9 +159,29 @@ def test_requested_count_accepts_inclusive_boundaries(requested_count: int) -> N
         pytest.param(_IntegerSubclass(1), id="integer-subclass"),
     ],
 )
-def test_requested_count_rejects_invalid_values(requested_count: object) -> None:
-    with pytest.raises(RetrievalRequestValidationError):
+def test_requested_count_rejects_invalid_values(
+    requested_count: object,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    canonical_tuple = None
+    if type(requested_count) is int and requested_count == -1:
+        canonical_tuple = pure_request_validator_remediation_tuple(
+            "RET-BND-003",
+            "PARSER-NEGATIVE-ONE-REJECTED",
+            "unit",
+        )
+        arm_r24_log_capture(caplog)
+
+    with pytest.raises(RetrievalRequestValidationError) as exc_info:
         parse_retrieval_request({"query": "valid", "requested_count": requested_count})
+
+    if canonical_tuple is not None:
+        _assert_pure_request_r24_sidecar(
+            canonical_tuple,
+            sentinels=("-1",),
+            log_records=caplog.records,
+            exception_error_records=(exc_info.value,),
+        )
 
 
 def test_parser_accepts_runtime_mapping() -> None:
@@ -213,6 +262,28 @@ def test_normalized_scalar_boundaries_are_accepted(scalar_count: int) -> None:
     query = "a" * scalar_count
 
     assert len(parse_retrieval_request({"query": query}).normalized_query) == scalar_count
+
+
+def test_post_normalization_scalar_boundary(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    canonical_tuple = pure_request_validator_remediation_tuple(
+        "RET-BND-001",
+        "POST-NORMALIZATION-SCALAR-BOUNDARY",
+        "unit",
+    )
+    raw_query = "\t" + "a" * 2_048 + "\u3000"
+    arm_r24_log_capture(caplog)
+
+    request = parse_retrieval_request({"query": raw_query})
+
+    assert request.normalized_query == "a" * 2_048
+    assert len(request.normalized_query) == 2_048
+    _assert_pure_request_r24_sidecar(
+        canonical_tuple,
+        sentinels=(raw_query,),
+        log_records=caplog.records,
+    )
 
 
 def test_normalized_scalar_count_above_maximum_is_rejected() -> None:

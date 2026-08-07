@@ -41,6 +41,30 @@ class CanonicalAcceptanceTuple:
         return f"{self.label}@{level}[{self.boundary}]"
 
 
+_PURE_REQUEST_VALIDATOR_REMEDIATION_LEDGER_ROWS = """
+RET-BND-001|POST-NORMALIZATION-SCALAR-BOUNDARY|unit|PURE_REQUEST_VALIDATOR|AF-3A|REQUIRED_NOT_YET_IMPLEMENTED|O-U-POST-NORMALIZATION-SCALAR-BOUNDARY
+RET-BND-003|PARSER-NEGATIVE-ONE-REJECTED|unit|PURE_REQUEST_VALIDATOR|AF-3A|REQUIRED_NOT_YET_IMPLEMENTED|O-U-PARSER-NEGATIVE-ONE-REJECTED
+""".strip()
+
+
+def _parse_pure_request_validator_remediation_ledger(
+) -> frozenset[CanonicalAcceptanceTuple]:
+    rows: list[CanonicalAcceptanceTuple] = []
+    for row in _PURE_REQUEST_VALIDATOR_REMEDIATION_LEDGER_ROWS.splitlines():
+        fields = row.split("|")
+        if len(fields) != 7:
+            raise AssertionError(f"Invalid pure-request remediation row: {row!r}")
+        rows.append(CanonicalAcceptanceTuple(*fields))
+    if len(rows) != 2 or len(set(rows)) != 2:
+        raise AssertionError("Pure-request remediation must contain exactly two tuples")
+    return frozenset(rows)
+
+
+PURE_REQUEST_VALIDATOR_REMEDIATION_TUPLES = (
+    _parse_pure_request_validator_remediation_ledger()
+)
+
+
 _AF3A03_LEDGER_ROWS = """
 RET-AUTH-002|DEFAULT|PostgreSQL integration|AF3A_INITIAL_ACCESS|AF-3A|REQUIRED_NOT_YET_IMPLEMENTED|O-PG-DEFAULT
 RET-AUTH-003|DEFAULT|PostgreSQL integration|AF3A_INITIAL_ACCESS|AF-3A|REQUIRED_NOT_YET_IMPLEMENTED|O-PG-DEFAULT
@@ -196,6 +220,25 @@ def arm_r24_log_capture(log_capture: R24LogCapture) -> None:
     log_capture.set_level(logging.DEBUG)
 
 
+def pure_request_validator_remediation_tuple(
+    case_id: str,
+    variant: str,
+    test_level: str,
+) -> CanonicalAcceptanceTuple:
+    """Resolve one exact pure-request closure-remediation identity."""
+    matches = [
+        row
+        for row in PURE_REQUEST_VALIDATOR_REMEDIATION_TUPLES
+        if (row.case_id, row.variant, row.test_level) == (case_id, variant, test_level)
+    ]
+    if len(matches) != 1:
+        raise AssertionError(
+            "Expected one pure-request remediation tuple for "
+            f"{(case_id, variant, test_level)!r}"
+        )
+    return matches[0]
+
+
 def acceptance_tuple(
     case_id: str,
     variant: str,
@@ -259,7 +302,10 @@ def assert_r24_sidecar(
 ) -> None:
     """Scan every registered AF-3A sink for exact or substring sentinel leaks."""
     if canonical_tuple not in (
-        AF3A03_CANONICAL_TUPLES | AF3A04_CANONICAL_TUPLES | AF3A05_CANONICAL_TUPLES
+        PURE_REQUEST_VALIDATOR_REMEDIATION_TUPLES
+        | AF3A03_CANONICAL_TUPLES
+        | AF3A04_CANONICAL_TUPLES
+        | AF3A05_CANONICAL_TUPLES
     ):
         raise AssertionError(f"Unknown canonical tuple: {canonical_tuple!r}")
 
