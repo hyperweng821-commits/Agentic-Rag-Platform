@@ -1578,11 +1578,13 @@ The embedding adapter invokes exactly
 `EmbeddingModel.embed([normalized_query])`. It returns one vector of the exact
 configured dimension containing only adapter-normalized built-in finite
 floats. The retrieval boundary performs no coercion, truncation, padding, or
-second-vector acceptance. Wrong count, dimension, type, conversion overflow,
-NaN, or infinity is fatal, discards completed keyword candidates, and permits
-no Chroma or final transaction. Raw/wire and decoded/decompressed embedding
-response ceilings are each inclusive at 2,097,152 bytes; bounded collection
-precedes strict UTF-8 and strict JSON materialization.
+second-vector acceptance. Wrong count, dimension, type, an overflow-capable
+non-built-in-float coercion sentinel, NaN, or infinity is fatal, discards
+completed keyword candidates, and permits no Chroma or final transaction. The
+sentinel is rejected by exact-type validation without invoking its conversion
+hook. Raw/wire and decoded/decompressed embedding response ceilings are each
+inclusive at 2,097,152 bytes; bounded collection precedes strict UTF-8 and
+strict JSON materialization.
 
 Every raw response fixture has parsed media type `application/json` with no
 parameter or only case-insensitive `charset=utf-8`, and is one strict UTF-8
@@ -3006,8 +3008,12 @@ regression or AF-3C HTTP execution.
   one configured-dimension list of built-in finite floats. Each row changes
   only its named condition. Wrong value type executes every declared type
   parameter (integer, boolean, string, decimal/float-like object, and numeric
-  subclass) without sampling. The byte rows use bounded streaming before
-  strict UTF-8/JSON materialization. Deadline covers the complete operation.
+  subclass) without sampling. The legacy-labelled
+  `NORMALIZATION-CONVERSION-OVERFLOW` row supplies a deliberately
+  non-built-in-float float-like sentinel whose observable `__float__` hook
+  would raise `OverflowError` if invoked. The byte rows use bounded streaming
+  before strict UTF-8/JSON materialization. Deadline covers the complete
+  operation.
 - **Concurrent state change:** None.
 - **Expected public result:** Every fatal row produces the generic planned
   unavailable outcome at AF-3C, with no keyword sentinel, partial output, or
@@ -3016,31 +3022,39 @@ regression or AF-3C HTTP execution.
 - **Expected internal validation result:** Exactly one vector and exact
   configured dimension are required. Only adapter-normalized built-in finite
   floats pass. No coercion, truncation, padding, duplicate/second vector, or
-  retrieval-boundary conversion is permitted. Count, dimension, type,
-  conversion overflow, NaN, and either infinity discard keyword candidates and
-  permit zero Chroma probes/queries and zero final transactions. Raw and
-  decoded ceilings each accept 2,097,152 and reject the first byte above it.
-  One total-deadline attempt is made.
+  retrieval-boundary conversion is permitted. Count, dimension, type, the
+  overflow-capable coercion sentinel, NaN, and either infinity discard keyword
+  candidates and permit zero Chroma probes/queries and zero final transactions.
+  Raw and decoded ceilings each accept 2,097,152 and reject the first byte
+  above it. One total-deadline attempt is made.
 
   The label-specific oracle is exact: `WRONG-VECTOR-COUNT` rejects zero or
   more than one vector; `WRONG-DIMENSION` rejects any length other than the
   configured dimension; `WRONG-VALUE-TYPE` executes and rejects integer,
   boolean, string, decimal/float-like, and numeric-subclass parameters without
-  sampling; `NORMALIZATION-CONVERSION-OVERFLOW` rejects overflow during the
-  adapter's normalization/conversion step; `NAN`, `POSITIVE-INFINITY`, and
-  `NEGATIVE-INFINITY` independently reject their named value;
+  sampling; `NORMALIZATION-CONVERSION-OVERFLOW` rejects its deliberately
+  non-built-in-float float-like sentinel as an invalid value type before any
+  numeric normalization or coercive conversion, proves the sentinel's
+  overflow-raising conversion hook was not invoked, and requires no
+  conversion-triggered `OverflowError` to occur; `NAN`, `POSITIVE-INFINITY`,
+  and `NEGATIVE-INFINITY` independently reject their named value;
   `WIRE-EXACT-2097152` and `DECODED-EXACT-2097152` independently accept their
   inclusive byte equality with an otherwise valid vector;
   `WIRE-PLUS-ONE-2097153` and `DECODED-PLUS-ONE-2097153` independently reject
   their first excess byte; `TOTAL-DEADLINE` times out the one total operation;
   and `NO-AUTOMATIC-RETRY` records exactly one attempted call after failure.
+  The legacy overflow label is retained solely for canonical tuple identity;
+  adding `float(value)` or any other coercive conversion to make it raise is a
+  contract failure. It remains a fatal embedding-validation row with the same
+  boundary-specific no-retry, no-fallback, no-partial-result, no-Provider-
+  authority, and disclosure constraints as the corresponding fatal row.
 
   | Level | Distinct level-specific oracle for every retained label |
   | --- | --- |
-  | unit | Observe only the exact local vector/count/dimension/type/finite/byte/deadline/attempt decision named by the label; no database claim is made. |
-  | provider-adapter contract | Observe the exact bounded embedding request/response transport, normalization, and decoded adapter outcome for the named label; no orchestration or PostgreSQL claim is imported. |
+  | unit | Observe only the exact local vector/count/dimension/type/finite/byte/deadline/attempt decision named by the label; for the overflow sentinel, observe invalid-type rejection and zero conversion-hook calls; no database claim is made. |
+  | provider-adapter contract | Observe the exact bounded embedding request/response transport and decoded adapter validation outcome for the named label; for the overflow sentinel, observe rejection before numeric normalization/conversion and zero conversion-hook calls; no orchestration or PostgreSQL claim is imported. |
   | PostgreSQL integration | Complete real scoped keyword SQL and release its transaction/connection before embedding. For each fatal label, reject the exact result, discard the completed keyword sentinel, retain no database resource across embedding, begin zero Chroma queries and zero final-validator transactions, and publish no success/partial internal authoritative retrieval record. For either exact-byte equality label, retain no database resource across embedding, accept the valid vector, use the present-empty Chroma control, and begin the later final transaction only through a newly acquired database resource. |
-  | fault injection | For every row actually enumerated at this level, inject only the named overflow/non-finite/plus-one/deadline/attempt fault and observe one fatal branch. Exact-byte equality controls have no fault-injection row. |
+  | fault injection | For every row actually enumerated at this level, inject only the named fault and observe one fatal branch. The overflow-sentinel row injects the sentinel, not an `OverflowError`, and observes invalid-type rejection with zero conversion-hook calls; the other rows inject only their named non-finite/plus-one/deadline/attempt fault. Exact-byte equality controls have no fault-injection row. |
   | HTTP integration | Either exact-byte equality control returns the existing successful authorized response and private/no-store; every fatal label returns generic `503 RETRIEVAL_UNAVAILABLE`, private/no-store, no content/identifier/Provider detail, and no partial retrieval result. |
 - **Forbidden behavior:** Sampling a value-type or non-finite row; accepting a
   second vector; coercion; padding/truncation; retry, backoff, failover,
@@ -4580,7 +4594,7 @@ that cannot observe them.
 | ADR-008-R07 — PostgreSQL authority for identity, scope, state, content, hash, source/provenance, and every citation-resolution field | RET-AUTH-007 through RET-AUTH-009, RET-PROV-030 through RET-PROV-031, RET-PROV-033 through RET-PROV-037, RET-KEY-001 through RET-KEY-004, RET-EVID-001 through RET-EVID-010, especially the exact public citation operation and current authoritative resolution in RET-EVID-003 through RET-EVID-009 |
 | ADR-008-R08 — Completed status plus persisted non-null valid hash | RET-KEY-001, RET-EVID-002, RET-EVID-009, RET-EVID-010 |
 | ADR-008-R09 — Exact citation operation, current reauthentication/target authorization, authoritative revision binding, and non-bearer reference | RET-EVID-003 through RET-EVID-009, including each named citation HTTP precedence/body/schema variant |
-| ADR-008-R10 — Exact bounded single embedding operation, exact vector validation, and no Provider authority | RET-CONC-001 embedding variants; RET-PROV-040 exact payload oracle; every RET-PROV-041 embedding count/dimension/type/overflow/non-finite/byte/deadline/attempt variant including its distinct real-PostgreSQL lifecycle oracle; RET-PROV-023 through RET-PROV-031; RET-KEY-002; RET-EVID-001 |
+| ADR-008-R10 — Exact bounded single embedding operation, exact vector validation, and no Provider authority | RET-CONC-001 embedding variants; RET-PROV-040 exact payload oracle; every RET-PROV-041 embedding count/dimension/type/no-coercion-overflow-sentinel/non-finite/byte/deadline/attempt variant including its distinct real-PostgreSQL lifecycle oracle; RET-PROV-023 through RET-PROV-031; RET-KEY-002; RET-EVID-001 |
 | ADR-008-R11 — Version/query inclusive wire/decode ceilings, exact field/metadata grammar and bounds, and exact depth counting | All named positive grammar variants in RET-PROV-001 paired with RET-PROV-010 through RET-PROV-013 and every named negative grammar branch in RET-PROV-016; RET-PROV-002 through RET-PROV-009; RET-PROV-014; every bounded version variant in RET-PROV-020 |
 | ADR-008-R12 — Strict UTF-8/RFC 8259 and unsupported-range numeric failures, canonical response-fatal taxonomy, version/missing-field fatality, independent Provider outage branches, and no fallback | RET-PROV-003 through RET-PROV-006, RET-PROV-009 through RET-PROV-014, RET-PROV-015 (fully canonical literal `NaN`, `Infinity`, and `-Infinity` wire failures plus valid-JSON `1e400` finite-domain failure), RET-PROV-016 (encoding/unknown/duplicate/null/return-field policy), RET-PROV-017 (every missing required key), RET-PROV-018 through RET-PROV-022 (configured count, version probe, position, connection, timeout), RET-BND-007, RET-CONC-011, RET-PRIV-004 |
 | ADR-008-R13 — Position-preserving candidate-local taxonomy and authorized empty | RET-PROV-008, RET-PROV-025 through RET-PROV-038 (including missing and non-string ID variants), RET-EVID-010 |
