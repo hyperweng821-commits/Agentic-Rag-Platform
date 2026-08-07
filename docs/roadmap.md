@@ -1,11 +1,11 @@
 # AgentForge roadmap
 
 AF-0, AF-1, AF-2A, the explicitly approved end-to-end AF-2B scope, and the
-minimal AF-2S1 knowledge-access boundary are implemented. Current `main` also
-contains two partial AF-3A prerequisites: the pure retrieval-request validator
-and `SessionAuthenticationProof`. AF-3A is not complete; all other AF-3 runtime
-work remains planned. Interfaces are introduced only with their first
-consuming feature. No phase begins before the previous phase meets its
+minimal AF-2S1 knowledge-access boundary are implemented. AF-3A-01 through
+AF-3A-05 are implemented and merged, and AF-3A is `CLOSED`. The AF-3B entry
+gate is satisfied, but AF-3B implementation has not started. AF-3C remains
+`BLOCKED` until AF-3B is `CLOSED`. Interfaces are introduced only with their
+first consuming feature. No phase begins before the previous phase meets its
 acceptance criteria. P1 work cannot block the P0 recruiting demo.
 
 ## AF-0 — Product boundary and safe branding
@@ -164,45 +164,37 @@ AF-2S1.
 
 ## AF-3 — Hybrid retrieval and citations
 
-**Status:** Incomplete. Only the pure AF-3A retrieval-request validator and
-`SessionAuthenticationProof` are merged; no retrieval orchestration, keyword
-or dense retrieval, final validator/loader, fusion, internal authoritative
-retrieval record, public Evidence, Citation, or HTTP retrieval behavior is
-implemented.
+**Status:** Incomplete. AF-3A is `CLOSED`; AF-3B is ready to begin but remains
+not implemented, and AF-3C remains `BLOCKED` until AF-3B is `CLOSED`. No AF-3B
+dense retrieval or fusion, or AF-3C public Evidence, Citation, or HTTP
+retrieval behavior, is implemented.
 
 ### AF-3 canonical project-control record
 
-The active documentation work is classified as Parent `AF-3-DOC-R1`, current
-remediation `AF-3-DOC-R1-R6`, **Merge-Review Phase-Fixture and
-Canonical-Identity Remediation**. The preceding
-`AF3_DOC_R1_INDEPENDENT_MERGE_REVIEW` result is `BLOCK` with exactly two
-findings. The R6 Documentation Remediation Gate fixes only those phase-fixture
-and canonical-identity findings plus this canonical record; once its exact
-manifest is frozen, its stop state and only permitted current gate are the
-Independent Read-Only Documentation Approval Review. The Commit Gate, Release
-Gate, Merge Gate, AF-3A-03, AF-3B, and AF-3C remain `BLOCKED`. This record is
-updated only by the bounded gate that changes it, and the remediation cannot
-approve itself.
+The authoritative phase decision is `AF3A_PHASE_CLOSURE: CLOSED` against
+merged main `adad7d3272f29b8d8df342dd54710e4662f9b8db`. All 115 AF-3A
+canonical tuples have executable evidence, the AF-3A close gate is satisfied,
+and the AF-3B entry gate is satisfied. This closure record does not start
+AF-3B implementation or advance AF-3C.
 
 Canonical AF-3 phase and slice ownership is frozen as follows:
 
 | Work ID | Owner and scope | Entry/exit state |
 | --- | --- | --- |
-| AF-3-DOC-R1 | Design Architect/remediation writer owns the documentation contract only. Remediation cycles append `-R1`, `-R2`, and later monotonically increasing suffixes without changing this parent. | Must be independently approved, committed, reviewed, and merged before runtime work is authorized. Current cycle is `AF-3-DOC-R1-R6`; its frozen stop state is the Independent Read-Only Documentation Approval Review. |
-| AF-3A-01 | Pure retrieval-request validator. | `MERGED`; not an AF-3A close. |
-| AF-3A-02 | `SessionAuthenticationProof` and `authenticate_session_with_proof`. | `MERGED`; not an AF-3A close. |
-| AF-3A-03 | Proof-aware initial access plus scoped deterministic keyword SQL. | `BLOCKED` until AF-3-DOC-R1 is merged and a separate implementation-start approval is issued. |
-| AF-3A-04 | First provider-independent final `REPEATABLE READ`, `READ ONLY` validator/loader and internal authoritative retrieval record. | `BLOCKED` until AF-3A-03 is merged and separately authorized. |
-| AF-3A-05 | Provider-independent concurrency, deletion, failure, all-sink security, and AF-3A phase close. | `BLOCKED` until AF-3A-04 is merged and separately authorized; AF-3A becomes `CLOSED` only after its complete owner-filtered ledger exit set passes on merged `main`. |
-| AF-3B | Embedding, read-only Chroma query, bounded dense handling, hybrid union, and deterministic fusion. | `BLOCKED` until AF-3A is `CLOSED`; closes only from AF-3B-owned rows plus the named AF-3A regression reruns. |
+| AF-3-DOC-R1 | Design Architect/remediation writer owns the documentation contract only. Remediation cycles append `-R1`, `-R2`, and later monotonically increasing suffixes without changing this parent. | `COMPLETED / MERGED`; the final remediation cycle was `AF-3-DOC-R1-R6`. |
+| AF-3A-01 | Pure retrieval-request validator. | `COMPLETED / MERGED`. |
+| AF-3A-02 | `SessionAuthenticationProof` and `authenticate_session_with_proof`. | `COMPLETED / MERGED`. |
+| AF-3A-03 | Proof-aware initial access plus scoped deterministic keyword SQL. | `COMPLETED / MERGED`. |
+| AF-3A-04 | First provider-independent final `REPEATABLE READ`, `READ ONLY` validator/loader and internal authoritative retrieval record. | `COMPLETED / MERGED`. |
+| AF-3A-05 | Provider-independent concurrency, deletion, failure, all-sink security, and AF-3A phase close. | `COMPLETED / MERGED`; AF-3A is `CLOSED`. |
+| AF-3B | Embedding, read-only Chroma query, bounded dense handling, hybrid union, and deterministic fusion. | Entry gate `SATISFIED`; `NOT STARTED` and ready to begin. Closes only from AF-3B-owned rows plus the named AF-3A regression reruns. |
 | AF-3C | HTTP, public Evidence/Citation, serialization, public errors/cache/privacy, and the complete public retrieval gate. | `BLOCKED` until AF-3B is `CLOSED`; its merge does not imply production readiness. |
 
-The frozen order is AF-3-DOC-R1 merge, AF-3A-03, AF-3A-04, AF-3A-05 and
-AF-3A closure, AF-3B and its closure, then AF-3C. `MERGED` and `CLOSED`, role
-separation, session reuse, baseline hashing, evidence invalidation, risk-based
-verification, single-writer operation, and output requirements use the
-repository-wide framework in `../AGENTS.md`. The acceptance tuple and its
-owner/boundary/status/oracle remain canonical only in
+The remaining frozen order is AF-3B and its closure, then AF-3C. `MERGED` and
+`CLOSED`, role separation, session reuse, baseline hashing, evidence
+invalidation, risk-based verification, single-writer operation, and output
+requirements use the repository-wide framework in `../AGENTS.md`. The
+acceptance tuple and its owner/boundary/status/oracle remain canonical only in
 `retrieval-security-acceptance.md`.
 
 The underlying documentation candidate addresses four independently confirmed
@@ -220,12 +212,12 @@ self-approval, and reuse of invalidated evidence as stop-worthy project risks.
 Those controls do not invent unrecorded historical events or any reviewer
 finding beyond the last complete visible finding.
 
-Remaining AF-3 implementation cannot begin until the documentation-only
-security design gate in ADR-008 and `retrieval-security-acceptance.md`
-completes the governance sequence below. The gate defines required behavior;
-it does not implement or authorize retrieval.
+The documentation-only security design gate and AF-3A implementation/closure
+sequence are complete. AF-3B is ready to begin only under a separately
+authorized implementation gate; this closure record does not itself authorize
+that implementation.
 
-The complete AF-3 design-to-implementation governance sequence is:
+The completed AF-3A design-to-implementation governance sequence was:
 
 1. documentation candidate authored;
 2. independent read-only review;
@@ -245,12 +237,10 @@ The complete AF-3 design-to-implementation governance sequence is:
 16. separate explicit approval for the next AF-3A implementation slice; and
 17. creation of a new AF-3A implementation branch for that slice.
 
-A PASS from a local design review is not commit approval. A committed local
-branch is not implementation approval. An open or merged design PR is not
-itself approval for more AF-3A implementation. The next AF-3A runtime slice
-begins only after this remediated design contract is merged into `main` and a
-separate implementation-start authorization is issued. This remediation
-candidate stops for step 4 and does not claim that any later step is complete.
+A PASS from a local design review is not commit approval, and a committed local
+branch is not implementation approval. AF-3B remains `NOT STARTED` until a
+separate implementation-start authorization is issued. AF-3C remains
+`BLOCKED` until AF-3B is `CLOSED`.
 
 AF-3 cannot be considered complete until its executable adversarial
 candidate-validation and untrusted-evidence suite passes. AF-2S2 remains P1
@@ -259,8 +249,9 @@ make AgentForge production-ready.
 
 ### AF-3A — Scoped retrieval contracts and PostgreSQL keyword baseline
 
-**Status:** In progress and incomplete. Current `main` contains only the pure
-retrieval-request validator and `SessionAuthenticationProof` prerequisites.
+**Status:** `CLOSED`. AF-3A-01 through AF-3A-05 are implemented, reviewed,
+tested, and merged; all 115 AF-3A-owned canonical tuples have approved
+executable evidence.
 
 **Objective:** Establish the bounded one-knowledge-base retrieval contract and
 the first PostgreSQL-scoped candidate path without introducing an external
@@ -320,8 +311,8 @@ chunk identity; `completed` status is insufficient when persisted
 `content_sha256` is null or invalid; no runtime hash, timestamp, UUID, or
 provider value invents a revision; authoritative text and provenance load only
 from PostgreSQL; client document/chunk IDs never authorize; ordinary tests use
-deterministic fakes. AF-3A is not complete until proof-aware initial access,
-scoped keyword retrieval, the first final validator/loader, final
+deterministic fakes. That close condition is satisfied: proof-aware initial
+access, scoped keyword retrieval, the first final validator/loader, final
 reauthentication and access classification, fixed-snapshot candidate
 validation, and their AF-3A concurrency gates are implemented, reviewed,
 tested, and merged.
@@ -330,16 +321,15 @@ tested, and merged.
 
 ### AF-3B — Dense candidate validation and deterministic hybrid fusion
 
-**Status:** Planned and unimplemented.
+**Status:** Entry gate `SATISFIED`; `NOT STARTED` and ready to begin.
 
 **Objective:** Add bounded dense candidate hints and deterministic hybrid
 fusion without allowing provider data to become authority.
 
-**Entry gate:** AF-3B MUST NOT begin dense retrieval, Provider querying, or
-fusion until every AF-3A prerequisite above is implemented, tested, reviewed,
-and merged. AF-3B may reuse those controls; it may not absorb, duplicate, or
-begin the missing scoped keyword path or first final PostgreSQL validator/
-loader.
+**Entry gate:** `SATISFIED`. Every AF-3A prerequisite above is implemented,
+tested, reviewed, and merged. AF-3B remains not implemented; when separately
+authorized to begin, it may reuse those controls but may not absorb or
+duplicate the scoped keyword path or first final PostgreSQL validator/loader.
 
 **Included scope:** Query embedding through the existing `EmbeddingModel`
 boundary with a distinct no-database-resource lifecycle barrier and failure/
@@ -433,7 +423,7 @@ counts, and exact-rational RRF with `RRF_K = 60`, the documented
 
 ### AF-3C — Evidence, citations, authenticated API and adversarial evaluation
 
-**Status:** Planned and unimplemented.
+**Status:** `BLOCKED` until AF-3B is `CLOSED`; planned and unimplemented.
 
 **Objective:** Expose bounded PostgreSQL-authoritative evidence and stable
 citations through exactly two authenticated operations and prove the design
