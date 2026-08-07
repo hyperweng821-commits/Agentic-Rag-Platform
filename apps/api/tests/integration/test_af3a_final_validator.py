@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from tests.retrieval_security import (
     CanonicalAcceptanceTuple,
     af3a04_acceptance_tuple,
+    af3a05_acceptance_tuple,
     arm_r24_log_capture,
     assert_r24_sidecar,
 )
@@ -100,6 +101,16 @@ _RECORD_ROWS = (
 )
 _NULL_HASH_ROW = _pg("RET-EVID-002", "AF3A-NULL-HASH-OMISSION")
 _INELIGIBLE_ROW = _pg("RET-EVID-010", "AF3A-ALL-INELIGIBLE-AUTHORIZED-EMPTY")
+_REVOKED_BEFORE_SNAPSHOT_ROW = af3a05_acceptance_tuple(
+    "RET-CONC-002",
+    "AF3A-KEYWORD-SESSION-REVOKED-BEFORE-FINAL-SNAPSHOT",
+    "PostgreSQL integration",
+)
+_ZERO_CANDIDATE_ACCESS_LOSS_ROW = af3a05_acceptance_tuple(
+    "RET-CONC-012",
+    "AF3A-ZERO-CANDIDATE-ACCESS-LOSS",
+    "PostgreSQL integration",
+)
 
 
 def _identity(*, expires_at: datetime) -> _Identity:
@@ -195,7 +206,7 @@ async def _seed_keyword_candidate(
     postgres_sessions: async_sessionmaker[AsyncSession],
     *,
     knowledge_base_id: UUID,
-) -> None:
+) -> tuple[Document, DocumentChunk]:
     document = _document(knowledge_base_id, name=f"empty-path-{uuid4()}")
     content = f"alpha empty-path candidate {uuid4()}"
     chunk = _chunk(
@@ -207,6 +218,7 @@ async def _seed_keyword_candidate(
     )
     async with postgres_sessions() as session, session.begin():
         session.add_all([document, chunk])
+    return document, chunk
 
 
 def _access(
@@ -378,14 +390,21 @@ async def test_final_snapshot_reauthorizes_with_zero_candidate_queries(
     )
 
 
-async def test_revoked_session_with_zero_keyword_candidates_fails_final_reauthorization(
+@pytest.mark.parametrize(
+    "canonical_tuple",
+    [pytest.param(_REVOKED_BEFORE_SNAPSHOT_ROW, id=_REVOKED_BEFORE_SNAPSHOT_ROW.pytest_id)],
+)
+async def test_revoked_session_before_snapshot_fails_final_reauthorization(
+    canonical_tuple: CanonicalAcceptanceTuple,
     postgres_sessions: async_sessionmaker[AsyncSession],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
+    arm_r24_log_capture(caplog)
     identity, knowledge_base = await _seed_access(
         postgres_sessions,
         expires_at=_FINAL_NOW + timedelta(hours=1),
     )
-    await _seed_keyword_candidate(
+    document, chunk = await _seed_keyword_candidate(
         postgres_sessions,
         knowledge_base_id=knowledge_base.id,
     )
@@ -395,28 +414,30 @@ async def test_revoked_session_with_zero_keyword_candidates_fails_final_reauthor
         knowledge_base_id=knowledge_base.id,
     )
 
-    async with postgres_sessions() as session, session.begin():
-        stored_session = await session.get(UserSession, identity.session.id)
-        assert stored_session is not None
-        stored_session.revoked_at = _FINAL_NOW
-
     keyword_candidates = await access.scoped_keyword_candidates(
         proof=identity.proof,
         knowledge_base_id=knowledge_base.id,
         normalized_query="alpha",
     )
     candidate_ids = tuple(candidate.chunk_id for candidate in keyword_candidates)
-    assert candidate_ids == ()
+    assert candidate_ids == (chunk.id,)
 
+    async with postgres_sessions() as session, session.begin():
+        stored_session = await session.get(UserSession, identity.session.id)
+        assert stored_session is not None
+        stored_session.revoked_at = _FINAL_NOW
+
+    captured_error: RetrievalAuthenticationError
     with (
         _capture_sql(postgres_sessions) as statements,
-        pytest.raises(RetrievalAuthenticationError),
+        pytest.raises(RetrievalAuthenticationError) as captured,
     ):
         await _validator(postgres_sessions).validate_and_load(
             proof=identity.proof,
             knowledge_base_id=knowledge_base.id,
             candidate_ids=candidate_ids,
         )
+    captured_error = captured.value
 
     assert statements[0].strip().upper() == (
         "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"
@@ -425,16 +446,41 @@ async def test_revoked_session_with_zero_keyword_candidates_fails_final_reauthor
     assert "current_setting('transaction_read_only')" in statements[1]
     assert "FROM document_chunks" not in " ".join(statements)
     assert len(statements) == 2
+    _assert_sidecar(
+        canonical_tuple,
+        caplog=caplog,
+        sentinels=_pg_sentinels(
+            identity=identity,
+            knowledge_base=knowledge_base,
+            documents=(document,),
+            chunks=(chunk,),
+            candidate_ids=candidate_ids,
+        ),
+        statements=tuple(statements),
+        exceptions=(captured_error,),
+    )
 
 
+@pytest.mark.parametrize(
+    "canonical_tuple",
+    [
+        pytest.param(
+            _ZERO_CANDIDATE_ACCESS_LOSS_ROW,
+            id=_ZERO_CANDIDATE_ACCESS_LOSS_ROW.pytest_id,
+        )
+    ],
+)
 async def test_removed_membership_with_zero_keyword_candidates_hides_final_target(
+    canonical_tuple: CanonicalAcceptanceTuple,
     postgres_sessions: async_sessionmaker[AsyncSession],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
+    arm_r24_log_capture(caplog)
     identity, knowledge_base = await _seed_access(
         postgres_sessions,
         expires_at=_FINAL_NOW + timedelta(hours=1),
     )
-    await _seed_keyword_candidate(
+    document, chunk = await _seed_keyword_candidate(
         postgres_sessions,
         knowledge_base_id=knowledge_base.id,
     )
@@ -460,15 +506,17 @@ async def test_removed_membership_with_zero_keyword_candidates_hides_final_targe
     candidate_ids = tuple(candidate.chunk_id for candidate in keyword_candidates)
     assert candidate_ids == ()
 
+    captured_error: RetrievalTargetNotFoundError
     with (
         _capture_sql(postgres_sessions) as statements,
-        pytest.raises(RetrievalTargetNotFoundError),
+        pytest.raises(RetrievalTargetNotFoundError) as captured,
     ):
         await _validator(postgres_sessions).validate_and_load(
             proof=identity.proof,
             knowledge_base_id=knowledge_base.id,
             candidate_ids=candidate_ids,
         )
+    captured_error = captured.value
 
     assert statements[0].strip().upper() == (
         "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"
@@ -477,6 +525,18 @@ async def test_removed_membership_with_zero_keyword_candidates_hides_final_targe
     assert "current_setting('transaction_read_only')" in statements[1]
     assert "FROM document_chunks" not in " ".join(statements)
     assert len(statements) == 2
+    _assert_sidecar(
+        canonical_tuple,
+        caplog=caplog,
+        sentinels=_pg_sentinels(
+            identity=identity,
+            knowledge_base=knowledge_base,
+            documents=(document,),
+            chunks=(chunk,),
+        ),
+        statements=tuple(statements),
+        exceptions=(captured_error,),
+    )
 
 
 @pytest.mark.parametrize(
