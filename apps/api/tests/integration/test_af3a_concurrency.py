@@ -190,8 +190,7 @@ def _chunk(document_id: UUID, *, chunk_id: UUID, index: int, label: str) -> Docu
 def _candidate_ids(count: int) -> tuple[UUID, ...]:
     return tuple(
         sorted(
-            uuid5(NAMESPACE_URL, f"af3a05-concurrency-candidate-{index}")
-            for index in range(count)
+            uuid5(NAMESPACE_URL, f"af3a05-concurrency-candidate-{index}") for index in range(count)
         )
     )
 
