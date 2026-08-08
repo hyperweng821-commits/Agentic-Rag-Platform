@@ -203,9 +203,7 @@ def _parse_af3a05_ledger() -> frozenset[CanonicalAcceptanceTuple]:
 
 AF3A05_CANONICAL_TUPLES = _parse_af3a05_ledger()
 
-_AF3B_LEDGER_PROJECTION_SHA256 = (
-    "8166a00d64b483090ce6dee5fa82a74adfc2dd28873abd0434a8d60c0045f59a"
-)
+_AF3B_LEDGER_PROJECTION_SHA256 = "8166a00d64b483090ce6dee5fa82a74adfc2dd28873abd0434a8d60c0045f59a"
 _AF3B_LEVEL_COUNTS = {
     "unit": 171,
     "provider-adapter contract": 167,
@@ -506,9 +504,7 @@ def _walk_rendered(value: object, *, seen: set[int]) -> Iterable[str | bytes]:
         declared = getattr(owner, "__slots__", ())
         if isinstance(declared, str):
             declared = (declared,)
-        slot_names.extend(
-            name for name in declared if name not in {"__dict__", "__weakref__"}
-        )
+        slot_names.extend(name for name in declared if name not in {"__dict__", "__weakref__"})
     for slot_name in dict.fromkeys(slot_names):
         try:
             slot_value = getattr(value, slot_name)

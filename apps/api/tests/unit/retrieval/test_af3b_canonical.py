@@ -223,8 +223,10 @@ class _Loader:
         self.ledger.append("final")
         self.calls.append(candidate_batches)
         candidates = tuple(item for batch in candidate_batches for item in batch)
-        retained = candidates if self.retained is None else tuple(
-            item for item in candidates if item in self.retained
+        retained = (
+            candidates
+            if self.retained is None
+            else tuple(item for item in candidates if item in self.retained)
         )
         return tuple(_record(item) for item in reversed(retained))
 
@@ -233,8 +235,7 @@ def _dense_result(*chunk_ids: UUID) -> DenseProviderResult:
     return DenseProviderResult(
         position_count=len(chunk_ids),
         candidates=tuple(
-            (f"chunk:{chunk_id}", float(index), index)
-            for index, chunk_id in enumerate(chunk_ids)
+            (f"chunk:{chunk_id}", float(index), index) for index, chunk_id in enumerate(chunk_ids)
         ),
     )
 
@@ -394,9 +395,7 @@ def _chroma_plan(row: CanonicalAcceptanceTuple) -> _ChromaPlan:
         size = 2_097_153 if case_id == "RET-PROV-006" else 2_097_152
         encoded = gzip.compress(_padded_json(_canonical_body(), size))
         plan.query_parts = (encoded,)
-        plan.query_headers.update(
-            {"content-encoding": "gzip", "content-length": str(len(encoded))}
-        )
+        plan.query_headers.update({"content-encoding": "gzip", "content-length": str(len(encoded))})
         plan.expected_failure = case_id == "RET-PROV-006"
         return plan
     if case_id in {"RET-PROV-008", "RET-PROV-009"}:
@@ -475,9 +474,7 @@ def _chroma_plan(row: CanonicalAcceptanceTuple) -> _ChromaPlan:
         elif variant == "UNKNOWN-TOP-LEVEL-KEY":
             body["unknown"] = None
         elif variant == "DUPLICATE-TOP-LEVEL-KEY":
-            plan.query_parts = (
-                _json_bytes(body).replace(b'{"ids":', b'{"ids":null,"ids":', 1),
-            )
+            plan.query_parts = (_json_bytes(body).replace(b'{"ids":', b'{"ids":null,"ids":', 1),)
             return plan
         elif variant == "NONNULL-EMBEDDINGS":
             body["embeddings"] = []
@@ -512,15 +509,11 @@ def _chroma_plan(row: CanonicalAcceptanceTuple) -> _ChromaPlan:
         elif variant.startswith("METADATA-"):
             if variant == "METADATA-NONFINITE-LITERAL":
                 body["metadatas"] = [[{"k": 0}]]
-                plan.query_parts = (
-                    _json_bytes(body).replace(b'"k":0', b'"k":NaN', 1),
-                )
+                plan.query_parts = (_json_bytes(body).replace(b'"k":0', b'"k":NaN', 1),)
                 return plan
             if variant == "METADATA-UNSUPPORTED-RANGE-NUMBER":
                 body["metadatas"] = [[{"k": 0}]]
-                plan.query_parts = (
-                    _json_bytes(body).replace(b'"k":0', b'"k":1e400', 1),
-                )
+                plan.query_parts = (_json_bytes(body).replace(b'"k":0', b'"k":1e400', 1),)
                 return plan
             value = {
                 "METADATA-STRING-ELEMENT": "x",
@@ -789,9 +782,7 @@ async def _raw_wrong_score_matrix() -> dict[UUID, int]:
             request: httpx.Request,
             fixture_body: dict[str, object] = body,
         ) -> httpx.Response:
-            payload: object = (
-                "1.5.9" if request.url.path == "/api/v2/version" else fixture_body
-            )
+            payload: object = "1.5.9" if request.url.path == "/api/v2/version" else fixture_body
             return httpx.Response(200, json=payload)
 
         client = httpx.AsyncClient(transport=httpx.MockTransport(respond))
@@ -1107,9 +1098,7 @@ async def _provider_operation_oracle(
 
     forbidden = ("create", "get_or_create", "update", "upsert", "delete")
     assert all(
-        not any(token in path for token in forbidden)
-        for ledger in ledgers
-        for _, path in ledger
+        not any(token in path for token in forbidden) for ledger in ledgers for _, path in ledger
     )
     return tuple(ledgers)
 
@@ -1213,10 +1202,14 @@ async def _embedding_oracle(
             assert len(execution_requests) == 1
             failures.append(failure)
             requests.extend(execution_requests)
-        return None, failures[0], {
-            "forbidden_types": tuple(type(value).__name__ for value in forbidden),
-            "requests": tuple(requests),
-        }
+        return (
+            None,
+            failures[0],
+            {
+                "forbidden_types": tuple(type(value).__name__ for value in forbidden),
+                "requests": tuple(requests),
+            },
+        )
     if variant == "NORMALIZATION-CONVERSION-OVERFLOW":
         sentinel = _OverflowFloatLike()
         valid_wire_body = _json_bytes(_embedding_body([[0.25, -0.5, 0.0, 1.0]]))
@@ -1243,51 +1236,51 @@ async def _embedding_oracle(
         assert "non-numeric" in str(failure)
         assert len(requests) == 1
         assert sentinel.calls == 0
-        return None, failure, {
-            "conversion_hook_calls": sentinel.calls,
-            "requests": requests,
-        }
+        return (
+            None,
+            failure,
+            {
+                "conversion_hook_calls": sentinel.calls,
+                "requests": requests,
+            },
+        )
 
     valid = [[0.25, -0.5, 0.0, 1.0]]
     if variant == "WRONG-VECTOR-COUNT":
         executions = []
         observed_requests: list[httpx.Request] = []
         for vectors in ([], [*valid, *valid]):
-            result, failure, requests = await _one_ollama_execution(
-                body=_embedding_body(vectors)
-            )
+            result, failure, requests = await _one_ollama_execution(body=_embedding_body(vectors))
             assert result is None
             assert isinstance(failure, EmbeddingResponseError)
             assert len(requests) == 1
             executions.append(failure)
             observed_requests.extend(requests)
-        return None, executions[0], {
-            "count_branches": len(executions),
-            "requests": tuple(observed_requests),
-        }
+        return (
+            None,
+            executions[0],
+            {
+                "count_branches": len(executions),
+                "requests": tuple(observed_requests),
+            },
+        )
     if variant == "WRONG-DIMENSION":
         result, failure, requests = await _one_ollama_execution(
             body=_embedding_body([[0.25, -0.5, 0.0]])
         )
     elif variant == "NAN":
         result, failure, requests = await _one_ollama_execution(
-            raw_parts=(
-                b'{"model":"embed-model","embeddings":[[NaN,-0.5,0.0,1.0]]}',
-            ),
+            raw_parts=(b'{"model":"embed-model","embeddings":[[NaN,-0.5,0.0,1.0]]}',),
             headers={"content-type": "application/json"},
         )
     elif variant == "POSITIVE-INFINITY":
         result, failure, requests = await _one_ollama_execution(
-            raw_parts=(
-                b'{"model":"embed-model","embeddings":[[Infinity,-0.5,0.0,1.0]]}',
-            ),
+            raw_parts=(b'{"model":"embed-model","embeddings":[[Infinity,-0.5,0.0,1.0]]}',),
             headers={"content-type": "application/json"},
         )
     elif variant == "NEGATIVE-INFINITY":
         result, failure, requests = await _one_ollama_execution(
-            raw_parts=(
-                b'{"model":"embed-model","embeddings":[[-Infinity,-0.5,0.0,1.0]]}',
-            ),
+            raw_parts=(b'{"model":"embed-model","embeddings":[[-Infinity,-0.5,0.0,1.0]]}',),
             headers={"content-type": "application/json"},
         )
     elif variant in {"WIRE-EXACT-2097152", "WIRE-PLUS-ONE-2097153"}:

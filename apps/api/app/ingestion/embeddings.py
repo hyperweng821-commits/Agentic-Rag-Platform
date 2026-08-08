@@ -148,9 +148,7 @@ async def _bounded_embedding_json(response: httpx.Response) -> object:
         async for raw_part in _embedding_raw_parts(response):
             wire_count += len(raw_part)
             if wire_count > MAX_EMBEDDING_WIRE_BYTES:
-                raise EmbeddingResponseError(
-                    "Ollama embedding response exceeded its byte limit."
-                )
+                raise EmbeddingResponseError("Ollama embedding response exceeded its byte limit.")
             if decompressor is None:
                 decoded_part = raw_part
                 decoded_count += len(decoded_part)
@@ -316,9 +314,7 @@ class OllamaEmbeddingModel:
                             )
                         body = await _bounded_embedding_json(response)
                     if not isinstance(body, dict):
-                        raise EmbeddingResponseError(
-                            "Ollama embedding response must be an object."
-                        )
+                        raise EmbeddingResponseError("Ollama embedding response must be an object.")
                     response_model = body.get("model")
                     if response_model != self._model_id:
                         raise EmbeddingResponseError(

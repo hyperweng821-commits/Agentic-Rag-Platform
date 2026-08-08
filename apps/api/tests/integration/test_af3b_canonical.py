@@ -379,8 +379,7 @@ def _dense_result(*chunk_ids: UUID) -> DenseProviderResult:
     return DenseProviderResult(
         position_count=len(chunk_ids),
         candidates=tuple(
-            (f"chunk:{chunk_id}", float(index), index)
-            for index, chunk_id in enumerate(chunk_ids)
+            (f"chunk:{chunk_id}", float(index), index) for index, chunk_id in enumerate(chunk_ids)
         ),
     )
 
@@ -388,10 +387,7 @@ def _dense_result(*chunk_ids: UUID) -> DenseProviderResult:
 def _chroma_failure(row: CanonicalAcceptanceTuple) -> bool:
     if row.case_id == "RET-PRIV-004":
         return True
-    if (
-        row.case_id == "RET-CONC-001"
-        and row.variant == "CHROMA-LIFECYCLE-REVOCATION"
-    ):
+    if row.case_id == "RET-CONC-001" and row.variant == "CHROMA-LIFECYCLE-REVOCATION":
         return False
     if row.case_id == "RET-PROV-042":
         return row.variant in {
@@ -647,9 +643,7 @@ async def _run_chroma_lifecycle_postgres_row(
     with _ConnectionLedger(sessions) as connections, _capture_sql(sessions) as statements:
         embedding = _FixedEmbedding(connections)
         dense = _BarrierDense(connections, _dense_result(_A))
-        final_spy = _FinalSpy(
-            PostgresFinalAuthoritativeLoader(sessions, clock=lambda: _NOW)
-        )
+        final_spy = _FinalSpy(PostgresFinalAuthoritativeLoader(sessions, clock=lambda: _NOW))
         service = HybridRetrievalService(
             keyword_service=ScopedKeywordRetrievalService(
                 PostgresRetrievalAccess(sessions, clock=lambda: _NOW)
@@ -703,10 +697,7 @@ async def _run_provider_postgres_row(
     caplog: pytest.LogCaptureFixture,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    if (
-        row.case_id == "RET-CONC-001"
-        and row.variant == "CHROMA-LIFECYCLE-REVOCATION"
-    ):
+    if row.case_id == "RET-CONC-001" and row.variant == "CHROMA-LIFECYCLE-REVOCATION":
         await _run_chroma_lifecycle_postgres_row(
             row,
             sessions=sessions,
@@ -761,9 +752,7 @@ async def _run_provider_postgres_row(
                 monkeypatch,
                 postgres_only_result=postgres_only_result,
             )
-        final_spy = _FinalSpy(
-            PostgresFinalAuthoritativeLoader(sessions, clock=lambda: _NOW)
-        )
+        final_spy = _FinalSpy(PostgresFinalAuthoritativeLoader(sessions, clock=lambda: _NOW))
         service = HybridRetrievalService(
             keyword_service=ScopedKeywordRetrievalService(
                 PostgresRetrievalAccess(sessions, clock=lambda: _NOW)
@@ -814,9 +803,7 @@ async def _run_provider_postgres_row(
             assert captured is None
             assert len(final_spy.calls) == 1
             if dense_ids:
-                returned_ids = {
-                    record.authoritative.trusted.chunk_id for record in records
-                }
+                returned_ids = {record.authoritative.trusted.chunk_id for record in records}
                 assert returned_ids <= set(dense_ids)
             if row.case_id in {
                 "RET-PROV-008",
@@ -896,9 +883,7 @@ async def _run_fusion_postgres_row(
     with _ConnectionLedger(sessions) as connections, _capture_sql(sessions) as statements:
         embedding = _FixedEmbedding(connections)
         dense = _FixedDense(connections, _dense_result(*dense_ids))
-        final_spy = _FinalSpy(
-            PostgresFinalAuthoritativeLoader(sessions, clock=lambda: _NOW)
-        )
+        final_spy = _FinalSpy(PostgresFinalAuthoritativeLoader(sessions, clock=lambda: _NOW))
         service = HybridRetrievalService(
             keyword_service=ScopedKeywordRetrievalService(
                 PostgresRetrievalAccess(sessions, clock=lambda: _NOW)
@@ -946,8 +931,7 @@ async def _run_fusion_postgres_row(
                 expected = local_oracles._fuse(
                     chunk_ids,
                     keyword={
-                        chunk_id: index + 1
-                        for index, chunk_id in enumerate(sorted(chunk_ids))
+                        chunk_id: index + 1 for index, chunk_id in enumerate(sorted(chunk_ids))
                     },
                     dense={chunk_id: index + 1 for index, chunk_id in enumerate(dense_ids)},
                     requested_count=10,
@@ -1154,11 +1138,7 @@ async def _run_hybrid_postgres_row(
 
         provider_callback = mutate
     elif row.case_id == "RET-CONC-004":
-        status = (
-            DocumentStatus.FAILED
-            if "FAILED" in row.variant
-            else DocumentStatus.PROCESSING
-        )
+        status = DocumentStatus.FAILED if "FAILED" in row.variant else DocumentStatus.PROCESSING
 
         async def mutate() -> None:
             await _set_document_status(sessions, seeded, status)

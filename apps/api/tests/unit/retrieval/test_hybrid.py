@@ -142,8 +142,7 @@ def _dense_result(*chunk_ids: UUID) -> DenseProviderResult:
     return DenseProviderResult(
         position_count=len(chunk_ids),
         candidates=tuple(
-            (f"chunk:{chunk_id}", float(index), index)
-            for index, chunk_id in enumerate(chunk_ids)
+            (f"chunk:{chunk_id}", float(index), index) for index, chunk_id in enumerate(chunk_ids)
         ),
     )
 
@@ -490,8 +489,7 @@ def test_hybrid_service_rejects_invalid_embedding_dimension() -> None:
 async def test_keyword_candidate_overflow_stops_before_provider_work() -> None:
     ledger: list[str] = []
     candidates = tuple(
-        KeywordCandidate(chunk_id=uuid4(), keyword_rank=(index % 128) + 1)
-        for index in range(129)
+        KeywordCandidate(chunk_id=uuid4(), keyword_rank=(index % 128) + 1) for index in range(129)
     )
     dense = _Dense(ledger, _dense_result())
     loader = _Loader(ledger)

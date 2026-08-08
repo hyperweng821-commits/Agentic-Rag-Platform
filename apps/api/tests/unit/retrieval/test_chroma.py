@@ -34,6 +34,27 @@ class _BytesStream(httpx.AsyncByteStream):
         pass
 
 
+class _TrackingPartsStream(httpx.AsyncByteStream):
+    def __init__(self, *parts: bytes) -> None:
+        self.parts = parts
+        self.consumed: list[bytes] = []
+
+    async def __aiter__(self) -> AsyncIterator[bytes]:
+        for part in self.parts:
+            self.consumed.append(part)
+            yield part
+
+    async def aclose(self) -> None:
+        pass
+
+
+def _depth_fixture(depth: int) -> bytes:
+    fixture = b"0"
+    for level in range(1, depth + 1):
+        fixture = b'{"v":' + fixture + b"}" if level % 2 else b"[" + fixture + b"]"
+    return fixture
+
+
 def _canonical_body(ids: list[object] | None = None) -> dict[str, object]:
     values = ids if ids is not None else [f"chunk:{_FIRST_CHUNK}", f"chunk:{_SECOND_CHUNK}"]
     return {
@@ -204,9 +225,7 @@ async def test_non_rfc_or_unsupported_range_wire_distance_is_response_fatal(
 
 async def test_raw_null_distance_is_candidate_local_without_becoming_typed_none() -> None:
     middle = uuid4()
-    body = _canonical_body(
-        [f"chunk:{_FIRST_CHUNK}", f"chunk:{middle}", f"chunk:{_SECOND_CHUNK}"]
-    )
+    body = _canonical_body([f"chunk:{_FIRST_CHUNK}", f"chunk:{middle}", f"chunk:{_SECOND_CHUNK}"])
     body["distances"] = [[0.125, None, 0.325]]
 
     def respond(request: httpx.Request) -> httpx.Response:
@@ -589,6 +608,52 @@ async def test_invalid_gzip_fails_before_json_materialization() -> None:
         await chroma_module._bounded_json_body(response)
 
 
+async def test_streaming_depth_accepts_d16_for_ordinary_json_parsing() -> None:
+    response = httpx.Response(
+        200,
+        headers={"content-type": "application/json"},
+        stream=_TrackingPartsStream(_depth_fixture(16)),
+    )
+
+    assert await chroma_module._bounded_json_body(response) is not None
+
+
+async def test_streaming_depth_rejects_d17_without_consuming_later_chunk() -> None:
+    fixture = _depth_fixture(17)
+    scalar_offset = fixture.index(b"0")
+    late_sentinel = b"late-stream-chunk-must-not-be-consumed"
+    stream = _TrackingPartsStream(fixture[:scalar_offset], late_sentinel)
+    response = httpx.Response(
+        200,
+        headers={"content-type": "application/json"},
+        stream=stream,
+    )
+
+    with pytest.raises(DenseProviderError):
+        await chroma_module._bounded_json_body(response)
+
+    assert stream.consumed == [fixture[:scalar_offset]]
+    assert late_sentinel not in stream.consumed
+
+
+async def test_streaming_depth_preserves_string_escape_and_utf8_state_across_chunks() -> None:
+    stream = _TrackingPartsStream(
+        b'{"value":"prefix' + b"\\",
+        b'"[{}] ' + b"\xc3",
+        b"\xa9" + b' suffix"}',
+    )
+    response = httpx.Response(
+        200,
+        headers={"content-type": "application/json"},
+        stream=stream,
+    )
+
+    assert await chroma_module._bounded_json_body(response) == {
+        "value": 'prefix"[{}] \N{LATIN SMALL LETTER E WITH ACUTE} suffix'
+    }
+    assert stream.consumed == list(stream.parts)
+
+
 @pytest.mark.parametrize(
     "mutation",
     [
@@ -662,9 +727,7 @@ async def test_scalar_metadata_variants_are_valid_but_never_returned() -> None:
 async def test_query_rejects_invalid_embedding_before_transport(
     embedding: tuple[object, ...],
 ) -> None:
-    client = httpx.AsyncClient(
-        transport=httpx.MockTransport(lambda request: httpx.Response(500))
-    )
+    client = httpx.AsyncClient(transport=httpx.MockTransport(lambda request: httpx.Response(500)))
     adapter = _adapter(client)
     try:
         with pytest.raises(ValueError, match="embedding"):
@@ -680,9 +743,7 @@ async def test_query_rejects_invalid_embedding_before_transport(
 
 @pytest.mark.parametrize("candidate_count", [0, 129])
 async def test_query_rejects_invalid_candidate_count_before_transport(candidate_count: int) -> None:
-    client = httpx.AsyncClient(
-        transport=httpx.MockTransport(lambda request: httpx.Response(500))
-    )
+    client = httpx.AsyncClient(transport=httpx.MockTransport(lambda request: httpx.Response(500)))
     adapter = _adapter(client)
     try:
         with pytest.raises(ValueError, match="candidate count"):

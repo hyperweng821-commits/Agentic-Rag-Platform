@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import codecs
 import json
 import math
 import zlib
@@ -151,6 +152,39 @@ class _JsonNumber(str):
     """Preserve a bounded JSON number's exact lexical byte representation."""
 
 
+@dataclass(slots=True)
+class _JsonDepthScanner:
+    """Track JSON container depth without materializing the response."""
+
+    depth: int = 0
+    in_string: bool = False
+    escaped: bool = False
+
+    def feed(self, text: str) -> None:
+        for character in text:
+            if self.in_string:
+                if self.escaped:
+                    self.escaped = False
+                elif character == "\\":
+                    self.escaped = True
+                elif character == '"':
+                    self.in_string = False
+                continue
+            if character == '"':
+                self.in_string = True
+            elif character in "[{":
+                next_depth = self.depth + 1
+                if next_depth > MAX_JSON_DEPTH:
+                    raise DenseProviderError
+                self.depth = next_depth
+            elif character in "]}":
+                self.depth -= 1
+
+    def finish(self) -> None:
+        if self.depth != 0 or self.in_string:
+            raise DenseProviderError
+
+
 class _CandidateLocalInvalidScore:
     """Non-identifying marker for a raw wrong-type candidate-local score."""
 
@@ -177,28 +211,9 @@ def _unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
 
 
 def _validate_json_depth(text: str) -> None:
-    depth = 0
-    in_string = False
-    escaped = False
-    for character in text:
-        if in_string:
-            if escaped:
-                escaped = False
-            elif character == "\\":
-                escaped = True
-            elif character == '"':
-                in_string = False
-            continue
-        if character == '"':
-            in_string = True
-        elif character in "[{":
-            depth += 1
-            if depth > MAX_JSON_DEPTH:
-                raise DenseProviderError
-        elif character in "]}":
-            depth -= 1
-    if depth != 0 or in_string:
-        raise DenseProviderError
+    scanner = _JsonDepthScanner()
+    scanner.feed(text)
+    scanner.finish()
 
 
 def _strict_json(body: bytes) -> object:
@@ -271,6 +286,13 @@ async def _bounded_json_body(response: httpx.Response) -> object:
     wire_count = 0
     decoded_count = 0
     decoded_parts: list[bytes] = []
+    utf8_decoder = codecs.getincrementaldecoder("utf-8")(errors="strict")
+    depth_scanner = _JsonDepthScanner()
+
+    def accept_decoded_part(decoded_part: bytes) -> None:
+        depth_scanner.feed(utf8_decoder.decode(decoded_part, final=False))
+        decoded_parts.append(decoded_part)
+
     try:
         async for raw_part in _provider_raw_parts(response):
             wire_count += len(raw_part)
@@ -281,7 +303,7 @@ async def _bounded_json_body(response: httpx.Response) -> object:
                 decoded_count += len(decoded_part)
                 if decoded_count > MAX_PROVIDER_DECODED_BYTES:
                     raise DenseProviderError
-                decoded_parts.append(decoded_part)
+                accept_decoded_part(decoded_part)
                 continue
 
             compressed_part = raw_part
@@ -291,7 +313,7 @@ async def _bounded_json_body(response: httpx.Response) -> object:
                 if len(decoded_part) > remaining:
                     raise DenseProviderError
                 decoded_count += len(decoded_part)
-                decoded_parts.append(decoded_part)
+                accept_decoded_part(decoded_part)
                 next_part = decompressor.unconsumed_tail
                 if next_part == compressed_part and not decoded_part:
                     raise DenseProviderError
@@ -304,8 +326,10 @@ async def _bounded_json_body(response: httpx.Response) -> object:
             if not decompressor.eof or decompressor.unused_data:
                 raise DenseProviderError
             decoded_count += len(decoded_part)
-            decoded_parts.append(decoded_part)
-    except (zlib.error, httpx.HTTPError):
+            accept_decoded_part(decoded_part)
+        depth_scanner.feed(utf8_decoder.decode(b"", final=True))
+        depth_scanner.finish()
+    except (UnicodeDecodeError, zlib.error, httpx.HTTPError):
         raise DenseProviderError from None
     return _strict_json(b"".join(decoded_parts))
 

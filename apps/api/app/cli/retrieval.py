@@ -121,6 +121,8 @@ def _print_result(result: HybridRetrievalResult) -> None:
                 )
             )
         )
+
+
 async def _run_and_dispose(
     args: argparse.Namespace,
     *,
@@ -139,9 +141,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     session_token = getpass.getpass("Session token: ")
     query = getpass.getpass("Retrieval query: ")
     try:
-        result = asyncio.run(
-            _run_and_dispose(args, session_token=session_token, query=query)
-        )
+        result = asyncio.run(_run_and_dispose(args, session_token=session_token, query=query))
     except (AuthenticationError, RetrievalAuthenticationError):
         print("Error: authentication failed.")
         return 2
