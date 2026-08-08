@@ -2,15 +2,24 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import math
-from collections.abc import Sequence
-from typing import Protocol
+import zlib
+from collections.abc import AsyncIterator, Sequence
+from typing import Protocol, cast
 
 import httpx
 
 type EmbeddingVector = tuple[float, ...]
+
+MAX_EMBEDDING_WIRE_BYTES = 2_097_152
+MAX_EMBEDDING_DECODED_BYTES = 2_097_152
+
+
+def _deadline_expired(deadline: float) -> bool:
+    return asyncio.get_running_loop().time() >= deadline
 
 
 class EmbeddingError(Exception):
@@ -89,18 +98,103 @@ def validate_embedding_batch(
 
         vector: list[float] = []
         for value in raw_vector:
-            if isinstance(value, bool) or not isinstance(value, (int, float)):
+            if type(value) is not float:
                 raise EmbeddingResponseError(
                     f"Embedding at index {vector_index} contains a non-numeric value."
                 )
-            converted = float(value)
-            if not math.isfinite(converted):
+            if not math.isfinite(value):
                 raise EmbeddingResponseError(
                     f"Embedding at index {vector_index} contains a non-finite value."
                 )
-            vector.append(converted)
+            vector.append(value)
         validated.append(tuple(vector))
     return validated
+
+
+def _embedding_content_encoding(response: httpx.Response) -> str:
+    raw = response.headers.get("content-encoding")
+    if raw is None or not raw.strip():
+        return "identity"
+    encoding = raw.strip().lower()
+    if "," in encoding or encoding not in {"identity", "gzip"}:
+        raise EmbeddingResponseError("Ollama returned an unsupported content encoding.")
+    return cast(str, encoding)
+
+
+async def _embedding_raw_parts(response: httpx.Response) -> AsyncIterator[bytes]:
+    if response.is_stream_consumed:
+        yield response.content
+        return
+    async for raw_part in response.aiter_raw():
+        yield raw_part
+
+
+async def _bounded_embedding_json(response: httpx.Response) -> object:
+    declared_length = response.headers.get("content-length")
+    if declared_length is not None:
+        try:
+            parsed_length = int(declared_length, 10)
+        except ValueError:
+            raise EmbeddingResponseError("Ollama returned an invalid content length.") from None
+        if parsed_length < 0 or parsed_length > MAX_EMBEDDING_WIRE_BYTES:
+            raise EmbeddingResponseError("Ollama embedding response exceeded its byte limit.")
+
+    encoding = _embedding_content_encoding(response)
+    decompressor = zlib.decompressobj(16 + zlib.MAX_WBITS) if encoding == "gzip" else None
+    wire_count = 0
+    decoded_count = 0
+    decoded_parts: list[bytes] = []
+    try:
+        async for raw_part in _embedding_raw_parts(response):
+            wire_count += len(raw_part)
+            if wire_count > MAX_EMBEDDING_WIRE_BYTES:
+                raise EmbeddingResponseError(
+                    "Ollama embedding response exceeded its byte limit."
+                )
+            if decompressor is None:
+                decoded_part = raw_part
+                decoded_count += len(decoded_part)
+                if decoded_count > MAX_EMBEDDING_DECODED_BYTES:
+                    raise EmbeddingResponseError(
+                        "Ollama embedding response exceeded its decoded byte limit."
+                    )
+                decoded_parts.append(decoded_part)
+                continue
+
+            compressed_part = raw_part
+            while compressed_part:
+                remaining = MAX_EMBEDDING_DECODED_BYTES - decoded_count
+                decoded_part = decompressor.decompress(compressed_part, remaining + 1)
+                if len(decoded_part) > remaining:
+                    raise EmbeddingResponseError(
+                        "Ollama embedding response exceeded its decoded byte limit."
+                    )
+                decoded_count += len(decoded_part)
+                decoded_parts.append(decoded_part)
+                next_part = decompressor.unconsumed_tail
+                if next_part == compressed_part and not decoded_part:
+                    raise EmbeddingResponseError("Ollama returned invalid gzip content.")
+                compressed_part = next_part
+        if decompressor is not None:
+            remaining = MAX_EMBEDDING_DECODED_BYTES - decoded_count
+            decoded_part = decompressor.flush(remaining + 1)
+            if len(decoded_part) > remaining:
+                raise EmbeddingResponseError(
+                    "Ollama embedding response exceeded its decoded byte limit."
+                )
+            if not decompressor.eof or decompressor.unused_data:
+                raise EmbeddingResponseError("Ollama returned invalid gzip content.")
+            decoded_count += len(decoded_part)
+            decoded_parts.append(decoded_part)
+        decoded = b"".join(decoded_parts).decode("utf-8", errors="strict")
+        return json.loads(
+            decoded,
+            parse_constant=lambda value: (_ for _ in ()).throw(
+                ValueError(f"Unsupported JSON constant: {value}")
+            ),
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError, zlib.error):
+        raise EmbeddingResponseError("Ollama returned malformed JSON.") from None
 
 
 class DeterministicEmbeddingModel:
@@ -179,6 +273,7 @@ class OllamaEmbeddingModel:
         self._model_id = model_id
         self._dimension = dimension
         self._batch_size = batch_size
+        self._timeout_seconds = float(timeout_seconds)
         self._timeout = httpx.Timeout(timeout_seconds)
         self._owns_client = client is None
         self._client = client or httpx.AsyncClient()
@@ -204,39 +299,47 @@ class OllamaEmbeddingModel:
                 "input": batch,
                 "truncate": False,
             }
+            normalized_failure: str | None = None
             try:
-                response = await self._client.post(
-                    self._endpoint,
-                    json=payload,
-                    timeout=self._timeout,
-                )
-                response.raise_for_status()
-            except httpx.TimeoutException as exc:
-                raise EmbeddingRequestError("Ollama embedding request timed out.") from exc
-            except httpx.HTTPStatusError as exc:
-                raise EmbeddingRequestError(
-                    f"Ollama embedding request failed with HTTP {exc.response.status_code}."
-                ) from exc
-            except httpx.HTTPError as exc:
-                raise EmbeddingRequestError("Ollama embedding request failed.") from exc
-
-            try:
-                body: object = response.json()
-            except json.JSONDecodeError as exc:
-                raise EmbeddingResponseError("Ollama returned malformed JSON.") from exc
-            if not isinstance(body, dict):
-                raise EmbeddingResponseError("Ollama embedding response must be an object.")
-            response_model = body.get("model")
-            if response_model != self._model_id:
-                raise EmbeddingResponseError(
-                    "Ollama embedding response model does not match the configured model."
-                )
-            batch_vectors = validate_embedding_batch(
-                batch,
-                body.get("embeddings"),
-                dimension=self._dimension,
-            )
-            vectors.extend(batch_vectors)
+                loop = asyncio.get_running_loop()
+                deadline = loop.time() + self._timeout_seconds
+                async with asyncio.timeout_at(deadline):
+                    async with self._client.stream(
+                        "POST",
+                        self._endpoint,
+                        json=payload,
+                        timeout=self._timeout,
+                    ) as response:
+                        if response.is_error:
+                            raise EmbeddingRequestError(
+                                f"Ollama embedding request failed with HTTP {response.status_code}."
+                            )
+                        body = await _bounded_embedding_json(response)
+                    if not isinstance(body, dict):
+                        raise EmbeddingResponseError(
+                            "Ollama embedding response must be an object."
+                        )
+                    response_model = body.get("model")
+                    if response_model != self._model_id:
+                        raise EmbeddingResponseError(
+                            "Ollama embedding response model does not match the configured model."
+                        )
+                    batch_vectors = validate_embedding_batch(
+                        batch,
+                        body.get("embeddings"),
+                        dimension=self._dimension,
+                    )
+                    if _deadline_expired(deadline):
+                        raise TimeoutError
+                    vectors.extend(batch_vectors)
+            except TimeoutError:
+                normalized_failure = "Ollama embedding request timed out."
+            except httpx.TimeoutException:
+                normalized_failure = "Ollama embedding request timed out."
+            except httpx.HTTPError:
+                normalized_failure = "Ollama embedding request failed."
+            if normalized_failure is not None:
+                raise EmbeddingRequestError(normalized_failure)
         return vectors
 
     async def close(self) -> None:

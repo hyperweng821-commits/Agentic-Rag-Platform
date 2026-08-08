@@ -1,5 +1,7 @@
 """Tests for settings validation and process-wide caching."""
 
+from uuid import UUID
+
 import pytest
 from pydantic import ValidationError
 
@@ -56,6 +58,49 @@ def test_settings_normalize_ollama_base_url() -> None:
 def test_settings_reject_invalid_chroma_collection_names(collection_name: str) -> None:
     with pytest.raises(ValidationError, match="chroma_collection_name"):
         Settings(_env_file=None, chroma_collection_name=collection_name)
+
+
+def test_settings_accept_trusted_chroma_collection_uuid_and_bounded_retrieval_timeout() -> None:
+    collection_uuid = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+
+    settings = Settings(
+        _env_file=None,
+        chroma_collection_uuid=collection_uuid,
+        chroma_retrieval_timeout_seconds=600,
+    )
+
+    assert settings.chroma_collection_uuid == collection_uuid
+    assert settings.chroma_retrieval_timeout_seconds == 600
+
+
+@pytest.mark.parametrize(
+    "collection_uuid",
+    [
+        "aaaaaaaaaaaa4aaa8aaaaaaaaaaaaaaa",
+        "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA",
+        "{aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa}",
+        "urn:uuid:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    ],
+)
+def test_settings_reject_noncanonical_chroma_collection_uuid(
+    collection_uuid: str,
+) -> None:
+    with pytest.raises(ValidationError, match="canonical UUID"):
+        Settings(_env_file=None, chroma_collection_uuid=collection_uuid)
+
+
+def test_settings_accept_canonical_chroma_collection_uuid_text() -> None:
+    canonical = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+
+    settings = Settings(_env_file=None, chroma_collection_uuid=canonical)
+
+    assert settings.chroma_collection_uuid == UUID(canonical)
+
+
+@pytest.mark.parametrize("timeout", [0, 601])
+def test_settings_reject_unbounded_chroma_retrieval_timeout(timeout: float) -> None:
+    with pytest.raises(ValidationError, match="chroma_retrieval_timeout_seconds"):
+        Settings(_env_file=None, chroma_retrieval_timeout_seconds=timeout)
 
 
 def test_production_defaults_to_json_logs() -> None:

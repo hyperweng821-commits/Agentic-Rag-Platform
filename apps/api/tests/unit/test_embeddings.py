@@ -1,12 +1,15 @@
 """Deterministic, network-free tests for the AF-2B embedding boundary."""
 
+import gzip
 import json
 import math
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
+from decimal import Decimal
 
 import httpx
 import pytest
 
+from app.ingestion import embeddings as embeddings_module
 from app.ingestion.embeddings import (
     DeterministicEmbeddingModel,
     EmbeddingInputError,
@@ -15,6 +18,35 @@ from app.ingestion.embeddings import (
     OllamaEmbeddingModel,
     validate_embedding_batch,
 )
+
+
+class _FloatLike:
+    def __float__(self) -> float:
+        return 0.25
+
+
+class _FloatSubclass(float):
+    pass
+
+
+class _OverflowFloatLike:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def __float__(self) -> float:
+        self.calls += 1
+        raise OverflowError("conversion must remain unreachable")
+
+
+class _BytesStream(httpx.AsyncByteStream):
+    def __init__(self, body: bytes) -> None:
+        self.body = body
+
+    async def __aiter__(self) -> AsyncIterator[bytes]:
+        yield self.body
+
+    async def aclose(self) -> None:
+        pass
 
 
 def _ollama_model(
@@ -98,6 +130,41 @@ def test_embedding_batch_validation_rejects_malformed_vectors(
 def test_embedding_batch_validation_rejects_invalid_expected_dimension() -> None:
     with pytest.raises(EmbeddingInputError, match="positive"):
         validate_embedding_batch([], [], dimension=0)
+
+
+@pytest.mark.parametrize(
+    "forbidden",
+    [
+        pytest.param(1, id="integer"),
+        pytest.param(True, id="boolean"),
+        pytest.param("0.25", id="string"),
+        pytest.param(_FloatLike(), id="float-like"),
+        pytest.param(_FloatSubclass(0.25), id="numeric-subclass"),
+        pytest.param(Decimal("0.25"), id="decimal"),
+    ],
+)
+def test_embedding_batch_validation_rejects_each_forbidden_value_type(
+    forbidden: object,
+) -> None:
+    with pytest.raises(EmbeddingResponseError, match="non-numeric"):
+        validate_embedding_batch(["text"], [[forbidden]], dimension=1)
+
+
+def test_embedding_batch_validation_accepts_only_exact_finite_floats() -> None:
+    assert validate_embedding_batch(
+        ["text"],
+        [[0.25, -0.5, 0.0, 1.0]],
+        dimension=4,
+    ) == [(0.25, -0.5, 0.0, 1.0)]
+
+
+def test_embedding_batch_validation_rejects_overflow_sentinel_before_conversion() -> None:
+    sentinel = _OverflowFloatLike()
+
+    with pytest.raises(EmbeddingResponseError, match="non-numeric"):
+        validate_embedding_batch(["text"], [[sentinel]], dimension=1)
+
+    assert sentinel.calls == 0
 
 
 async def test_ollama_adapter_batches_requests_and_preserves_order() -> None:
@@ -229,6 +296,168 @@ async def test_closed_ollama_adapter_rejects_embedding() -> None:
 
         with pytest.raises(EmbeddingRequestError, match="closed"):
             await model.embed(["text"])
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.parametrize(
+    ("wire_bytes", "succeeds"),
+    [(2_097_152, True), (2_097_153, False)],
+)
+async def test_ollama_wire_ceiling_is_inclusive(wire_bytes: int, succeeds: bool) -> None:
+    base = json.dumps(
+        {"model": "embed-model", "embeddings": [[1.0, 2.0, 3.0]]},
+        separators=(",", ":"),
+    ).encode()
+    body = base + b" " * (wire_bytes - len(base))
+    client = httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(200, stream=_BytesStream(body))
+        )
+    )
+    model = _ollama_model(client)
+    try:
+        operation = model.embed(["text"])
+        if succeeds:
+            assert await operation == [(1.0, 2.0, 3.0)]
+        else:
+            with pytest.raises(EmbeddingResponseError, match="byte limit"):
+                await operation
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.parametrize(
+    ("decoded_bytes", "succeeds"),
+    [(2_097_152, True), (2_097_153, False)],
+)
+async def test_ollama_decoded_gzip_ceiling_is_inclusive(
+    decoded_bytes: int,
+    succeeds: bool,
+) -> None:
+    base = json.dumps(
+        {"model": "embed-model", "embeddings": [[1.0, 2.0, 3.0]]},
+        separators=(",", ":"),
+    ).encode()
+    body = gzip.compress(base + b" " * (decoded_bytes - len(base)))
+    client = httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                200,
+                headers={
+                    "content-encoding": "gzip",
+                    "content-length": str(len(body)),
+                },
+                stream=_BytesStream(body),
+            )
+        )
+    )
+    model = _ollama_model(client)
+    try:
+        operation = model.embed(["text"])
+        if succeeds:
+            assert await operation == [(1.0, 2.0, 3.0)]
+        else:
+            with pytest.raises(EmbeddingResponseError, match="decoded byte limit"):
+                await operation
+    finally:
+        await client.aclose()
+
+
+async def test_ollama_gzip_bomb_uses_first_plus_one_bounded_decompression(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    decoded_limit = 1_024
+    decoded = b"{" + b" " * decoded_limit
+    body = gzip.compress(decoded)
+    real_factory = embeddings_module.zlib.decompressobj
+    requested_output_limits: list[int] = []
+
+    class TrackingDecompressor:
+        def __init__(self) -> None:
+            self._inner = real_factory(16 + embeddings_module.zlib.MAX_WBITS)
+
+        @property
+        def unconsumed_tail(self) -> bytes:
+            return self._inner.unconsumed_tail
+
+        @property
+        def eof(self) -> bool:
+            return self._inner.eof
+
+        @property
+        def unused_data(self) -> bytes:
+            return self._inner.unused_data
+
+        def decompress(self, data: bytes, max_length: int) -> bytes:
+            requested_output_limits.append(max_length)
+            return self._inner.decompress(data, max_length)
+
+        def flush(self, length: int) -> bytes:
+            requested_output_limits.append(length)
+            return self._inner.flush(length)
+
+    monkeypatch.setattr(embeddings_module, "MAX_EMBEDDING_DECODED_BYTES", decoded_limit)
+    monkeypatch.setattr(
+        embeddings_module.zlib,
+        "decompressobj",
+        lambda *args, **kwargs: TrackingDecompressor(),
+    )
+    client = httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                200,
+                headers={"content-encoding": "gzip"},
+                stream=_BytesStream(body),
+            )
+        )
+    )
+    model = _ollama_model(client)
+    try:
+        with pytest.raises(EmbeddingResponseError, match="decoded byte limit"):
+            await model.embed(["text"])
+        assert requested_output_limits
+        assert max(requested_output_limits) <= decoded_limit + 1
+    finally:
+        await client.aclose()
+
+
+async def test_ollama_total_deadline_includes_vector_validation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    validation_completed = False
+    original_validate = embeddings_module.validate_embedding_batch
+
+    def validate(
+        texts: list[str],
+        vectors: object,
+        *,
+        dimension: int,
+    ) -> list[tuple[float, ...]]:
+        nonlocal validation_completed
+        result = original_validate(texts, vectors, dimension=dimension)
+        validation_completed = True
+        return result
+
+    monkeypatch.setattr(embeddings_module, "validate_embedding_batch", validate)
+    monkeypatch.setattr(
+        embeddings_module,
+        "_deadline_expired",
+        lambda deadline: validation_completed,
+    )
+    client = httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                200,
+                json={"model": "embed-model", "embeddings": [[1.0, 2.0, 3.0]]},
+            )
+        )
+    )
+    model = _ollama_model(client)
+    try:
+        with pytest.raises(EmbeddingRequestError, match="timed out"):
+            await model.embed(["text"])
+        assert validation_completed
     finally:
         await client.aclose()
 
