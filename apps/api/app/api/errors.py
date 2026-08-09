@@ -90,6 +90,20 @@ class ServiceUnavailableError(AppException):
     status_code = status.HTTP_503_SERVICE_UNAVAILABLE
 
 
+class RetrievalInvalidRequestError(BadRequestError):
+    """The public retrieval request failed canonical semantic validation."""
+
+    code = "RETRIEVAL_INVALID_REQUEST"
+    message = "The retrieval request is invalid."
+
+
+class RetrievalServiceUnavailableError(ServiceUnavailableError):
+    """The product retrieval boundary is temporarily unavailable."""
+
+    code = "RETRIEVAL_UNAVAILABLE"
+    message = "Retrieval is temporarily unavailable."
+
+
 class DatabaseUnavailableError(ServiceUnavailableError):
     """PostgreSQL did not pass the readiness check."""
 
