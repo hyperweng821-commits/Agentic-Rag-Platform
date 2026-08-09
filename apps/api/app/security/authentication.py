@@ -91,7 +91,13 @@ def generate_opaque_token() -> str:
 
 
 def hash_token(token: str) -> str:
-    """Return the lowercase SHA-256 digest persisted for an opaque token."""
+    """Return the fixed-width lookup digest for an opaque random token.
+
+    Production tokens come from ``secrets.token_urlsafe(32)`` and therefore
+    contain 256 bits of randomness. This is identifier hashing, not password
+    hashing over a low-entropy input space.
+    """
+    # codeql[py/weak-sensitive-data-hashing]
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 

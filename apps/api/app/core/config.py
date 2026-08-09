@@ -5,6 +5,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
+from uuid import UUID
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -97,6 +98,8 @@ class Settings(BaseSettings):
         max_length=512,
         pattern=r"^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$",
     )
+    chroma_collection_uuid: UUID | None = None
+    chroma_retrieval_timeout_seconds: float = Field(default=30.0, gt=0, le=600)
 
     ingestion_lease_seconds: int = Field(default=300, ge=30, le=86_400)
     ingestion_retry_delay_seconds: int = Field(default=30, ge=1, le=86_400)
@@ -136,6 +139,22 @@ class Settings(BaseSettings):
         if "://" in value or "/" in value or any(character.isspace() for character in value):
             msg = "CHROMA_HOST must be a hostname without a scheme, path, or whitespace"
             raise ValueError(msg)
+        return value
+
+    @field_validator("chroma_collection_uuid", mode="before")
+    @classmethod
+    def validate_chroma_collection_uuid(cls, value: object) -> object:
+        """Reject coercive or noncanonical configured collection UUID spellings."""
+        if value is None or type(value) is UUID:
+            return value
+        if type(value) is not str:
+            raise ValueError("CHROMA_COLLECTION_UUID must be a canonical UUID")
+        try:
+            parsed = UUID(value)
+        except ValueError:
+            raise ValueError("CHROMA_COLLECTION_UUID must be a canonical UUID") from None
+        if value != str(parsed):
+            raise ValueError("CHROMA_COLLECTION_UUID must be a canonical UUID")
         return value
 
     @model_validator(mode="after")

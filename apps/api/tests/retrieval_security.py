@@ -4,10 +4,12 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, fields, is_dataclass
 from logging import LogRecord
+from pathlib import Path
 from typing import Protocol
 
 
@@ -201,6 +203,54 @@ def _parse_af3a05_ledger() -> frozenset[CanonicalAcceptanceTuple]:
 
 AF3A05_CANONICAL_TUPLES = _parse_af3a05_ledger()
 
+_AF3B_LEDGER_PROJECTION_SHA256 = "8166a00d64b483090ce6dee5fa82a74adfc2dd28873abd0434a8d60c0045f59a"
+_AF3B_LEVEL_COUNTS = {
+    "unit": 171,
+    "provider-adapter contract": 167,
+    "PostgreSQL integration": 218,
+    "deterministic concurrency": 7,
+    "fault injection": 17,
+}
+
+
+def _parse_af3b_ledger() -> frozenset[CanonicalAcceptanceTuple]:
+    """Load the hash-pinned AF-3B projection from the committed canonical ledger."""
+    repository_root = Path(__file__).resolve().parents[3]
+    ledger_path = repository_root / "docs" / "retrieval-security-acceptance.md"
+    lines = ledger_path.read_text(encoding="utf-8").splitlines()
+    inside = False
+    projected_lines: list[str] = []
+    rows: list[CanonicalAcceptanceTuple] = []
+    for line in lines:
+        if line == "<!-- CANONICAL_LEDGER_BEGIN -->":
+            inside = True
+            continue
+        if line == "<!-- CANONICAL_LEDGER_END -->":
+            inside = False
+            break
+        if not inside or not line.startswith("|"):
+            continue
+        fields = tuple(field.strip() for field in line.strip("|").split("|"))
+        if len(fields) != 7 or fields[4] != "AF-3B":
+            continue
+        projected_lines.append(line)
+        rows.append(CanonicalAcceptanceTuple(*fields))
+
+    projection = "".join(f"{line}\n" for line in projected_lines).encode()
+    if hashlib.sha256(projection).hexdigest() != _AF3B_LEDGER_PROJECTION_SHA256:
+        raise AssertionError("AF-3B canonical ledger projection hash changed")
+    if len(rows) != 580 or len(set(rows)) != 580:
+        raise AssertionError("AF-3B ledger projection must contain 580 unique tuples")
+    for level, expected_count in _AF3B_LEVEL_COUNTS.items():
+        if sum(row.test_level == level for row in rows) != expected_count:
+            raise AssertionError(f"AF-3B {level} inventory changed")
+    if any(row.status != "REQUIRED_NOT_YET_IMPLEMENTED" for row in rows):
+        raise AssertionError("AF-3B ledger status changed during implementation")
+    return frozenset(rows)
+
+
+AF3B_CANONICAL_TUPLES = _parse_af3b_ledger()
+
 _AF3A_EXPLICIT_SINKS = frozenset(
     {
         "exception_error_records",
@@ -208,6 +258,13 @@ _AF3A_EXPLICIT_SINKS = frozenset(
         "postgres_sql_database_driver_transaction_diagnostics",
         "service_diagnostics",
         "internal_authoritative_retrieval_record_diagnostics",
+    }
+)
+_AF3B_EXPLICIT_SINKS = _AF3A_EXPLICIT_SINKS | frozenset(
+    {
+        "embedding_provider_request_response_diagnostics",
+        "chroma_provider_request_response_diagnostics",
+        "hybrid_result_diagnostics",
     }
 )
 
@@ -289,6 +346,24 @@ def af3a05_acceptance_tuple(
     return matches[0]
 
 
+def af3b_acceptance_tuple(
+    case_id: str,
+    variant: str,
+    test_level: str,
+) -> CanonicalAcceptanceTuple:
+    """Resolve one exact hash-pinned AF-3B executable identity."""
+    matches = [
+        row
+        for row in AF3B_CANONICAL_TUPLES
+        if (row.case_id, row.variant, row.test_level) == (case_id, variant, test_level)
+    ]
+    if len(matches) != 1:
+        raise AssertionError(
+            f"Expected one canonical AF-3B tuple for {(case_id, variant, test_level)!r}"
+        )
+    return matches[0]
+
+
 def assert_r24_sidecar(
     canonical_tuple: CanonicalAcceptanceTuple,
     *,
@@ -302,16 +377,20 @@ def assert_r24_sidecar(
         | AF3A03_CANONICAL_TUPLES
         | AF3A04_CANONICAL_TUPLES
         | AF3A05_CANONICAL_TUPLES
+        | AF3B_CANONICAL_TUPLES
     ):
         raise AssertionError(f"Unknown canonical tuple: {canonical_tuple!r}")
 
     normalized_sentinels = _normalize_sentinels(sentinels)
+    expected_sinks = (
+        _AF3B_EXPLICIT_SINKS if canonical_tuple.owner == "AF-3B" else _AF3A_EXPLICIT_SINKS
+    )
     supplied_sinks = set(sinks)
-    if supplied_sinks != _AF3A_EXPLICIT_SINKS:
-        missing = sorted(_AF3A_EXPLICIT_SINKS - supplied_sinks)
-        unexpected = sorted(supplied_sinks - _AF3A_EXPLICIT_SINKS)
+    if supplied_sinks != expected_sinks:
+        missing = sorted(expected_sinks - supplied_sinks)
+        unexpected = sorted(supplied_sinks - expected_sinks)
         raise AssertionError(
-            "AF-3A R24 rows must explicitly register every owned sink; "
+            "R24 rows must explicitly register every owned sink; "
             f"missing={missing!r}, unexpected={unexpected!r}"
         )
 
@@ -410,3 +489,26 @@ def _walk_rendered(value: object, *, seen: set[int]) -> Iterable[str | bytes]:
         return
 
     yield repr(value)
+    if is_dataclass(value) and not isinstance(value, type):
+        for data_field in fields(value):
+            yield data_field.name
+            yield from _walk_rendered(getattr(value, data_field.name), seen=seen)
+        return
+
+    state = getattr(value, "__dict__", None)
+    if isinstance(state, Mapping):
+        yield from _walk_rendered(state, seen=seen)
+
+    slot_names: list[str] = []
+    for owner in type(value).__mro__:
+        declared = getattr(owner, "__slots__", ())
+        if isinstance(declared, str):
+            declared = (declared,)
+        slot_names.extend(name for name in declared if name not in {"__dict__", "__weakref__"})
+    for slot_name in dict.fromkeys(slot_names):
+        try:
+            slot_value = getattr(value, slot_name)
+        except AttributeError:
+            continue
+        yield slot_name
+        yield from _walk_rendered(slot_value, seen=seen)
