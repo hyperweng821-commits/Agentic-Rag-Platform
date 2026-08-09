@@ -636,6 +636,25 @@ async def test_streaming_depth_rejects_d17_without_consuming_later_chunk() -> No
     assert late_sentinel not in stream.consumed
 
 
+@pytest.mark.parametrize("malformed_prefix", [b"]", b"}", b"[}", b"{]"])
+async def test_streaming_depth_rejects_malformed_closer_without_consuming_later_chunk(
+    malformed_prefix: bytes,
+) -> None:
+    late_sentinel = b"late-stream-chunk-must-not-be-consumed"
+    stream = _TrackingPartsStream(malformed_prefix, late_sentinel)
+    response = httpx.Response(
+        200,
+        headers={"content-type": "application/json"},
+        stream=stream,
+    )
+
+    with pytest.raises(DenseProviderError):
+        await chroma_module._bounded_json_body(response)
+
+    assert stream.consumed == [malformed_prefix]
+    assert late_sentinel not in stream.consumed
+
+
 async def test_streaming_depth_preserves_string_escape_and_utf8_state_across_chunks() -> None:
     stream = _TrackingPartsStream(
         b'{"value":"prefix' + b"\\",

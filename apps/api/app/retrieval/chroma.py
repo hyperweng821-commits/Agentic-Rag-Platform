@@ -156,7 +156,7 @@ class _JsonNumber(str):
 class _JsonDepthScanner:
     """Track JSON container depth without materializing the response."""
 
-    depth: int = 0
+    containers: list[str] = field(default_factory=list)
     in_string: bool = False
     escaped: bool = False
 
@@ -173,15 +173,17 @@ class _JsonDepthScanner:
             if character == '"':
                 self.in_string = True
             elif character in "[{":
-                next_depth = self.depth + 1
-                if next_depth > MAX_JSON_DEPTH:
+                if len(self.containers) >= MAX_JSON_DEPTH:
                     raise DenseProviderError
-                self.depth = next_depth
+                self.containers.append(character)
             elif character in "]}":
-                self.depth -= 1
+                expected_opener = "[" if character == "]" else "{"
+                if not self.containers or self.containers[-1] != expected_opener:
+                    raise DenseProviderError
+                self.containers.pop()
 
     def finish(self) -> None:
-        if self.depth != 0 or self.in_string:
+        if self.containers or self.in_string:
             raise DenseProviderError
 
 
