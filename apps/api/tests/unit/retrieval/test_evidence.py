@@ -106,9 +106,7 @@ def test_product_projection_has_exact_safe_field_manifest() -> None:
         "keyword_rank",
         "dense_rank",
     )
-    assert {field.name for field in fields(RetrievedEvidence)} == set(
-        RetrievedEvidence.__slots__
-    )
+    assert {field.name for field in fields(RetrievedEvidence)} == set(RetrievedEvidence.__slots__)
     for forbidden in (
         "knowledge_base_id",
         "provider_response",
