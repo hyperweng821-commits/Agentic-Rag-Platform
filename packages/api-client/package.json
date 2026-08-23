@@ -16,7 +16,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
-    "prettier": "3.9.5",
-    "typescript": "5.9.3"
+    "prettier": "3.9.6",
+    "typescript": "7.0.2"
   }
 }
